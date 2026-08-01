@@ -106,10 +106,11 @@ type statusEvent struct {
 // --- server ---------------------------------------------------------------
 
 type server struct {
-	cfg   *config
-	cfgMu sync.Mutex
-	token string
-	hub   *hub
+	cfg     *config
+	cfgMu   sync.Mutex
+	token   string
+	hub     *hub
+	history *history
 
 	autosaveMu   sync.Mutex
 	autosaving   map[string]bool      // inbox files currently being auto-saved
@@ -117,10 +118,15 @@ type server struct {
 }
 
 func newServer(cfg *config) *server {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		dir = "."
+	}
 	return &server{
 		cfg:          cfg,
 		token:        newToken(),
 		hub:          newHub(),
+		history:      newHistory(filepath.Join(dir, "tailscale-drop")),
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
 	}
@@ -151,6 +157,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/delete", s.guard(true, s.handleDelete))
 	mux.HandleFunc("/api/send", s.guard(true, s.handleSend))
 	mux.HandleFunc("/api/open", s.guard(true, s.handleOpen))
+	mux.HandleFunc("/api/history", s.guard(true, s.handleHistory))
 	return mux
 }
 
@@ -469,6 +476,50 @@ func (s *server) handleSend(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
+// historyStats summarizes the event log for the History tab header.
+type historyStats struct {
+	Received      int   `json:"received"`
+	ReceivedBytes int64 `json:"receivedBytes"`
+	Sent          int   `json:"sent"`
+	SentBytes     int64 `json:"sentBytes"`
+	Failed        int   `json:"failed"`
+}
+
+func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		s.history.clear()
+		writeJSON(w, map[string]any{"ok": true})
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.history.mu.Lock()
+	events := append([]historyEvent(nil), s.history.events...)
+	s.history.mu.Unlock()
+	slices.Reverse(events) // most recent first
+
+	var st historyStats
+	seen := map[string]bool{}
+	for _, e := range events {
+		switch e.Kind {
+		case "arrived":
+			if !seen[e.ID] {
+				seen[e.ID] = true
+				st.Received++
+				st.ReceivedBytes += e.Size
+			}
+		case "sent":
+			st.Sent++
+			st.SentBytes += e.Size
+		case "send_failed":
+			st.Failed++
+		}
+	}
+	writeJSON(w, map[string]any{"events": events, "stats": st})
+}
+
 func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Path string `json:"path"`
@@ -526,6 +577,7 @@ func (s *server) watchInbox(ctx context.Context) {
 			}
 			s.hub.broadcast(inboxEvent{Type: "inbox", Files: r.files})
 			s.hub.broadcast(statusEvent{Type: "status"}) // daemon is reachable again
+			s.history.recordArrivals(r.files)
 			s.maybeAutoSave(ctx, r.files)
 		}
 	}

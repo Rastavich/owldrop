@@ -50,6 +50,24 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .btn.ghost:hover{border-color:#333d55}
 .check{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:13px;cursor:pointer;user-select:none;white-space:nowrap}
 .check input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+.searchbar{padding-top:0}
+.search{flex:1;min-width:180px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font:inherit;font-size:13px;outline:none}
+.search:focus{border-color:var(--accent)}
+.hint{font-size:12px;color:var(--muted);white-space:nowrap}
+.stats{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.danger-text{color:var(--red)}
+.chips{display:flex;gap:6px;margin-bottom:12px}
+.chip-btn{border:1px solid var(--border);background:var(--panel);color:var(--muted);border-radius:999px;padding:5px 13px;font-size:12.5px;font-weight:600}
+.chip-btn:hover{color:var(--text)}
+.chip-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.row.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.status{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.4px}
+.status.waiting{background:rgba(251,191,36,.14);color:var(--amber)}
+.status.saved{background:rgba(52,211,153,.14);color:var(--green)}
+.status.deleted{background:rgba(248,113,113,.12);color:var(--red)}
+.status.sent{background:rgba(52,211,153,.14);color:var(--green)}
+.status.failed{background:rgba(248,113,113,.12);color:var(--red)}
+.hpath{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--muted);word-break:break-all}
 .btn.danger{border-color:transparent;background:transparent;color:var(--muted);padding:7px 8px}
 .btn.danger:hover{color:var(--red)}
 .btn.mini{border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:8px;padding:4px 10px;font-size:12px}
@@ -133,6 +151,7 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
 <nav class="tabs">
   <button id="tab-inbox" class="tab active">Inbox <span class="badge" id="inbox-badge" hidden></span></button>
   <button id="tab-send" class="tab">Send</button>
+  <button id="tab-history" class="tab">History</button>
 </nav>
 
 <main>
@@ -145,7 +164,12 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
       <button id="set-dir" class="btn ghost">Set default</button>
       <button id="browse-dir" class="btn ghost">Browse…</button>
       <button id="save-all" class="btn">Save all</button>
+      <button id="save-all-to" class="btn ghost">Save all to…</button>
       <label class="check"><input type="checkbox" id="auto-save"> Auto-save incoming</label>
+    </div>
+    <div class="toolbar searchbar">
+      <input id="inbox-search" class="search" type="text" placeholder="Filter files…  ( / )" spellcheck="false" autocomplete="off">
+      <span class="hint" id="inbox-hint"></span>
     </div>
     <div id="inbox-list" class="list"></div>
     <div id="inbox-empty" class="empty" hidden>
@@ -172,6 +196,25 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
     <div id="send-empty" class="empty" hidden>
       <p class="t">No devices found</p>
       <p class="s">Make sure your tailnet is up and other machines are online, then hit Refresh.</p>
+    </div>
+  </section>
+
+  <section id="pane-history" class="pane">
+    <div class="toolbar">
+      <input id="history-search" class="search" type="text" placeholder="Search history…" spellcheck="false" autocomplete="off">
+      <span id="history-stats" class="stats"></span>
+      <button id="history-clear" class="btn ghost danger-text">Clear</button>
+    </div>
+    <div class="chips" id="history-chips">
+      <button class="chip-btn active" data-filter="all">All</button>
+      <button class="chip-btn" data-filter="received">Received</button>
+      <button class="chip-btn" data-filter="sent">Sent</button>
+    </div>
+    <div id="history-list" class="list"></div>
+    <div id="history-empty" class="empty" hidden>
+      <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="16" stroke="#8a93a8" stroke-width="2.5"/><path d="M24 14v10l7 4" stroke="#8a93a8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <p class="t">No history yet</p>
+      <p class="s">Files you receive or send will be logged here, along with where they ended up.</p>
     </div>
   </section>
 </main>
@@ -225,6 +268,13 @@ let sending = new Map();           // id -> {name,peer,sent,size,done,err}
 let devices = [];                  // {id,name,os,online,lastSeen,taildrop}
 let knownNames = new Set();
 let currentTab = 'inbox';
+let inboxFilter = '';
+let selIdx = -1;
+let historyEvents = [];            // newest first, from /api/history
+let historyFilter = 'all';
+let historySearch = '';
+let historyStats = { received: 0, receivedBytes: 0, sent: 0, sentBytes: 0, failed: 0 };
+let clearArmed = false;
 
 // ---------- helpers ----------
 
@@ -288,11 +338,11 @@ function uuid() {
     });
 }
 
-function toast(msg, action, kind = 'ok') {
+function toast(msg, actions, kind = 'ok') {
   const t = el('div', { class: 'toast ' + kind });
   t.appendChild(el('span', {}, msg));
-  if (action) {
-    const b = el('button', { class: 'toast-act', onclick: () => { action.fn(); t.remove(); } }, action.label);
+  for (const a of actions ? (Array.isArray(actions) ? actions : [actions]) : []) {
+    const b = el('button', { class: 'toast-act', onclick: () => { a.fn(); t.remove(); } }, a.label);
     t.appendChild(b);
   }
   toasts.appendChild(t);
@@ -330,6 +380,11 @@ function setDaemonState(ok, msg) {
 
 // ---------- inbox ----------
 
+function visibleInbox() {
+  const q = inboxFilter.toLowerCase().trim();
+  return q ? inbox.filter(f => f.name.toLowerCase().includes(q)) : inbox;
+}
+
 function renderInbox() {
   const any = inbox.length > 0;
   $('#inbox-empty').hidden = any;
@@ -340,18 +395,24 @@ function renderInbox() {
   document.title = inbox.length ? `(${inbox.length}) Taildrop` : 'Taildrop';
   if (!any) return;
 
-  const rows = inbox.map(f => inboxRow(f));
+  const files = visibleInbox();
+  if (selIdx >= files.length) selIdx = files.length - 1;
+  const rows = files.map((f, i) => inboxRow(f, i));
   // keep in-flight saves on screen even if the file briefly drops out
   for (const [name, st] of saving) {
     if (st.done) continue;
-    if (!inbox.some(f => f.name === name)) rows.push(savingRow(name, st));
+    if (!files.some(f => f.name === name)) rows.push(savingRow(name, st));
   }
   for (const r of rows) inboxList.appendChild(r);
+  $('#inbox-hint').textContent = files.length === inbox.length
+    ? 'j/k select · s save · d delete · / search'
+    : `${files.length}/${inbox.length} shown · j/k select · s save · d delete · / search`;
 }
 
-function inboxRow(f) {
+function inboxRow(f, idx) {
   const st = saving.get(f.name);
-  const row = el('div', { class: 'row' });
+  const row = el('div', { class: 'row' + (idx === selIdx ? ' selected' : '') });
+  row.dataset.idx = idx;
   row.appendChild(el('div', { class: 'chip ' + chipClass(f.name) }, chipLabel(f.name)));
   const meta = el('div', { class: 'meta' });
   meta.appendChild(el('div', { class: 'name' }, f.name));
@@ -447,7 +508,11 @@ async function saveFile(name, size, dir) {
     // Optimistic removal — the saved file is out of the daemon inbox.
     inbox = inbox.filter(f => f.name !== name);
     renderInbox();
-    toast(`Saved ${name}`, { label: 'Open', fn: () => api('/api/open', { method: 'POST', json: { path: res.path } }).catch(() => {}) });
+    toast(`Saved ${name}`, [
+      { label: 'Open', fn: () => api('/api/open', { method: 'POST', json: { path: res.path } }).catch(() => {}) },
+      { label: 'Reveal', fn: () => api('/api/open', { method: 'POST', json: { path: res.path.slice(0, res.path.lastIndexOf('/')) } }).catch(() => {}) },
+    ]);
+    fetchHistory();
   } catch (e) {
     const st = saving.get(name) || {};
     saving.set(name, { ...st, done: true, err: e.message });
@@ -465,6 +530,7 @@ async function deleteFile(name) {
     inbox = inbox.filter(f => f.name !== name);
     renderInbox();
     toast(`Deleted ${name} from the inbox`);
+    fetchHistory();
   } catch (e) {
     toast(`Couldn't delete: ${e.message}`, null, 'err');
   }
@@ -547,6 +613,7 @@ async function sendFile(file) {
     const st = sending.get(id) || {};
     sending.set(id, { ...st, done: true });
     toast(`Sent ${file.name}`);
+    fetchHistory();
   } catch (e) {
     const st = sending.get(id) || {};
     sending.set(id, { ...st, done: true, err: e.message });
@@ -564,9 +631,10 @@ function handleFiles(files) {
 
 let picker = null; // { file, path }
 
-function openDirPicker(file) {
-  picker = { file, path: '' };
-  document.querySelector('.modal-title').textContent = file ? 'Save to folder' : 'Default save folder';
+function openDirPicker(file, mode = 'file') {
+  picker = { file, path: '', mode };
+  const titles = { file: 'Save to folder', default: 'Default save folder', batch: 'Save all to folder' };
+  document.querySelector('.modal-title').textContent = titles[mode] || titles.file;
   $('#dir-modal').hidden = false;
   browseTo(CONFIG.saveDir);
 }
@@ -631,9 +699,9 @@ $('#dir-use').addEventListener('click', async () => {
   const file = picker.file;
   const dir = picker.path;
   closeDirPicker();
-  if (file) {
+  if (picker.mode === 'file' && file) {
     saveFile(file.name, file.size, dir);
-  } else {
+  } else if (picker.mode === 'default') {
     try {
       const res = await api('/api/config', { method: 'POST', json: { saveDir: dir } });
       CONFIG.saveDir = res.saveDir;
@@ -642,6 +710,8 @@ $('#dir-use').addEventListener('click', async () => {
     } catch (e) {
       toast(e.message, null, 'err');
     }
+  } else { // batch: save every waiting file there
+    for (const f of inbox) saveFile(f.name, f.size, dir);
   }
 });
 $('#dir-new').addEventListener('click', () => {
@@ -665,6 +735,154 @@ $('#dir-new-name').addEventListener('keydown', async e => {
     browseTo(picker.path);
   } catch (err) {
     toast(err.message, null, 'err');
+  }
+});
+
+// ---------- history ----------
+
+async function fetchHistory() {
+  try {
+    const res = await api('/api/history');
+    historyEvents = res.events || [];
+    historyStats = res.stats || historyStats;
+    renderHistory();
+  } catch (e) {
+    toast("Couldn't load history: " + e.message, null, 'err');
+  }
+}
+
+function historySessions() {
+  // Group events by session ID; a received file is one session (arrival +
+  // saved/deleted), each send attempt is its own session.
+  const byId = new Map();
+  for (const e of historyEvents) {
+    let s = byId.get(e.id);
+    if (!s) {
+      s = { id: e.id, events: [], name: e.name, size: e.size, arrived: e.ts };
+      byId.set(e.id, s);
+    }
+    s.events.push(e);
+    if (e.ts < s.arrived) s.arrived = e.ts;
+  }
+  return [...byId.values()].sort((a, b) => (a.arrived < b.arrived ? 1 : -1));
+}
+
+function sessionState(s) {
+  let saved = null, deleted = false, sent = null, failed = null, waiting = false;
+  for (const e of s.events) {
+    if (e.kind === 'saved') saved = e;
+    else if (e.kind === 'deleted') deleted = true;
+    else if (e.kind === 'sent') sent = e;
+    else if (e.kind === 'send_failed') failed = e;
+    else if (e.kind === 'arrived') waiting = true;
+  }
+  return { saved, deleted, sent, failed, waiting };
+}
+
+function historyVisible() {
+  const q = historySearch.toLowerCase().trim();
+  return historySessions().filter(s => {
+    if (historyFilter === 'received' && !s.events.some(e => e.kind === 'arrived')) return false;
+    if (historyFilter === 'sent' && !s.events.some(e => e.kind === 'sent' || e.kind === 'send_failed')) return false;
+    if (q && !(s.name.toLowerCase().includes(q) || (s.saved && s.saved.path && s.saved.path.toLowerCase().includes(q)))) return false;
+    return true;
+  });
+}
+
+function renderHistory() {
+  const sessions = historyVisible();
+  const list = $('#history-list');
+  list.textContent = '';
+  $('#history-empty').hidden = historyEvents.length > 0;
+  $('#history-stats').textContent = historyEvents.length
+    ? `${historyStats.received} received · ${fmtSize(historyStats.receivedBytes)} · ${historyStats.sent} sent`
+    : '';
+  for (const s of sessions) list.appendChild(historyRow(s));
+}
+
+function historyRow(s) {
+  const st = sessionState(s);
+  const isSend = st.sent || st.failed;
+  const row = el('div', { class: 'row' });
+  row.appendChild(el('div', { class: 'chip ' + chipClass(s.name) }, chipLabel(s.name)));
+  const meta = el('div', { class: 'meta' });
+  meta.appendChild(el('div', { class: 'name' }, s.name));
+  const bits = [];
+  if (isSend) {
+    const badge = el('span', { class: 'status ' + (st.failed ? 'failed' : 'sent') }, st.failed ? 'failed' : 'sent');
+    bits.push(badge, 'to ' + (st.failed ? st.failed.peer : st.sent.peer));
+  } else {
+    const status = st.saved ? 'saved' : (st.deleted ? 'deleted' : 'waiting');
+    bits.push(el('span', { class: 'status ' + status }, status));
+  }
+  if (s.size > 0) bits.push(fmtSize(s.size));
+  bits.push(fmtAge(s.arrived));
+  meta.appendChild(el('div', { class: 'sub' }, bits));
+  row.appendChild(meta);
+  if (st.saved) {
+    const actions = el('div', { class: 'actions' });
+    const path = st.saved.path;
+    actions.appendChild(el('button', { class: 'btn mini', onclick: () => api('/api/open', { method: 'POST', json: { path } }).catch(() => {}) }, 'Open'));
+    actions.appendChild(el('button', { class: 'btn mini', onclick: () => api('/api/open', { method: 'POST', json: { path: path.slice(0, path.lastIndexOf('/')) } }).catch(() => {}) }, 'Reveal'));
+    row.appendChild(actions);
+    const pathLine = el('div', { class: 'hpath' }, path);
+    meta.appendChild(pathLine);
+  }
+  return row;
+}
+
+async function clearHistory() {
+  if (!confirm('Clear the entire history?')) return;
+  try {
+    await api('/api/history', { method: 'DELETE' });
+    historyEvents = [];
+    renderHistory();
+    toast('History cleared');
+  } catch (e) {
+    toast("Couldn't clear history: " + e.message, null, 'err');
+  }
+}
+
+// ---------- keyboard shortcuts (inbox) ----------
+
+document.addEventListener('keydown', e => {
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+    if (e.key === 'Escape' && e.target.id === 'inbox-search') {
+      e.target.blur();
+      e.target.value = '';
+      inboxFilter = '';
+      renderInbox();
+    }
+    return;
+  }
+  if (currentTab !== 'inbox') return;
+  const vis = visibleInbox();
+  switch (e.key) {
+    case '/':
+      e.preventDefault();
+      $('#inbox-search').focus();
+      break;
+    case 'j':
+    case 'ArrowDown':
+      e.preventDefault();
+      if (vis.length) { selIdx = selIdx < 0 ? 0 : Math.min(selIdx + 1, vis.length - 1); renderInbox(); }
+      break;
+    case 'k':
+    case 'ArrowUp':
+      e.preventDefault();
+      if (vis.length) { selIdx = selIdx < 0 ? 0 : Math.max(selIdx - 1, 0); renderInbox(); }
+      break;
+    case 's': {
+      const f = vis[selIdx];
+      if (f) saveFile(f.name, f.size, CONFIG.saveDir);
+      break;
+    }
+    case 'd': {
+      const f = vis[selIdx];
+      if (f) deleteFile(f.name);
+      break;
+    }
   }
 });
 
@@ -739,18 +957,19 @@ async function boot() {
 }
 
 // tabs
-$('#tab-inbox').addEventListener('click', () => {
-  currentTab = 'inbox';
-  $('#tab-inbox').classList.add('active'); $('#tab-send').classList.remove('active');
-  $('#pane-inbox').classList.add('active'); $('#pane-send').classList.remove('active');
-  renderInbox();
-});
-$('#tab-send').addEventListener('click', () => {
-  currentTab = 'send';
-  $('#tab-send').classList.add('active'); $('#tab-inbox').classList.remove('active');
-  $('#pane-send').classList.add('active'); $('#pane-inbox').classList.remove('active');
-  refreshDevices();
-});
+function setTab(name) {
+  currentTab = name;
+  for (const t of ['inbox', 'send', 'history']) {
+    $('#tab-' + t).classList.toggle('active', t === name);
+    $('#pane-' + t).classList.toggle('active', t === name);
+  }
+  if (name === 'inbox') renderInbox();
+  if (name === 'send') refreshDevices();
+  if (name === 'history') fetchHistory();
+}
+$('#tab-inbox').addEventListener('click', () => setTab('inbox'));
+$('#tab-send').addEventListener('click', () => setTab('send'));
+$('#tab-history').addEventListener('click', () => setTab('history'));
 
 // toolbar
 $('#set-dir').addEventListener('click', async () => {
@@ -764,7 +983,18 @@ $('#set-dir').addEventListener('click', async () => {
     toast(e.message, null, 'err');
   }
 });
-$('#browse-dir').addEventListener('click', () => openDirPicker(null));
+$('#browse-dir').addEventListener('click', () => openDirPicker(null, 'default'));
+$('#save-all-to').addEventListener('click', () => openDirPicker(null, 'batch'));
+$('#inbox-search').addEventListener('input', e => { inboxFilter = e.target.value; selIdx = -1; renderInbox(); });
+$('#history-search').addEventListener('input', e => { historySearch = e.target.value; renderHistory(); });
+$('#history-clear').addEventListener('click', clearHistory);
+$('#history-chips').addEventListener('click', e => {
+  const btn = e.target.closest('.chip-btn');
+  if (!btn) return;
+  for (const b of document.querySelectorAll('.chip-btn')) b.classList.toggle('active', b === btn);
+  historyFilter = btn.dataset.filter;
+  renderHistory();
+});
 $('#auto-save').addEventListener('change', async () => {
   try {
     const res = await api('/api/config', { method: 'POST', json: { autoSave: $('#auto-save').checked } });

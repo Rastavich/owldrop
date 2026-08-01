@@ -54,6 +54,7 @@ func (s *server) sendOne(ctx context.Context, id string, peer tailcfg.StableNode
 			if onProgress != nil {
 				onProgress(cr.n.Load())
 			}
+			s.history.recordSend(peerDisplayName(peer), name, size, err)
 			return err
 		case <-ticker.C:
 			if n := cr.n.Load(); n != last {
@@ -67,6 +68,21 @@ func (s *server) sendOne(ctx context.Context, id string, peer tailcfg.StableNode
 			return ctx.Err()
 		}
 	}
+}
+
+// peerDisplayName resolves a StableNodeID to the device name shown in the UI
+// (best effort; falls back to the ID).
+func peerDisplayName(peer tailcfg.StableNodeID) string {
+	cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if devs, err := tsDevices(cctx); err == nil {
+		for _, d := range devs {
+			if d.ID == peer {
+				return d.Name
+			}
+		}
+	}
+	return string(peer)
 }
 
 // deleteInboxFile discards an inbox file, then pushes a fresh inbox snapshot

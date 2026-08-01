@@ -23,9 +23,14 @@ The two talk over localhost only; nothing is proxied through a remote server.
 ## Features
 
 - **Inbox** — files appear instantly (daemon long-poll), with size, arrival
-  time, progress bars, Save / Save to… (native folder dialog) / Delete
+  time, progress bars, Save / Save to… (native folder dialog) / Delete,
+  and a filter box. Keyboard: `/` search, `j`/`k` select, `s` save, `d` delete.
+- **History** — everything that happened is logged locally: arrivals,
+  saves (with the destination path), deletes, and sends. Filter by
+  received/sent, search, open or reveal a saved file, per-file stats, clear.
 - **Send** — device picker (offline & can't-receive reasons shown), file
-  picker, or drag & drop onto the window
+  picker, or drag & drop onto the window; Save all / Save all to… for batch
+  receiving.
 - **Auto-save** — one checkbox: incoming files land in your folder the
   moment they arrive (like `tailscale file get --loop`), with notifications
 - **Notifications** — arrival + save/send results, native OS notifications
@@ -60,6 +65,7 @@ cd electron && npm install && npm start
 main.go        sidecar: config, HTTP server, OS helpers
 taildrop.go    daemon interactions: inbox, save, delete, devices, send
 ops.go         save/send operations with progress events
+history.go     local event log (arrivals, saves, deletes, sends)
 server.go      event hub, API, security guards, inbox watcher + auto-save
 web/index.html the UI (embedded into the sidecar binary)
 electron/      desktop shell: main.js, package.json, icon
