@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taildrop</title>
+<style>
+:root{
+  --bg:#0b0e14; --panel:#12161f; --panel2:#181e2c; --border:#232b3d;
+  --text:#e8ebf3; --muted:#8a93a8; --accent:#5f6cff; --accent-soft:rgba(95,108,255,.14);
+  --green:#34d399; --red:#f87171; --amber:#fbbf24;
+  --radius:12px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:default;opacity:.5}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 28px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#101522 0%,var(--bg) 100%)}
+.brand{display:flex;align-items:center;gap:12px}
+.brand h1{margin:0;font-size:17px;font-weight:650;letter-spacing:.2px}
+.brand .tag{margin:0;font-size:12px;color:var(--muted)}
+.logo{width:34px;height:34px;flex:none}
+.pill{display:flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel);font-size:12.5px;color:var(--muted);max-width:50%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:8px;height:8px;border-radius:50%;background:#5a6375;flex:none}
+.pill.ok .dot{background:var(--green);box-shadow:0 0 8px rgba(52,211,153,.6)}
+.pill.err .dot{background:var(--red);box-shadow:0 0 8px rgba(248,113,113,.6)}
+
+.tabs{display:flex;gap:4px;padding:10px 28px 0;border-bottom:1px solid var(--border)}
+.tab{display:flex;align-items:center;gap:8px;padding:9px 16px;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;background:transparent;color:var(--muted);font-size:13.5px;font-weight:600}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);background:var(--panel);border-color:var(--border);position:relative;top:1px}
+.badge{min-width:20px;padding:1px 6px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-align:center}
+
+main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
+.pane{display:none}
+.pane.active{display:block}
+
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.dir-field{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:6px 12px;flex:1;min-width:240px}
+.dir-field span{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.dir-field input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font:inherit;font-size:13px}
+.dir-field input::placeholder{color:#5a6375}
+.dir-field select{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font:inherit;font-size:13.5px;appearance:none;cursor:pointer}
+.btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{border-color:var(--border);background:var(--panel);color:var(--text)}
+.btn.ghost:hover{border-color:#333d55}
+.btn.danger{border-color:transparent;background:transparent;color:var(--muted);padding:7px 8px}
+.btn.danger:hover{color:var(--red)}
+.btn.mini{border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:8px;padding:4px 10px;font-size:12px}
+.btn.mini:hover{border-color:#3a4560}
+.btn.mini.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;transition:border-color .15s}
+.row:hover{border-color:#333d55}
+.chip{width:42px;height:42px;border-radius:10px;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);flex:none;text-transform:uppercase}
+.chip.c-img{color:var(--green)} .chip.c-vid{color:#f472b6} .chip.c-aud{color:var(--amber)}
+.chip.c-arc{color:#fb923c} .chip.c-doc{color:#60a5fa} .chip.c-code{color:#a78bfa}
+.meta{flex:1;min-width:0}
+.meta .name{font-size:13.5px;font-weight:600;word-break:break-all}
+.meta .sub{font-size:12px;color:var(--muted);margin-top:1px}
+.actions{display:flex;align-items:center;gap:6px;flex:none}
+.actions .btn.mini{white-space:nowrap}
+.bar{flex:1;min-width:140px;max-width:300px}
+.bar .track{height:6px;border-radius:99px;background:var(--panel2);overflow:hidden}
+.bar .fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),#8b5cf6);transition:width .2s}
+.bar .lbl{font-size:11.5px;color:var(--muted);margin-top:4px}
+.row .status-err{font-size:12px;color:var(--red);flex:1;min-width:0;word-break:break-all}
+
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:70px 20px;color:var(--muted)}
+.empty svg{width:56px;height:56px;opacity:.55;margin-bottom:14px}
+.empty .t{font-size:15px;font-weight:600;color:var(--text)}
+.empty .s{font-size:13px;max-width:380px;margin-top:4px}
+
+.drop-zone{margin-bottom:14px;border:1.5px dashed #2c3550;border-radius:var(--radius);padding:34px 20px;text-align:center;color:var(--muted);background:var(--panel);transition:border-color .15s,background .15s}
+.drop-zone svg{width:40px;height:40px;opacity:.6;margin-bottom:8px}
+.drop-zone p{margin:0}
+.drop-zone .t{font-weight:600;color:var(--text)}
+.drop-zone .sub{font-size:12.5px;margin-top:4px}
+.drop-zone .link{color:var(--accent);cursor:pointer;text-decoration:underline}
+.drop-zone.over{border-color:var(--accent);background:var(--accent-soft)}
+
+.toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:360px}
+.toast{display:flex;align-items:center;gap:10px;background:#1a2133;border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.45);animation:in .18s ease;word-break:break-word}
+.toast.out{opacity:0;transform:translateY(4px);transition:all .25s}
+.toast.err{border-color:rgba(248,113,113,.4)}
+.toast .toast-act{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:7px;padding:3px 10px;font-size:12px;font-weight:600;flex:none}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+
+footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 40 40" fill="none">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#5f6cff"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+      <path d="M12 30a8 8 0 1 1 1.2-15.9A10 10 0 0 1 32.5 16 7.5 7.5 0 0 1 31 30.5H12z" fill="url(#g)" opacity=".92"/>
+      <path d="M20 24.5v-9m0 0-3.4 3.4M20 15.5l3.4 3.4" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div>
+      <h1>Taildrop</h1>
+      <p class="tag">files across your tailnet</p>
+    </div>
+  </div>
+  <div class="pill" id="daemon-pill"><span class="dot"></span><span id="daemon-text">connecting…</span></div>
+</header>
+
+<nav class="tabs">
+  <button id="tab-inbox" class="tab active">Inbox <span class="badge" id="inbox-badge" hidden></span></button>
+  <button id="tab-send" class="tab">Send</button>
+</nav>
+
+<main>
+  <section id="pane-inbox" class="pane active">
+    <div class="toolbar">
+      <label class="dir-field">
+        <span>Save to</span>
+        <input id="save-dir" type="text" spellcheck="false" autocomplete="off">
+      </label>
+      <button id="set-dir" class="btn ghost">Set default</button>
+      <button id="save-all" class="btn">Save all</button>
+    </div>
+    <div id="inbox-list" class="list"></div>
+    <div id="inbox-empty" class="empty" hidden>
+      <svg viewBox="0 0 48 48" fill="none"><path d="M14 36a9.5 9.5 0 1 1 1.4-18.9A12 12 0 0 1 39 19a9 9 0 0 1-2 17H14z" stroke="#8a93a8" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 30.5v-11m0 0-4.2 4.2M24 19.5l4.2 4.2" stroke="#8a93a8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <p class="t">No files waiting</p>
+      <p class="s">When someone on your tailnet sends you a file, it lands here for you to save or delete.</p>
+    </div>
+  </section>
+
+  <section id="pane-send" class="pane">
+    <div class="toolbar">
+      <label class="dir-field">
+        <span>Send to</span>
+        <select id="device-select"></select>
+      </label>
+      <button id="refresh-devices" class="btn ghost">Refresh</button>
+    </div>
+    <div id="drop-zone" class="drop-zone">
+      <svg viewBox="0 0 48 48" fill="none"><path d="M14 36a9.5 9.5 0 1 1 1.4-18.9A12 12 0 0 1 39 19a9 9 0 0 1-2 17H14z" stroke="#8a93a8" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 30.5v-11m0 0-4.2 4.2M24 19.5l4.2 4.2" stroke="#8a93a8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <p class="t">Drag &amp; drop files here</p>
+      <p class="sub">or <label class="link">browse<input type="file" id="file-input" multiple hidden></label> — sent straight over your tailnet</p>
+    </div>
+    <div id="send-list" class="list"></div>
+    <div id="send-empty" class="empty" hidden>
+      <p class="t">No devices found</p>
+      <p class="s">Make sure your tailnet is up and other machines are online, then hit Refresh.</p>
+    </div>
+  </section>
+</main>
+
+<footer>Talks directly to your local tailscaled daemon — nothing leaves this machine except the files you send.</footer>
+
+<div id="toasts" class="toasts"></div>
+
+<script>
+'use strict';
+const CONFIG = __CONFIG__;
+
+const $ = s => document.querySelector(s);
+const inboxList = $('#inbox-list'), sendList = $('#send-list');
+const toasts = $('#toasts');
+
+let inbox = [];                    // {name,size,arrived}
+let saving = new Map();            // name -> {written,size,done,path,err}
+let sending = new Map();           // id -> {name,peer,sent,size,done,err}
+let devices = [];                  // {id,name,os,online,lastSeen,taildrop}
+let knownNames = new Set();
+let currentTab = 'inbox';
+
+// ---------- helpers ----------
+
+function el(tag, attrs = {}, children = []) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (k === 'disabled' && v) n.disabled = true;
+    else n.setAttribute(k, v);
+  }
+  for (const c of [].concat(children)) {
+    if (c == null) continue;
+    n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return n;
+}
+
+function fmtSize(n) {
+  if (n < 0) return '?';
+  if (n < 1024) return n + ' B';
+  const u = ['KiB', 'MiB', 'GiB', 'TiB'];
+  let v = n, i = -1;
+  do { v /= 1024; i++; } while (v >= 1024 && i < u.length - 1);
+  return (v >= 100 ? v.toFixed(0) : v.toFixed(1)) + ' ' + u[i];
+}
+
+function fmtAge(t) {
+  const s = (Date.now() - new Date(t).getTime()) / 1000;
+  if (s < 10) return 'just now';
+  if (s < 60) return Math.round(s) + 's ago';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  const d = Math.round(s / 86400);
+  return d + 'd ago';
+}
+
+function chipClass(name) {
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  if (['png','jpg','jpeg','gif','webp','svg','heic','bmp','avif','raw'].includes(ext)) return 'c-img';
+  if (['mp4','mkv','mov','avi','webm','m4v'].includes(ext)) return 'c-vid';
+  if (['mp3','wav','flac','ogg','m4a','aac','opus'].includes(ext)) return 'c-aud';
+  if (['zip','tar','gz','bz2','xz','7z','rar','zst'].includes(ext)) return 'c-arc';
+  if (['pdf','doc','docx','xls','xlsx','ppt','pptx','odt','ods','md','txt','rtf','csv'].includes(ext)) return 'c-doc';
+  if (['go','rs','py','js','ts','c','h','cpp','java','sh','html','css','json','yaml','yml','toml'].includes(ext)) return 'c-code';
+  return '';
+}
+
+function chipLabel(name) {
+  const i = name.lastIndexOf('.');
+  if (i <= 0 || i === name.length - 1) return 'FILE';
+  const e = name.slice(i + 1).toUpperCase();
+  return e.length > 5 ? e.slice(0, 4) + '…' : e;
+}
+
+function uuid() {
+  return (crypto.randomUUID && crypto.randomUUID()) ||
+    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
+function toast(msg, action, kind = 'ok') {
+  const t = el('div', { class: 'toast ' + kind });
+  t.appendChild(el('span', {}, msg));
+  if (action) {
+    const b = el('button', { class: 'toast-act', onclick: () => { action.fn(); t.remove(); } }, action.label);
+    t.appendChild(b);
+  }
+  toasts.appendChild(t);
+  setTimeout(() => t.classList.add('out'), 4500);
+  setTimeout(() => t.remove(), 5000);
+}
+
+// ---------- API ----------
+
+async function api(path, opts = {}) {
+  const headers = { 'X-Taildrop-Token': CONFIG.token };
+  if (opts.json !== undefined) headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, {
+    method: opts.method || 'GET',
+    headers,
+    body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.body,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+// ---------- daemon status ----------
+
+function setDaemonState(ok, msg) {
+  const pill = $('#daemon-pill');
+  pill.classList.toggle('ok', ok);
+  pill.classList.toggle('err', !ok);
+  $('#daemon-text').textContent = msg;
+}
+
+// ---------- inbox ----------
+
+function renderInbox() {
+  const any = inbox.length > 0;
+  $('#inbox-empty').hidden = any;
+  inboxList.textContent = '';
+  const badge = $('#inbox-badge');
+  badge.hidden = inbox.length === 0;
+  badge.textContent = inbox.length;
+  document.title = inbox.length ? `(${inbox.length}) Taildrop` : 'Taildrop';
+  if (!any) return;
+
+  const rows = inbox.map(f => inboxRow(f));
+  // keep in-flight saves on screen even if the file briefly drops out
+  for (const [name, st] of saving) {
+    if (st.done) continue;
+    if (!inbox.some(f => f.name === name)) rows.push(savingRow(name, st));
+  }
+  for (const r of rows) inboxList.appendChild(r);
+}
+
+function inboxRow(f) {
+  const st = saving.get(f.name);
+  const row = el('div', { class: 'row' });
+  row.appendChild(el('div', { class: 'chip ' + chipClass(f.name) }, chipLabel(f.name)));
+  const meta = el('div', { class: 'meta' });
+  meta.appendChild(el('div', { class: 'name' }, f.name));
+  if (st && !st.done) {
+    const bar = el('div', { class: 'bar' });
+    bar.appendChild(el('div', { class: 'track' }, el('div', { class: 'fill', style: 'width:' + pct(st.written, st.size) + '%' })));
+    bar.appendChild(el('div', { class: 'lbl' }, savingLabel(st)));
+    row.appendChild(meta); row.appendChild(bar);
+    return row;
+  }
+  meta.appendChild(el('div', { class: 'sub' }, fmtSize(f.size) + ' · ' + fmtAge(f.arrived)));
+  row.appendChild(meta);
+  const actions = el('div', { class: 'actions' });
+  actions.appendChild(el('button', { class: 'btn mini primary', onclick: () => saveFile(f.name, f.size, CONFIG.saveDir) }, 'Save'));
+  actions.appendChild(el('button', { class: 'btn mini', onclick: () => saveToPrompt(f) }, 'Save to…'));
+  actions.appendChild(el('button', { class: 'btn mini danger', onclick: () => deleteFile(f.name) }, 'Delete'));
+  row.appendChild(actions);
+  return row;
+}
+
+function savingRow(name, st) {
+  const row = el('div', { class: 'row' });
+  row.appendChild(el('div', { class: 'chip ' + chipClass(name) }, chipLabel(name)));
+  const meta = el('div', { class: 'meta' });
+  meta.appendChild(el('div', { class: 'name' }, name));
+  if (st.err) {
+    meta.appendChild(el('div', { class: 'sub', style: 'color:var(--red)' }, st.err));
+    row.appendChild(meta);
+    return row;
+  }
+  const bar = el('div', { class: 'bar' });
+  bar.appendChild(el('div', { class: 'track' }, el('div', { class: 'fill', style: 'width:' + pct(st.written, st.size) + '%' })));
+  bar.appendChild(el('div', { class: 'lbl' }, savingLabel(st)));
+  row.appendChild(meta); row.appendChild(bar);
+  return row;
+}
+
+function pct(w, s) { return s > 0 ? Math.min(100, Math.round(w * 100 / s)) : 0; }
+function savingLabel(st) {
+  return st.size > 0
+    ? `saving… ${fmtSize(st.written)} / ${fmtSize(st.size)} (${pct(st.written, st.size)}%)`
+    : `saving… ${fmtSize(st.written)}`;
+}
+
+async function saveFile(name, size, dir) {
+  if (saving.has(name)) return;
+  saving.set(name, { written: 0, size, done: false });
+  renderInbox();
+  try {
+    const res = await api('/api/save', { method: 'POST', json: { name, dir } });
+    const st = saving.get(name) || {};
+    saving.set(name, { ...st, done: true, path: res.path });
+    toast(`Saved ${name}`, { label: 'Open', fn: () => api('/api/open', { method: 'POST', json: { path: res.path } }).catch(() => {}) });
+  } catch (e) {
+    const st = saving.get(name) || {};
+    saving.set(name, { ...st, done: true, err: e.message });
+    toast(`Couldn't save ${name}: ${e.message}`, null, 'err');
+  }
+  setTimeout(() => { saving.delete(name); renderInbox(); }, 2500);
+  renderInbox();
+}
+
+function saveToPrompt(f) {
+  const dir = prompt('Save to directory', CONFIG.saveDir);
+  if (dir) saveFile(f.name, f.size, dir);
+}
+
+async function deleteFile(name) {
+  try {
+    await api('/api/delete', { method: 'POST', json: { name } });
+    toast(`Deleted ${name} from the inbox`);
+  } catch (e) {
+    toast(`Couldn't delete: ${e.message}`, null, 'err');
+  }
+}
+
+// ---------- send ----------
+
+function renderDevices() {
+  const sel = $('#device-select');
+  sel.textContent = '';
+  const usable = devices.filter(d => d.taildrop === 'available');
+  for (const d of devices) {
+    const opt = el('option', { value: d.id });
+    const offline = d.online ? '' : ' · offline';
+    const reason = d.taildrop === 'available' ? '' : ` · can't receive (${d.taildrop})`;
+    opt.textContent = d.name + (d.os ? ` (${d.os})` : '') + offline + reason;
+    opt.disabled = d.taildrop !== 'available';
+    sel.appendChild(opt);
+  }
+  $('#send-empty').hidden = devices.length > 0;
+  if (devices.length > 0) {
+    // try to keep a usable selection
+    if (sel.value === '' || sel.selectedOptions.length && sel.selectedOptions[0].disabled) {
+      const first = usable.find(d => d.online) || usable[0];
+      if (first) sel.value = first.id;
+    }
+  }
+}
+
+async function refreshDevices() {
+  try {
+    const res = await api('/api/devices');
+    devices = res.devices || [];
+    renderDevices();
+  } catch (e) {
+    setDaemonState(false, 'tailscaled unreachable: ' + e.message);
+    toast("Couldn't list devices: " + e.message, null, 'err');
+  }
+}
+
+function renderSends() {
+  sendList.textContent = '';
+  const any = sending.size > 0;
+  sendList.style.display = any ? '' : 'none';
+  if (!any) return;
+  for (const [id, st] of sending) {
+    const row = el('div', { class: 'row' });
+    row.appendChild(el('div', { class: 'chip ' + chipClass(st.name) }, chipLabel(st.name)));
+    const meta = el('div', { class: 'meta' });
+    meta.appendChild(el('div', { class: 'name' }, st.name));
+    const dev = devices.find(d => d.id === st.peer);
+    if (st.err) {
+      meta.appendChild(el('div', { class: 'sub', style: 'color:var(--red)' }, st.err));
+    } else if (st.done) {
+      meta.appendChild(el('div', { class: 'sub', style: 'color:var(--green)' }, 'sent to ' + (dev ? dev.name : 'device')));
+    } else {
+      const bar = el('div', { class: 'bar' });
+      bar.appendChild(el('div', { class: 'track' }, el('div', { class: 'fill', style: 'width:' + pct(st.sent, st.size) + '%' })));
+      bar.appendChild(el('div', { class: 'lbl' }, st.size > 0
+        ? `sending to ${dev ? dev.name : 'device'}… ${fmtSize(st.sent)} / ${fmtSize(st.size)} (${pct(st.sent, st.size)}%)`
+        : `sending to ${dev ? dev.name : 'device'}… ${fmtSize(st.sent)}`));
+      row.appendChild(meta); row.appendChild(bar);
+      sendList.appendChild(row);
+      continue;
+    }
+    row.appendChild(meta);
+    sendList.appendChild(row);
+  }
+}
+
+async function sendFile(file) {
+  const sel = $('#device-select');
+  if (!sel.value) { toast('Pick a device to send to first', null, 'err'); return; }
+  const id = uuid();
+  sending.set(id, { name: file.name, peer: sel.value, sent: 0, size: file.size, done: false });
+  renderSends();
+  try {
+    const q = new URLSearchParams({ id, peer: sel.value, name: file.name });
+    await api('/api/send?' + q, { method: 'POST', body: file });
+    const st = sending.get(id) || {};
+    sending.set(id, { ...st, done: true });
+    toast(`Sent ${file.name}`);
+  } catch (e) {
+    const st = sending.get(id) || {};
+    sending.set(id, { ...st, done: true, err: e.message });
+    toast(`Failed to send ${file.name}: ${e.message}`, null, 'err');
+  }
+  renderSends();
+  setTimeout(() => { if (sending.get(id)?.done) { sending.delete(id); renderSends(); } }, 5000);
+}
+
+function handleFiles(files) {
+  for (const f of files) sendFile(f);
+}
+
+// ---------- events ----------
+
+function handleEvent(ev) {
+  switch (ev.type) {
+    case 'inbox': {
+      const fresh = ev.files.filter(f => !knownNames.has(f.name));
+      inbox = ev.files;
+      knownNames = new Set(ev.files.map(f => f.name));
+      renderInbox();
+      if (fresh.length && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+        for (const f of fresh) new Notification(f.name, { body: fmtSize(f.size) + ' — click to open Taildrop' });
+      }
+      break;
+    }
+    case 'devices':
+      devices = ev.devices;
+      renderDevices();
+      break;
+    case 'save': {
+      const st = saving.get(ev.name);
+      if (!st) break;
+      if (ev.done) { st.done = true; if (ev.err) st.err = ev.err; if (ev.path) st.path = ev.path; }
+      else { st.written = ev.written; st.size = ev.size; }
+      renderInbox();
+      break;
+    }
+    case 'send': {
+      const st = sending.get(ev.id);
+      if (!st) break;
+      st.sent = ev.sent;
+      if (ev.size >= 0) st.size = ev.size;
+      if (ev.done) { st.done = true; if (ev.err) st.err = ev.err; }
+      renderSends();
+      break;
+    }
+    case 'status':
+      setDaemonState(false, 'tailscaled unreachable: ' + ev.err);
+      break;
+  }
+}
+
+// ---------- boot ----------
+
+function connectEvents() {
+  const es = new EventSource('/events');
+  es.onmessage = e => { try { handleEvent(JSON.parse(e.data)); } catch (_) {} };
+  es.onopen = () => { /* first inbox event flips the pill */ };
+  es.onerror = () => { /* browser retries automatically */ };
+}
+
+async function boot() {
+  $('#save-dir').value = CONFIG.saveDir;
+  connectEvents();
+  try {
+    const res = await api('/api/inbox');
+    handleEvent({ type: 'inbox', files: res.files || [] });
+    setDaemonState(true, 'connected to tailscaled');
+  } catch (e) {
+    setDaemonState(false, 'tailscaled unreachable: ' + e.message);
+  }
+  await refreshDevices();
+  if (currentTab !== 'send') setInterval(() => { if (currentTab === 'send') refreshDevices(); }, 60000);
+  setInterval(() => { if (currentTab === 'inbox' && inbox.length) renderInbox(); }, 30000); // refresh relative times
+}
+
+// tabs
+$('#tab-inbox').addEventListener('click', () => {
+  currentTab = 'inbox';
+  $('#tab-inbox').classList.add('active'); $('#tab-send').classList.remove('active');
+  $('#pane-inbox').classList.add('active'); $('#pane-send').classList.remove('active');
+  renderInbox();
+});
+$('#tab-send').addEventListener('click', () => {
+  currentTab = 'send';
+  $('#tab-send').classList.add('active'); $('#tab-inbox').classList.remove('active');
+  $('#pane-send').classList.add('active'); $('#pane-inbox').classList.remove('active');
+  refreshDevices();
+});
+
+// toolbar
+$('#set-dir').addEventListener('click', async () => {
+  const dir = $('#save-dir').value.trim();
+  if (!dir) return;
+  try {
+    const res = await api('/api/config', { method: 'POST', json: { saveDir: dir } });
+    CONFIG.saveDir = res.saveDir;
+    toast('Default save folder: ' + res.saveDir);
+  } catch (e) {
+    toast(e.message, null, 'err');
+  }
+});
+$('#save-all').addEventListener('click', async () => {
+  for (const f of inbox) {
+    if (saving.has(f.name)) continue;
+    await saveFile(f.name, f.size, CONFIG.saveDir);
+  }
+});
+$('#refresh-devices').addEventListener('click', refreshDevices);
+
+// drop zone + file picker
+const dz = $('#drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('over');
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+$('#file-input').addEventListener('change', e => {
+  handleFiles(e.target.files);
+  e.target.value = '';
+});
+
+// notifications: request permission on first interaction
+document.addEventListener('pointerdown', () => {
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+}, { once: true });
+
+boot();
+</script>
+</body>
+</html>
