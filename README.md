@@ -77,3 +77,15 @@ main_test.go   unit tests (conflict naming, validation)
 ## License
 
 MIT — do whatever you like with it.
+
+## Install as a service (NixOS)
+
+```sh
+./install.sh
+```
+
+Installs the app into `~/.local/share/tailscale-drop` and runs it as a
+systemd user service (`tailscale-drop.service`), so it starts with your
+desktop session and restarts on failure. The window's close button hides
+to the tray; quit from the tray menu. `./install.sh --run` launches in the
+foreground instead.

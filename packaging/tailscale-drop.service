@@ -1,0 +1,12 @@
+[Unit]
+Description=Taildrop — Tailscale file sharing desktop app
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/tailscale-drop/run.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

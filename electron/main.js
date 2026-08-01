@@ -14,6 +14,7 @@ const ICON_PATH = path.join(__dirname, 'icon.png');
 let win = null;
 let tray = null;
 let sidecar = null;
+let notifStarted = false;
 let quitting = false;
 let port = 0;
 
@@ -28,6 +29,7 @@ function sidecarPath() {
 }
 
 function startSidecar() {
+  port = 0;
   sidecar = spawn(sidecarPath(), ['--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
   sidecar.stdout.setEncoding('utf8');
   sidecar.stderr.setEncoding('utf8');
@@ -43,16 +45,19 @@ function startSidecar() {
   sidecar.on('exit', (code) => {
     sidecar = null;
     if (!quitting) {
-      console.error('sidecar exited with code', code);
-      app.quit();
+      console.error(`sidecar exited with code ${code} — restarting in 2s`);
+      setTimeout(startSidecar, 2000);
     }
   });
 }
 
 function onServerUp() {
-  createWindow();
-  setupTray();
-  setupNotifications();
+  if (!win) createWindow();
+  if (!tray) setupTray();
+  if (!notifStarted) {
+    notifStarted = true;
+    setupNotifications();
+  }
 }
 
 // --- window ---------------------------------------------------------------
@@ -159,6 +164,11 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  // Optional: --remote-debugging-port comes from the command line as usual;
+  // TSD_DEBUG_PORT is honoured so a systemd service can enable it too.
+  if (!process.argv.includes('--remote-debugging-port') && process.env.TSD_DEBUG_PORT) {
+    app.commandLine.appendSwitch('remote-debugging-port', process.env.TSD_DEBUG_PORT);
+  }
   app.on('second-instance', () => {
     if (win) { win.show(); win.focus(); }
   });
@@ -173,5 +183,7 @@ if (!gotLock) {
   });
 
   // Never quit when the window closes — keep running in the tray.
-  app.on('window-all-closed', () => {});
+  app.on('window-all-closed', () => {
+    if (quitting) app.exit(0);
+  });
 }

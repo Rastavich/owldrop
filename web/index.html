@@ -92,6 +92,23 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .toast .toast-act{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:7px;padding:3px 10px;font-size:12px;font-weight:600;flex:none}
 @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
 
+.modal-overlay{position:fixed;inset:0;background:rgba(5,8,14,.62);display:flex;align-items:center;justify-content:center;z-index:40}
+.modal-overlay[hidden]{display:none}
+.modal{width:540px;max-width:92vw;background:var(--panel);border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--border)}
+.modal-title{font-weight:650}
+.btn.x{border:none;background:transparent;color:var(--muted);padding:2px 9px;font-size:15px}
+.btn.x:hover{color:var(--text)}
+.modal-body{padding:12px 16px;display:flex;flex-direction:column;gap:10px;min-height:230px}
+#dir-path{background:var(--panel2);border:1px solid var(--border);border-radius:9px;padding:8px 11px;color:var(--text);font:inherit;font-size:13px;outline:none}
+.dir-list{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:9px;background:var(--panel2);min-height:190px;max-height:340px}
+.dir-row{display:flex;align-items:center;gap:9px;padding:7px 11px;cursor:pointer;font-size:13px}
+.dir-row:hover{background:var(--accent-soft)}
+.dir-row svg{flex:none;opacity:.85}
+.modal-foot{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--border)}
+.modal-foot .spacer{flex:1}
+#dir-new-name{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font:inherit;font-size:12.5px;outline:none;width:150px}
+
 footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size:12px}
 </style>
 </head>
@@ -160,10 +177,40 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
 
 <div id="toasts" class="toasts"></div>
 
+<div id="dir-modal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">Choose a folder</span>
+      <button id="dir-close" class="btn x">✕</button>
+    </div>
+    <div class="modal-body">
+      <input id="dir-path" type="text" spellcheck="false" autocomplete="off" placeholder="/home/you">
+      <div id="dir-list" class="dir-list"></div>
+    </div>
+    <div class="modal-foot">
+      <input id="dir-new-name" type="text" placeholder="folder name…" hidden>
+      <button id="dir-new" class="btn ghost">New folder…</button>
+      <span class="spacer"></span>
+      <button id="dir-cancel" class="btn ghost">Cancel</button>
+      <button id="dir-use" class="btn">Use this folder</button>
+    </div>
+  </div>
+</div>
+
 <script>
 'use strict';
 const CONFIG = __CONFIG__;
 const IS_ELECTRON = navigator.userAgent.includes('Electron');
+
+// Surface unexpected failures instead of failing silently.
+window.__errs = [];
+window.addEventListener('error', e => {
+  window.__errs.push(String(e.message));
+  toast('UI error: ' + e.message, null, 'err');
+});
+window.addEventListener('unhandledrejection', e => {
+  window.__errs.push('rejection: ' + e.reason);
+});
 
 const $ = s => document.querySelector(s);
 const inboxList = $('#inbox-list'), sendList = $('#send-list');
@@ -311,12 +358,35 @@ function inboxRow(f) {
   meta.appendChild(el('div', { class: 'sub' }, fmtSize(f.size) + ' · ' + fmtAge(f.arrived)));
   row.appendChild(meta);
   const actions = el('div', { class: 'actions' });
-  actions.appendChild(el('button', { class: 'btn mini primary', onclick: () => saveFile(f.name, f.size, CONFIG.saveDir) }, 'Save'));
-  actions.appendChild(el('button', { class: 'btn mini', onclick: () => saveToPrompt(f) }, 'Save to…'));
-  actions.appendChild(el('button', { class: 'btn mini danger', onclick: () => deleteFile(f.name) }, 'Delete'));
+  actions.appendChild(el('button', { class: 'btn mini primary', 'data-action': 'save', 'data-name': f.name, 'data-size': f.size }, 'Save'));
+  actions.appendChild(el('button', { class: 'btn mini', 'data-action': 'save-to', 'data-name': f.name, 'data-size': f.size }, 'Save to…'));
+  actions.appendChild(el('button', { class: 'btn mini danger', 'data-action': 'delete', 'data-name': f.name }, 'Delete'));
   row.appendChild(actions);
   return row;
 }
+
+// One listener for all row buttons. Delegation means clicks survive the
+// frequent row re-renders (progress updates, age refreshes) that would
+// otherwise destroy a button between mousedown and mouseup.
+inboxList.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const name = btn.dataset.name;
+  const size = Number(btn.dataset.size || 0);
+  switch (btn.dataset.action) {
+    case 'save':
+      saveFile(name, size, CONFIG.saveDir);
+      break;
+    case 'save-to': {
+      const f = inbox.find(x => x.name === name);
+      if (f) openDirPicker(f);
+      break;
+    }
+    case 'delete':
+      deleteFile(name);
+      break;
+  }
+});
 
 function savingRow(name, st) {
   const row = el('div', { class: 'row' });
@@ -343,10 +413,10 @@ function savingLabel(st) {
 }
 
 async function saveFile(name, size, dir) {
-  if (saving.has(name)) return;
+  if (saving.has(name)) { toast(`Already saving ${name}`); return; }
   saving.set(name, { written: 0, size, done: false });
-  renderInbox();
   try {
+    renderInbox();
     const res = await api('/api/save', { method: 'POST', json: { name, dir } });
     const st = saving.get(name) || {};
     saving.set(name, { ...st, done: true, path: res.path });
@@ -358,11 +428,6 @@ async function saveFile(name, size, dir) {
   }
   setTimeout(() => { saving.delete(name); renderInbox(); }, 2500);
   renderInbox();
-}
-
-function saveToPrompt(f) {
-  const dir = prompt('Save to directory', CONFIG.saveDir);
-  if (dir) saveFile(f.name, f.size, dir);
 }
 
 async function deleteFile(name) {
@@ -463,6 +528,102 @@ async function sendFile(file) {
 function handleFiles(files) {
   for (const f of files) sendFile(f);
 }
+
+// ---------- folder picker ----------
+
+let picker = null; // { file, path }
+
+function openDirPicker(file) {
+  picker = { file, path: '' };
+  $('#dir-modal').hidden = false;
+  browseTo(CONFIG.saveDir);
+}
+
+function closeDirPicker() {
+  $('#dir-modal').hidden = true;
+  $('#dir-new-name').hidden = true;
+  $('#dir-new').hidden = false;
+  picker = null;
+}
+
+async function browseTo(path) {
+  if (!path) return;
+  try {
+    const res = await api('/api/browse?path=' + encodeURIComponent(path));
+    if (!picker) return; // closed while loading
+    picker.path = res.path;
+    $('#dir-path').value = res.path;
+    const list = $('#dir-list');
+    list.textContent = '';
+    if (res.parent) list.appendChild(dirRow('..', res.parent));
+    for (const d of res.dirs) list.appendChild(dirRow(d, res.path + '/' + d));
+    if (!res.parent && !res.dirs.length) {
+      list.appendChild(el('div', { class: 'dir-row', style: 'cursor:default' }, '(empty folder)'));
+    }
+  } catch (e) {
+    toast(e.message, null, 'err');
+  }
+}
+
+function dirRow(name, fullPath) {
+  const row = el('div', { class: 'dir-row' });
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '16');
+  svg.setAttribute('height', '16');
+  svg.innerHTML = '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>';
+  row.appendChild(svg);
+  row.appendChild(el('span', {}, name));
+  row.addEventListener('click', () => browseTo(fullPath));
+  return row;
+}
+
+$('#dir-close').addEventListener('click', closeDirPicker);
+$('#dir-cancel').addEventListener('click', closeDirPicker);
+$('#dir-path').addEventListener('keydown', e => {
+  if (e.key === 'Enter') browseTo(e.target.value.trim());
+  else if (e.key === 'Escape') closeDirPicker();
+});
+$('#dir-use').addEventListener('click', async () => {
+  if (!picker) return;
+  const v = $('#dir-path').value.trim();
+  if (v && v !== picker.path) {
+    try {
+      const res = await api('/api/browse?path=' + encodeURIComponent(v));
+      picker.path = res.path;
+    } catch (e) {
+      toast(e.message, null, 'err');
+      return;
+    }
+  }
+  const file = picker.file;
+  const dir = picker.path;
+  closeDirPicker();
+  saveFile(file.name, file.size, dir);
+});
+$('#dir-new').addEventListener('click', () => {
+  $('#dir-new').hidden = true;
+  const input = $('#dir-new-name');
+  input.hidden = false;
+  input.value = '';
+  input.focus();
+});
+$('#dir-new-name').addEventListener('keydown', async e => {
+  if (e.key === 'Escape') {
+    $('#dir-new-name').hidden = true;
+    $('#dir-new').hidden = false;
+    return;
+  }
+  if (e.key !== 'Enter' || !e.target.value.trim() || !picker) return;
+  try {
+    await api('/api/mkdir', { method: 'POST', json: { path: picker.path, name: e.target.value.trim() } });
+    $('#dir-new-name').hidden = true;
+    $('#dir-new').hidden = false;
+    browseTo(picker.path);
+  } catch (err) {
+    toast(err.message, null, 'err');
+  }
+});
 
 // ---------- events ----------
 
