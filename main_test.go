@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -37,6 +38,27 @@ func TestConflictFreeName(t *testing.T) {
 	got = conflictFreeName(dir, "foo (1).txt")
 	if want := filepath.Join(dir, "foo (1) (1).txt"); got != want {
 		t.Fatalf("daemon-deduplicated name: got %q, want %q", got, want)
+	}
+}
+
+// TestHistoryWiring guards against lost history hooks — a mutation path that
+// stops recording its event (as happened once with an aborted edit batch)
+// silently breaks the History tab. Source-level check; mocking the daemon
+// client for a real integration test isn't worth the plumbing.
+func TestHistoryWiring(t *testing.T) {
+	b, err := os.ReadFile("ops.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{
+		"s.history.recordSaved(name, path)",
+		"s.history.recordDeleted(name)",
+		"s.history.recordSend(",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("ops.go is missing %q — history event not recorded", want)
+		}
 	}
 }
 

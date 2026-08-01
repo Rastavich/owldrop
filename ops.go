@@ -27,6 +27,7 @@ func (s *server) saveOne(ctx context.Context, name, dir string, onProgress func(
 		return "", err
 	}
 	s.hub.broadcast(saveEvent{Type: "save", Name: name, Done: true, Path: path})
+	s.history.recordSaved(name, path)
 	s.broadcastInboxNow()
 	return path, nil
 }
@@ -92,6 +93,7 @@ func (s *server) deleteInboxFile(ctx context.Context, name string) error {
 	if err := tsDeleteFile(ctx, name); err != nil {
 		return err
 	}
+	s.history.recordDeleted(name)
 	s.broadcastInboxNow()
 	return nil
 }
