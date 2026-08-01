@@ -58,10 +58,9 @@ function startSidecar() {
 function onServerUp() {
   const url = `http://127.0.0.1:${port}/`;
   if (win) {
-    // Sidecar (re)started, possibly on a new port — point the window at it.
-    if (win.webContents.getURL() !== url) {
-      win.loadURL(url);
-    }
+    // Sidecar (re)started. With a fixed port the URL is unchanged, so always
+    // reload — this is also what picks up embedded-UI changes on hot reload.
+    win.loadURL(url);
   } else {
     createWindow();
   }

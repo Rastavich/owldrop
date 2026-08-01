@@ -1,0 +1,184 @@
+package main
+
+import (
+	"os"
+	"bytes"
+	"encoding/json"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func newDropTestServer(t *testing.T) (*server, string) {
+	t.Helper()
+	cfg := &config{SaveDir: t.TempDir()}
+	s := newServerDir(cfg, t.TempDir())
+	s.port = 8976
+	ts := httptest.NewServer(s.routes())
+	t.Cleanup(ts.Close)
+	return s, ts.URL
+}
+
+func createTestDropLink(t *testing.T, s *server, name string, ttl time.Duration, maxUses int) string {
+	t.Helper()
+	l := s.drops.create(name, ttl, maxUses)
+	return l.Token
+}
+
+func uploadToDrop(t *testing.T, base, token, filename, content string) *http.Response {
+	t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	fw, err := w.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fw.Write([]byte(content))
+	w.Close()
+	req, err := http.NewRequest("POST", base+"/drop/"+token+"/upload", &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func TestDropUploadAndSave(t *testing.T) {
+	s, base := newDropTestServer(t)
+	token := createTestDropLink(t, s, "Alice", time.Hour, 1)
+
+	res := uploadToDrop(t, base, token, "notes.txt", "hello from a drop link")
+	if res.StatusCode != 200 {
+		t.Fatalf("upload status = %d", res.StatusCode)
+	}
+
+	// It should appear in the combined inbox as a link-sourced file.
+	files, err := s.combinedInbox(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].Name != "notes.txt" || files[0].Source != "link" || files[0].Sender != "Alice" {
+		t.Fatalf("inbox = %+v", files)
+	}
+
+	// Saving it via the API moves it out of quarantine into the save dir.
+	body := strings.NewReader(`{"name":"notes.txt","source":"link","dir":""}`)
+	req, _ := http.NewRequest("POST", base+"/api/save", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Taildrop-Token", s.token)
+	r2, _ := http.DefaultClient.Do(req)
+	if r2.StatusCode != 200 {
+		t.Fatalf("save status = %d", r2.StatusCode)
+	}
+	saved := filepath.Join(s.cfg.SaveDir, "notes.txt")
+	b, err := readFile(t, saved)
+	if err != nil || string(b) != "hello from a drop link" {
+		t.Fatalf("saved content = %q, err = %v", b, err)
+	}
+	if s.drops.file("notes.txt") != nil {
+		t.Fatal("file still in quarantine after save")
+	}
+}
+
+func TestDropLinkSingleUseAndExpiry(t *testing.T) {
+	s, base := newDropTestServer(t)
+	token := createTestDropLink(t, s, "", time.Hour, 1)
+
+	if res := uploadToDrop(t, base, token, "a.txt", "one"); res.StatusCode != 200 {
+		t.Fatalf("first upload = %d", res.StatusCode)
+	}
+	// Single-use: the second upload must be refused.
+	if res := uploadToDrop(t, base, token, "b.txt", "two"); res.StatusCode != 200 {
+		t.Logf("second upload rejected (expected)")
+	} else {
+		t.Fatal("second upload accepted on a single-use link")
+	}
+
+	// Expired link must refuse.
+	expired := createTestDropLink(t, s, "", -time.Minute, 0)
+	if res := uploadToDrop(t, base, expired, "c.txt", "x"); res.StatusCode != 200 {
+		t.Logf("expired upload rejected (expected)")
+	} else {
+		t.Fatal("upload accepted on an expired link")
+	}
+
+	// Revoked link must refuse.
+	revoked := createTestDropLink(t, s, "", time.Hour, 0)
+	s.drops.revoke(revoked)
+	if res := uploadToDrop(t, base, revoked, "d.txt", "y"); res.StatusCode != 200 {
+		t.Logf("revoked upload rejected (expected)")
+	} else {
+		t.Fatal("upload accepted on a revoked link")
+	}
+}
+
+func TestDropPageAndBadToken(t *testing.T) {
+	s, base := newDropTestServer(t)
+	token := createTestDropLink(t, s, "Bob", time.Hour, 1)
+
+	page, _ := http.Get(base + "/drop/" + token)
+	if page.StatusCode != 200 {
+		t.Fatalf("page status = %d", page.StatusCode)
+	}
+	var buf bytes.Buffer
+	buf.ReadFrom(page.Body)
+	if !strings.Contains(buf.String(), "Send a file") || !strings.Contains(buf.String(), "Bob") {
+		t.Fatalf("page missing content")
+	}
+
+	bad, _ := http.Get(base + "/drop/deadbeef")
+	if bad.StatusCode != 200 {
+		t.Fatalf("bad token page status = %d", bad.StatusCode)
+	}
+	var b2 bytes.Buffer
+	b2.ReadFrom(bad.Body)
+	if !strings.Contains(b2.String(), "doesn&#39;t exist") && !strings.Contains(b2.String(), "doesn't exist") {
+		t.Fatalf("bad token page: %s", b2.String())
+	}
+}
+
+func TestDropLinkListAndRevokeAPI(t *testing.T) {
+	s, base := newDropTestServer(t)
+	token := createTestDropLink(t, s, "Carol", time.Hour, 0)
+
+	req, _ := http.NewRequest("GET", base+"/api/droplinks", nil)
+	req.Header.Set("X-Taildrop-Token", s.token)
+	res, _ := http.DefaultClient.Do(req)
+	var got struct {
+		Links []struct {
+			Token string `json:"token"`
+			URL   string `json:"url"`
+		} `json:"links"`
+	}
+	json.NewDecoder(res.Body).Decode(&got)
+	if len(got.Links) != 1 || got.Links[0].Token != token {
+		t.Fatalf("list = %+v", got.Links)
+	}
+	if !strings.Contains(got.Links[0].URL, "/drop/"+token) {
+		t.Fatalf("url = %q", got.Links[0].URL)
+	}
+
+	req, _ = http.NewRequest("POST", base+"/api/droplinks/"+token+"/revoke", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Taildrop-Token", s.token)
+	r2, _ := http.DefaultClient.Do(req)
+	if r2.StatusCode != 200 {
+		t.Fatalf("revoke = %d", r2.StatusCode)
+	}
+	if ok, _ := s.drops.usable(token); ok {
+		t.Fatal("link still usable after revoke")
+	}
+}
+
+func readFile(t *testing.T, path string) ([]byte, error) {
+	t.Helper()
+	return os.ReadFile(path)
+}

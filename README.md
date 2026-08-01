@@ -116,3 +116,19 @@ systemd user service (`tailscale-drop.service`), so it starts with your
 desktop session and restarts on failure. The window's close button hides
 to the tray; quit from the tray menu. `./install.sh --run` launches in the
 foreground instead.
+
+## Drop links (send files TO this machine from anyone)
+
+Create a short-lived link in Settings → Drop links (name it, pick a
+lifetime, single-file or unlimited). Anyone who opens the URL in a browser
+— no Tailscale account needed — can drop a file straight into your inbox,
+with "via drop link" attribution. Links expire, can be single-use, and can
+be revoked instantly.
+
+- The URL token is the only auth, so keep links short-lived.
+- Uploads are quarantined and go through the same save/delete and
+  risky-open handling as anything else.
+- **External users** (not on your tailnet): enable Funnel in the admin
+  console, then `./scripts/funnel.sh on`. Only the `/drop/*` pages are
+  reachable on your public hostname — the full app (and its session token)
+  is never exposed there.

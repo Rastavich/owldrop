@@ -125,6 +125,15 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .settings h3{font-size:13.5px;margin:20px 0 8px;color:var(--text)}
 .settings h3:first-child{margin-top:0}
 .settings .check{margin:6px 0}
+.dropform{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+.dropform .search{flex:1}
+.drop-links{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.droplink{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;flex-wrap:wrap}
+.droplink .dl-url{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--muted);flex:1;min-width:140px;word-break:break-all}
+.droplink .dl-meta{color:var(--muted)}
+.droplink.dead{opacity:.55}
+.dl-copy{border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:7px;padding:3px 9px;font-size:12px;cursor:pointer}
+.dl-copy:hover{border-color:var(--accent)}
 .settings .sub2{color:var(--muted);font-size:13px;margin:2px 0;line-height:1.6}
 .settings code{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12px}
 .confirm-text{white-space:pre-wrap;word-break:break-all;color:var(--text);font-size:13.5px;margin:0}
@@ -272,6 +281,20 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
       <label class="check"><input type="checkbox" id="pref-lan"> Allow other devices on my tailnet to open this app</label>
       <p class="sub2" id="lan-url" hidden></p>
       <p class="sub2">Opening this app from another device is as powerful as being at this machine — only enable it if you trust your tailnet.</p>
+      <h3>Drop links</h3>
+      <p class="sub2">Create a short-lived link — anyone who opens it can drop a file into your inbox from a browser, no Tailscale needed. It expires or dies after its first use, and you can revoke it anytime.</p>
+      <div class="dropform">
+        <input id="drop-name" class="search" type="text" placeholder="Their name (optional)" spellcheck="false">
+        <select id="drop-ttl" class="search" style="flex:0 0 auto;width:auto">
+          <option value="5">5 minutes</option>
+          <option value="60" selected>1 hour</option>
+          <option value="1440">1 day</option>
+        </select>
+        <label class="check"><input type="checkbox" id="drop-single" checked> single file</label>
+        <button id="drop-create" class="btn">Create link</button>
+      </div>
+      <div id="drop-links" class="drop-links"></div>
+      <p class="sub2" id="drop-funnel-hint" hidden>External users need your Funnel URL — see <code>scripts/funnel.sh</code>.</p>
       <h3>Shortcuts</h3>
       <p class="sub2"><code>/</code> filter · <code>j</code>/<code>k</code> select · <code>s</code> save · <code>d</code> delete · <code>Ctrl+V</code> paste to send</p>
       <h3>About</h3>
@@ -517,12 +540,12 @@ function inboxRow(f, idx) {
     row.appendChild(meta); row.appendChild(bar);
     return row;
   }
-  meta.appendChild(el('div', { class: 'sub' }, fmtSize(f.size) + ' · ' + fmtAge(f.arrived)));
+  meta.appendChild(el('div', { class: 'sub' }, fmtSize(f.size) + ' · ' + fmtAge(f.arrived) + (f.source === 'link' ? (f.sender ? ' · via drop link from ' + f.sender : ' · via drop link') : '')));
   row.appendChild(meta);
   const actions = el('div', { class: 'actions' });
-  actions.appendChild(el('button', { class: 'btn mini primary', 'data-action': 'save', 'data-name': f.name, 'data-size': f.size }, 'Save'));
-  actions.appendChild(el('button', { class: 'btn mini', 'data-action': 'save-to', 'data-name': f.name, 'data-size': f.size }, 'Save to…'));
-  actions.appendChild(el('button', { class: 'btn mini danger', 'data-action': 'delete', 'data-name': f.name }, 'Delete'));
+  actions.appendChild(el('button', { class: 'btn mini primary', 'data-action': 'save', 'data-name': f.name, 'data-size': f.size, 'data-source': f.source || '' }, 'Save'));
+  actions.appendChild(el('button', { class: 'btn mini', 'data-action': 'save-to', 'data-name': f.name, 'data-size': f.size, 'data-source': f.source || '' }, 'Save to…'));
+  actions.appendChild(el('button', { class: 'btn mini danger', 'data-action': 'delete', 'data-name': f.name, 'data-source': f.source || '' }, 'Delete'));
   row.appendChild(actions);
   return row;
 }
@@ -534,17 +557,18 @@ function inboxRow(f, idx) {
 function rowAction(btn) {
   const name = btn.dataset.name;
   const size = Number(btn.dataset.size || 0);
+  const source = btn.dataset.source || '';
   switch (btn.dataset.action) {
     case 'save':
-      saveFile(name, size, CONFIG.saveDir);
+      saveFile(name, size, CONFIG.saveDir, source);
       break;
     case 'save-to': {
       const f = inbox.find(x => x.name === name);
-      if (f) openDirPicker(f);
+      if (f) openDirPicker(f, 'file');
       break;
     }
     case 'delete':
-      deleteFile(name);
+      deleteFile(name, source);
       break;
   }
 }
@@ -591,12 +615,12 @@ function savingLabel(st) {
     : `saving… ${fmtSize(st.written)}`;
 }
 
-async function saveFile(name, size, dir) {
+async function saveFile(name, size, dir, source) {
   if (saving.has(name)) { toast(`Already saving ${name}`); return; }
   saving.set(name, { written: 0, size, done: false });
   try {
     renderInbox();
-    const res = await api('/api/save', { method: 'POST', json: { name, dir } });
+    const res = await api('/api/save', { method: 'POST', json: { name, dir, source: source || '' } });
     const st = saving.get(name) || {};
     saving.set(name, { ...st, done: true, path: res.path });
     // Optimistic removal — the saved file is out of the daemon inbox.
@@ -616,9 +640,9 @@ async function saveFile(name, size, dir) {
   renderInbox();
 }
 
-async function deleteFile(name) {
+async function deleteFile(name, source) {
   try {
-    await api('/api/delete', { method: 'POST', json: { name } });
+    await api('/api/delete', { method: 'POST', json: { name, source: source || '' } });
     // Optimistic removal — the server also pushes a fresh snapshot, but the
     // row shouldn't linger even for a second.
     inbox = inbox.filter(f => f.name !== name);
@@ -953,6 +977,7 @@ function historyRow(s) {
   } else {
     const status = st.saved ? 'saved' : (st.deleted ? 'deleted' : 'waiting');
     sub.push(el('span', { class: 'status ' + status }, status));
+    if (s.events.some(e => e.source === 'link')) sub.push(' via drop link');
   }
   if (s.size > 0) sub.push(' · ' + fmtSize(s.size));
   sub.push(' · ' + fmtAge(s.arrived));
@@ -1000,6 +1025,82 @@ function exportHistory() {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   toast('History exported');
 }
+
+// ---------- drop links ----------
+
+let dropLinks = [];
+
+async function fetchDropLinks() {
+  try {
+    const res = await api('/api/droplinks');
+    dropLinks = res.links || [];
+    renderDropLinks();
+  } catch (e) {
+    toast("Couldn't load drop links: " + e.message, null, 'err');
+  }
+}
+
+function linkState(l) {
+  if (l.revoked) return 'revoked';
+  if (l.expired) return 'expired';
+  if (l.maxUses > 0 && l.uses >= l.maxUses) return 'used';
+  return 'active';
+}
+
+function renderDropLinks() {
+  const box = $('#drop-links');
+  box.textContent = '';
+  $('#drop-funnel-hint').hidden = !dropLinks.length;
+  for (const l of dropLinks) {
+    const state = linkState(l);
+    const row = el('div', { class: 'droplink' + (state === 'active' ? '' : ' dead') });
+    row.appendChild(el('span', {}, l.name || 'unnamed link'));
+    const meta = [state];
+    if (state === 'active') {
+      meta.push('expires ' + fmtAge(l.expires) + ' · ' + (l.maxUses > 0 ? l.uses + '/' + l.maxUses + ' used' : 'unlimited'));
+    }
+    row.appendChild(el('span', { class: 'dl-meta' }, meta.join(' · ')));
+    if (state === 'active') {
+      row.appendChild(el('span', { class: 'dl-url' }, l.url));
+      row.appendChild(el('button', { class: 'dl-copy', onclick: () => copyText(l.url) }, 'Copy'));
+      row.appendChild(el('button', { class: 'btn mini danger', onclick: () => revokeLink(l.token) }, 'Revoke'));
+    }
+    box.appendChild(row);
+  }
+}
+
+async function createDropLink() {
+  const name = $('#drop-name').value.trim();
+  const ttl = Number($('#drop-ttl').value);
+  const maxUses = $('#drop-single').checked ? 1 : 0;
+  try {
+    const res = await api('/api/droplinks', { method: 'POST', json: { name, ttlMinutes: ttl, maxUses } });
+    $('#drop-name').value = '';
+    copyText(res.url);
+    toast('Link created — URL copied to clipboard');
+    fetchDropLinks();
+  } catch (e) {
+    toast("Couldn't create link: " + e.message, null, 'err');
+  }
+}
+
+async function revokeLink(token) {
+  try {
+    await api('/api/droplinks/' + token + '/revoke', { method: 'POST', json: {} });
+    toast('Link revoked');
+    fetchDropLinks();
+  } catch (e) {
+    toast("Couldn't revoke link: " + e.message, null, 'err');
+  }
+}
+
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {});
+  }
+}
+
+$('#drop-create').addEventListener('click', createDropLink);
 
 // ---------- keyboard shortcuts (inbox) ----------
 
@@ -1277,6 +1378,7 @@ function setTab(name) {
   if (name === 'inbox') renderInbox();
   if (name === 'send') refreshDevices();
   if (name === 'history') fetchHistory();
+  if (name === 'settings') fetchDropLinks();
 }
 $('#tab-inbox').addEventListener('click', () => setTab('inbox'));
 $('#tab-send').addEventListener('click', () => setTab('send'));

@@ -104,7 +104,7 @@ func (s *server) deleteInboxFile(ctx context.Context, name string) error {
 func (s *server) broadcastInboxNow() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if files, err := tsInbox(ctx); err == nil {
+	if files, err := s.combinedInbox(ctx); err == nil {
 		s.hub.broadcast(inboxEvent{Type: "inbox", Files: files})
 	}
 }

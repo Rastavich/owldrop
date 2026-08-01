@@ -106,13 +106,16 @@ type statusEvent struct {
 // --- server ---------------------------------------------------------------
 
 type server struct {
-	cfg     *config
-	cfgMu   sync.Mutex
-	token   string
-	hub     *hub
-	history *history
-	port    int
-	lan     bool
+	cfg         *config
+	cfgMu       sync.Mutex
+	token       string
+	hub         *hub
+	history     *history
+	drops       *dropManager
+	port        int
+	lan         bool
+	selfDNS     string
+	selfDNSOnce sync.Once
 
 	autosaveMu   sync.Mutex
 	autosaving   map[string]bool      // inbox files currently being auto-saved
@@ -124,19 +127,60 @@ func newServer(cfg *config) *server {
 	if err != nil {
 		dir = "."
 	}
+	return newServerDir(cfg, filepath.Join(dir, "tailscale-drop"))
+}
+
+// newServerDir builds a server with an explicit data dir (tests use a temp
+// dir; production uses the user config dir).
+func newServerDir(cfg *config, dataDir string) *server {
 	return &server{
 		cfg:          cfg,
 		token:        newToken(),
 		hub:          newHub(),
-		history:      newHistory(filepath.Join(dir, "tailscale-drop")),
+		history:      newHistory(dataDir),
+		drops:        newDropManager(dataDir),
 		lan:          cfg.LAN,
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
 	}
 }
 
-func (s *server) setListenerPort(p int) {
-	s.port = p
+func (s *server) dropBaseURL() string {
+	if s.lan {
+		if urls := s.lanURLs(); len(urls) > 0 {
+			return urls[0]
+		}
+	}
+	if s.port > 0 {
+		return fmt.Sprintf("http://127.0.0.1:%d/", s.port)
+	}
+	return "http://127.0.0.1/"
+}
+
+// selfDNSName is this machine's MagicDNS name (for the funnel host check).
+func (s *server) selfDNSName() string {
+	s.selfDNSOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if st, err := tsClient.Status(ctx); err == nil && st.Self != nil {
+			s.selfDNS = strings.TrimSuffix(st.Self.DNSName, ".")
+		}
+	})
+	return s.selfDNS
+}
+
+// funnelHost reports whether the request came through the machine's own
+// MagicDNS name (i.e. Tailscale Funnel). Only drop links are served there.
+func (s *server) funnelHost(host string) bool {
+	dns := s.selfDNSName()
+	if dns == "" {
+		return false
+	}
+	h := host
+	if hh, _, err := net.SplitHostPort(host); err == nil {
+		h = hh
+	}
+	return h == dns
 }
 
 // lanURLs returns the URLs other tailnet devices can use to open the UI.
@@ -156,6 +200,12 @@ func (s *server) lanURLs() []string {
 	}
 	return urls
 }
+
+func (s *server) setListenerPort(p int) {
+	s.port = p
+}
+
+// lanURLs returns the URLs other tailnet devices can use to open the UI.
 
 func (s *server) saveDir() string {
 	s.cfgMu.Lock()
@@ -183,7 +233,89 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/send", s.guard(s.handleSend))
 	mux.HandleFunc("/api/open", s.guard(s.handleOpen))
 	mux.HandleFunc("/api/history", s.guard(s.handleHistory))
+	mux.HandleFunc("/api/droplinks", s.guard(s.handleDropLinks))
+	mux.HandleFunc("/api/droplinks/", s.guard(s.handleDropLinks))
+	// Public drop-link pages: the URL token is the auth, not the session
+	// token. Host checks still apply; through the funnel hostname ONLY drop
+	// pages are reachable (everything else 404s there).
+	mux.HandleFunc("/drop/", s.hostGuard(s.handleDropPageOrUpload))
 	return mux
+}
+
+// hostGuard applies the host/origin checks without the session token.
+func (s *server) hostGuard(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.hostAllowed(r.Host) {
+			http.Error(w, "bad host", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *server) handleDropPageOrUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		s.handleDropUpload(w, r)
+		return
+	}
+	if r.Method == http.MethodGet {
+		s.handleDropPage(w, r)
+		return
+	}
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
+	// Revoke: POST /api/droplinks/<token>/revoke
+	if rest := strings.TrimPrefix(r.URL.Path, "/api/droplinks/"); rest != r.URL.Path && strings.HasSuffix(rest, "/revoke") {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		token := strings.TrimSuffix(rest, "/revoke")
+		s.drops.revoke(token)
+		writeJSON(w, map[string]any{"ok": true})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		links := s.drops.list()
+		type row struct {
+			*dropLink
+			URL     string `json:"url"`
+			Expired bool   `json:"expired"`
+		}
+		base := s.dropBaseURL()
+		rows := make([]row, 0, len(links))
+		for _, l := range links {
+			rows = append(rows, row{
+				dropLink: l,
+				URL:      base + "drop/" + l.Token,
+				Expired:  time.Now().After(l.Expires),
+			})
+		}
+		writeJSON(w, map[string]any{"links": rows, "baseUrl": base})
+	case http.MethodPost:
+		var req struct {
+			Name     string `json:"name"`
+			TTLMin   int    `json:"ttlMinutes"`
+			MaxUses  int    `json:"maxUses"` // 0 = unlimited
+		}
+		if err := decodeJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.TTLMin <= 0 {
+			req.TTLMin = 60
+		}
+		if req.TTLMin > 7*24*60 {
+			req.TTLMin = 7 * 24 * 60
+		}
+		l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses)
+		writeJSON(w, map[string]any{"link": l, "url": s.dropBaseURL() + "drop/" + l.Token})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // guard rejects cross-site requests (CSRF + DNS rebinding). Mutating
@@ -202,6 +334,12 @@ func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+		// Through the Funnel hostname only the public drop pages exist; the
+		// full app (which embeds the session token) must never be public.
+		if s.funnelHost(r.Host) && !strings.HasPrefix(r.URL.Path, "/drop/") {
+			http.NotFound(w, r)
+			return
+		}
 		if r.Method != http.MethodGet {
 			tok := r.Header.Get("X-Taildrop-Token")
 			if subtle.ConstantTimeCompare([]byte(tok), []byte(s.token)) != 1 {
@@ -213,8 +351,9 @@ func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// hostAllowed: loopback always; in LAN mode any IP literal is accepted so
-// tailnet/LAN clients can connect. Hostnames stay blocked (DNS rebinding).
+// hostAllowed: loopback always; this machine's own MagicDNS name (so Tailscale
+// Funnel works); in LAN mode any IP literal (tailnet/LAN clients). Hostnames
+// stay blocked against DNS rebinding except our own.
 func (s *server) hostAllowed(host string) bool {
 	h := host
 	if hh, _, err := net.SplitHostPort(host); err == nil {
@@ -222,6 +361,9 @@ func (s *server) hostAllowed(host string) bool {
 	}
 	switch h {
 	case "127.0.0.1", "localhost", "::1", "[::1]":
+		return true
+	}
+	if s.funnelHost(host) {
 		return true
 	}
 	if s.lan {
@@ -308,7 +450,7 @@ func (s *server) handleEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleInbox(w http.ResponseWriter, r *http.Request) {
-	files, err := tsInbox(r.Context())
+	files, err := s.combinedInbox(r.Context())
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -487,8 +629,9 @@ func (s *server) configResponse(c config) map[string]any {
 
 func (s *server) handleSave(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name string `json:"name"`
-		Dir  string `json:"dir"`
+		Name   string `json:"name"`
+		Dir    string `json:"dir"`
+		Source string `json:"source"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -502,6 +645,16 @@ func (s *server) handleSave(w http.ResponseWriter, r *http.Request) {
 	if dir == "" {
 		dir = s.saveDir()
 	}
+	if req.Source == "link" {
+		path, err := s.linkSave(req.Name, dir)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		s.broadcastInboxNow()
+		writeJSON(w, map[string]any{"path": path})
+		return
+	}
 	path, err := s.saveOne(r.Context(), req.Name, dir, nil)
 	if err != nil {
 		writeErr(w, err)
@@ -512,7 +665,8 @@ func (s *server) handleSave(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name string `json:"name"`
+		Name   string `json:"name"`
+		Source string `json:"source"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -520,6 +674,19 @@ func (s *server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validBaseName(req.Name) {
 		http.Error(w, "bad file name", http.StatusBadRequest)
+		return
+	}
+	if req.Source == "link" {
+		lf := s.drops.file(req.Name)
+		if lf == nil {
+			http.Error(w, "no such file", http.StatusNotFound)
+			return
+		}
+		os.Remove(lf.Path)
+		s.drops.removeFile(req.Name)
+		s.history.recordDeleted(req.Name)
+		s.broadcastInboxNow()
+		writeJSON(w, map[string]any{"ok": true})
 		return
 	}
 	if err := s.deleteInboxFile(r.Context(), req.Name); err != nil {
@@ -636,6 +803,9 @@ func (s *server) watchInbox(ctx context.Context) {
 			pollCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 			defer cancel()
 			files, err := tsInboxWait(pollCtx, 30*time.Second)
+			if err == nil {
+				files = append(files, s.drops.linkInbox()...)
+			}
 			ch <- res{files, err}
 		}()
 		select {
@@ -688,7 +858,13 @@ func (s *server) maybeAutoSave(ctx context.Context, files []waitingFile) {
 				delete(s.autosaving, f.Name)
 				s.autosaveMu.Unlock()
 			}()
-			if _, err := s.saveOne(ctx, f.Name, dir, nil); err != nil {
+			var err error
+			if f.Source == "link" {
+				_, err = s.linkSave(f.Name, dir)
+			} else {
+				_, err = s.saveOne(ctx, f.Name, dir, nil)
+			}
+			if err != nil {
 				s.autosaveMu.Lock()
 				s.autosaveFail[f.Name] = time.Now()
 				s.autosaveMu.Unlock()
@@ -713,6 +889,12 @@ func decodeJSON(r *http.Request, v any) error {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
 }
 

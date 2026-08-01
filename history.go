@@ -15,13 +15,14 @@ import (
 // file share an ID: an "arrived" event opens a session, and "saved"/"deleted"
 // close it. "sent"/"send_failed" are their own sessions.
 type historyEvent struct {
-	ID   string    `json:"id"`
-	Ts   time.Time `json:"ts"`
-	Kind string    `json:"kind"` // arrived | saved | deleted | sent | send_failed
-	Name string    `json:"name"`
-	Size int64     `json:"size"`
-	Path string    `json:"path,omitempty"`
-	Peer string    `json:"peer,omitempty"`
+	ID     string    `json:"id"`
+	Ts     time.Time `json:"ts"`
+	Kind   string    `json:"kind"` // arrived | saved | deleted | sent | send_failed
+	Name   string    `json:"name"`
+	Size   int64     `json:"size"`
+	Path   string    `json:"path,omitempty"`
+	Peer   string    `json:"peer,omitempty"`
+	Source string    `json:"source,omitempty"` // "" = taildrop, "link" = drop link
 }
 
 // history is a small append-only log of everything that happened to files.
@@ -91,7 +92,7 @@ func (h *history) recordArrivals(files []waitingFile) {
 		if _, ok := h.active[f.Name]; ok {
 			continue
 		}
-		e := historyEvent{ID: newID(), Ts: now, Kind: "arrived", Name: f.Name, Size: f.Size}
+		e := historyEvent{ID: newID(), Ts: now, Kind: "arrived", Name: f.Name, Size: f.Size, Source: f.Source}
 		h.events = append(h.events, e)
 		h.active[f.Name] = e.ID
 		changed = true
