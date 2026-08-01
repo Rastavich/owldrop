@@ -52,7 +52,15 @@ function startSidecar() {
 }
 
 function onServerUp() {
-  if (!win) createWindow();
+  const url = `http://127.0.0.1:${port}/`;
+  if (win) {
+    // Sidecar (re)started, possibly on a new port — point the window at it.
+    if (win.webContents.getURL() !== url) {
+      win.loadURL(url);
+    }
+  } else {
+    createWindow();
+  }
   if (!tray) setupTray();
   if (!notifStarted) {
     notifStarted = true;
@@ -180,6 +188,9 @@ if (!gotLock) {
   app.on('before-quit', () => {
     quitting = true;
     if (sidecar) sidecar.kill();
+    // Don't let a slow window teardown hang shutdown (seen as a 1-minute
+    // stall + crash on stop); force-exit after a short grace period.
+    setTimeout(() => process.exit(0), 1500);
   });
 
   // Never quit when the window closes — keep running in the tray.

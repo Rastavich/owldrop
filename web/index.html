@@ -73,6 +73,7 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .row .status-err{font-size:12px;color:var(--red);flex:1;min-width:0;word-break:break-all}
 
 .empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:70px 20px;color:var(--muted)}
+.empty[hidden]{display:none}
 .empty svg{width:56px;height:56px;opacity:.55;margin-bottom:14px}
 .empty .t{font-size:15px;font-weight:600;color:var(--text)}
 .empty .s{font-size:13px;max-width:380px;margin-top:4px}
@@ -313,7 +314,11 @@ async function api(path, opts = {}) {
   return data;
 }
 
-// ---------- daemon status ----------
+// Debug aid: every pointer press is logged to the main process (journal via
+// --enable-logging) so a dead-button report can be diagnosed from the log.
+document.addEventListener('pointerdown', e => {
+  console.log('pointerdown', Math.round(e.clientX), Math.round(e.clientY), e.target.closest('button[data-action]')?.dataset?.action || e.target.tagName);
+}, true);
 
 function setDaemonState(ok, msg) {
   const pill = $('#daemon-pill');
@@ -366,12 +371,11 @@ function inboxRow(f) {
   return row;
 }
 
-// One listener for all row buttons. Delegation means clicks survive the
-// frequent row re-renders (progress updates, age refreshes) that would
-// otherwise destroy a button between mousedown and mouseup.
-inboxList.addEventListener('click', e => {
-  const btn = e.target.closest('button[data-action]');
-  if (!btn) return;
+// One listener for all row buttons. Actions fire on pointerdown (mouse
+// press), not click, so a re-render between press and release can never
+// swallow the interaction. The click listener below only covers keyboard
+// activation (Enter/Space fires click without pointer events).
+function rowAction(btn) {
   const name = btn.dataset.name;
   const size = Number(btn.dataset.size || 0);
   switch (btn.dataset.action) {
@@ -387,6 +391,24 @@ inboxList.addEventListener('click', e => {
       deleteFile(name);
       break;
   }
+}
+
+inboxList.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  btn.dataset.pressed = '1';
+  rowAction(btn);
+});
+
+inboxList.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  if (btn.dataset.pressed) {
+    delete btn.dataset.pressed; // already handled on pointerdown
+    return;
+  }
+  rowAction(btn);
 });
 
 function savingRow(name, st) {

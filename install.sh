@@ -34,7 +34,7 @@ cat > "$DEST/run.sh" <<'RUNEOF'
 NIX_BIN="$(command -v nix || echo /run/current-system/sw/bin/nix)"
 DEST="$HOME/.local/share/tailscale-drop"
 cd "$DEST"
-exec "$NIX_BIN" develop --command electron "$DEST/electron" ${TSD_DEBUG_PORT:+--remote-debugging-port=$TSD_DEBUG_PORT}
+exec "$NIX_BIN" develop --command electron "$DEST/electron" --enable-logging ${TSD_DEBUG_PORT:+--remote-debugging-port=$TSD_DEBUG_PORT}
 RUNEOF
 chmod +x "$DEST/run.sh"
 
