@@ -235,6 +235,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/history", s.guard(s.handleHistory))
 	mux.HandleFunc("/api/droplinks", s.guard(s.handleDropLinks))
 	mux.HandleFunc("/api/droplinks/", s.guard(s.handleDropLinks))
+	mux.HandleFunc("/api/funnel", s.guard(s.handleFunnel))
 	// Public drop-link pages: the URL token is the auth, not the session
 	// token. Host checks still apply; through the funnel hostname ONLY drop
 	// pages are reachable (everything else 404s there).
@@ -282,19 +283,25 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
 		links := s.drops.list()
 		type row struct {
 			*dropLink
-			URL     string `json:"url"`
-			Expired bool   `json:"expired"`
+			URL       string `json:"url"`
+			PublicURL string `json:"publicUrl,omitempty"`
+			Expired   bool   `json:"expired"`
 		}
 		base := s.dropBaseURL()
+		pub := s.funnelPublicURL()
 		rows := make([]row, 0, len(links))
 		for _, l := range links {
-			rows = append(rows, row{
+			r := row{
 				dropLink: l,
 				URL:      base + "drop/" + l.Token,
 				Expired:  time.Now().After(l.Expires),
-			})
+			}
+			if pub != "" {
+				r.PublicURL = pub + "drop/" + l.Token
+			}
+			rows = append(rows, r)
 		}
-		writeJSON(w, map[string]any{"links": rows, "baseUrl": base})
+		writeJSON(w, map[string]any{"links": rows, "baseUrl": base, "publicUrl": pub})
 	case http.MethodPost:
 		var req struct {
 			Name    string `json:"name"`
@@ -312,7 +319,11 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
 			req.TTLMin = 7 * 24 * 60
 		}
 		l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses)
-		writeJSON(w, map[string]any{"link": l, "url": s.dropBaseURL() + "drop/" + l.Token})
+		resp := map[string]any{"link": l, "url": s.dropBaseURL() + "drop/" + l.Token}
+		if pub := s.funnelPublicURL(); pub != "" {
+			resp["publicUrl"] = pub + "drop/" + l.Token
+		}
+		writeJSON(w, resp)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}

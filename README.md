@@ -128,7 +128,9 @@ be revoked instantly.
 - The URL token is the only auth, so keep links short-lived.
 - Uploads are quarantined and go through the same save/delete and
   risky-open handling as anything else.
-- **External users** (not on your tailnet): enable Funnel in the admin
-  console, then `./scripts/funnel.sh on`. Only the `/drop/*` pages are
-  reachable on your public hostname — the full app (and its session token)
-  is never exposed there.
+- **External users** (not on your tailnet): flip on "Public access
+  (Funnel)" in Settings → Drop links — the app runs `tailscale funnel`
+  itself and shows your public `https://<you>.ts.net/` URL. Only the
+  `/drop/*` pages are reachable on that hostname; the full app (and its
+  session token) is never exposed. (`./scripts/funnel.sh` still exists for
+  manual control.)
