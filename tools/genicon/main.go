@@ -39,7 +39,7 @@ func main() {
 		// triangle pointing down: apex (128, 208), base y=180 from x=105..151
 		if y >= 180 && y <= 208 {
 			t := (y - 180) / (208 - 180) // 0 at base, 1 at apex
-			half := (151-105)/2*t
+			half := (151 - 105) / 2 * t
 			mid := 128.0
 			return math.Abs(x-mid) <= half
 		}

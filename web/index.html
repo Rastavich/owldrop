@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:">
 <title>Taildrop</title>
 <style>
 :root{
@@ -443,6 +444,9 @@ async function saveFile(name, size, dir) {
     const res = await api('/api/save', { method: 'POST', json: { name, dir } });
     const st = saving.get(name) || {};
     saving.set(name, { ...st, done: true, path: res.path });
+    // Optimistic removal — the saved file is out of the daemon inbox.
+    inbox = inbox.filter(f => f.name !== name);
+    renderInbox();
     toast(`Saved ${name}`, { label: 'Open', fn: () => api('/api/open', { method: 'POST', json: { path: res.path } }).catch(() => {}) });
   } catch (e) {
     const st = saving.get(name) || {};
@@ -456,6 +460,10 @@ async function saveFile(name, size, dir) {
 async function deleteFile(name) {
   try {
     await api('/api/delete', { method: 'POST', json: { name } });
+    // Optimistic removal — the server also pushes a fresh snapshot, but the
+    // row shouldn't linger even for a second.
+    inbox = inbox.filter(f => f.name !== name);
+    renderInbox();
     toast(`Deleted ${name} from the inbox`);
   } catch (e) {
     toast(`Couldn't delete: ${e.message}`, null, 'err');
@@ -696,7 +704,7 @@ function handleEvent(ev) {
       break;
     }
     case 'status':
-      setDaemonState(false, 'tailscaled unreachable: ' + ev.err);
+      setDaemonState(!ev.err, ev.err ? 'tailscaled unreachable: ' + ev.err : 'connected to tailscaled');
       break;
   }
 }

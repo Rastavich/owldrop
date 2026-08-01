@@ -27,7 +27,7 @@ func (s *server) saveOne(ctx context.Context, name, dir string, onProgress func(
 		return "", err
 	}
 	s.hub.broadcast(saveEvent{Type: "save", Name: name, Done: true, Path: path})
-	s.refresh()
+	s.broadcastInboxNow()
 	return path, nil
 }
 
@@ -69,12 +69,24 @@ func (s *server) sendOne(ctx context.Context, id string, peer tailcfg.StableNode
 	}
 }
 
-// deleteInboxFile discards an inbox file and pings the watcher so the UI
-// updates immediately.
+// deleteInboxFile discards an inbox file, then pushes a fresh inbox snapshot
+// to all clients right away (the watcher's long-poll can take up to 30s to
+// notice a deletion).
 func (s *server) deleteInboxFile(ctx context.Context, name string) error {
 	if err := tsDeleteFile(ctx, name); err != nil {
 		return err
 	}
-	s.refresh()
+	s.broadcastInboxNow()
 	return nil
+}
+
+// broadcastInboxNow fetches the current inbox (waitsec=0, so it returns
+// immediately) and broadcasts it, keeping the UI in sync right after local
+// mutations instead of waiting for the daemon's long-poll to fire.
+func (s *server) broadcastInboxNow() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if files, err := tsInbox(ctx); err == nil {
+		s.hub.broadcast(inboxEvent{Type: "inbox", Files: files})
+	}
 }

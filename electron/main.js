@@ -11,6 +11,9 @@ const fs = require('fs');
 
 const ICON_PATH = path.join(__dirname, 'icon.png');
 
+// Forward renderer console output to stderr (lands in the systemd journal).
+app.commandLine.appendSwitch('enable-logging');
+
 let win = null;
 let tray = null;
 let sidecar = null;

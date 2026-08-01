@@ -22,18 +22,14 @@ import (
 // --- event hub (Server-Sent Events) --------------------------------------
 
 type hub struct {
-	mu            sync.Mutex
-	webClients    map[chan []byte]struct{}
-	nativeClients map[chan any]struct{}
-	lastInbox     []byte // replayed to late-joining pages
-	lastDevices   []byte
+	mu          sync.Mutex
+	webClients  map[chan []byte]struct{}
+	lastInbox   []byte // replayed to late-joining pages
+	lastDevices []byte
 }
 
 func newHub() *hub {
-	return &hub{
-		webClients:    map[chan []byte]struct{}{},
-		nativeClients: map[chan any]struct{}{},
-	}
+	return &hub{webClients: map[chan []byte]struct{}{}}
 }
 
 func (h *hub) subscribeWeb() chan []byte {
@@ -48,21 +44,6 @@ func (h *hub) unsubscribeWeb(c chan []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.webClients, c)
-}
-
-// subscribeNative hands typed events to in-process consumers (the Fyne UI).
-func (h *hub) subscribeNative() chan any {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	c := make(chan any, 64)
-	h.nativeClients[c] = struct{}{}
-	return c
-}
-
-func (h *hub) unsubscribeNative(c chan any) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	delete(h.nativeClients, c)
 }
 
 func (h *hub) broadcast(v any) {
@@ -82,12 +63,6 @@ func (h *hub) broadcast(v any) {
 		select {
 		case c <- b:
 		default: // drop for slow consumers
-		}
-	}
-	for c := range h.nativeClients {
-		select {
-		case c <- v:
-		default:
 		}
 	}
 }
@@ -131,15 +106,14 @@ type statusEvent struct {
 // --- server ---------------------------------------------------------------
 
 type server struct {
-	cfg       *config
-	cfgMu     sync.Mutex
-	token     string
-	hub       *hub
-	refreshCh chan struct{} // ping the inbox watcher to re-poll now
+	cfg   *config
+	cfgMu sync.Mutex
+	token string
+	hub   *hub
 
-	autosaveMu    sync.Mutex
-	autosaving    map[string]bool      // inbox files currently being auto-saved
-	autosaveFail  map[string]time.Time // failed auto-saves, for backoff
+	autosaveMu   sync.Mutex
+	autosaving   map[string]bool      // inbox files currently being auto-saved
+	autosaveFail map[string]time.Time // failed auto-saves, for backoff
 }
 
 func newServer(cfg *config) *server {
@@ -147,7 +121,6 @@ func newServer(cfg *config) *server {
 		cfg:          cfg,
 		token:        newToken(),
 		hub:          newHub(),
-		refreshCh:    make(chan struct{}, 1),
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
 	}
@@ -163,13 +136,6 @@ func (s *server) autoSave() bool {
 	s.cfgMu.Lock()
 	defer s.cfgMu.Unlock()
 	return s.cfg.AutoSave
-}
-
-func (s *server) refresh() {
-	select {
-	case s.refreshCh <- struct{}{}:
-	default:
-	}
 }
 
 func (s *server) routes() http.Handler {
@@ -470,11 +436,10 @@ func (s *server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad file name", http.StatusBadRequest)
 		return
 	}
-	if err := tsDeleteFile(r.Context(), req.Name); err != nil {
+	if err := s.deleteInboxFile(r.Context(), req.Name); err != nil {
 		writeErr(w, err)
 		return
 	}
-	s.refresh()
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -546,8 +511,6 @@ func (s *server) watchInbox(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-s.refreshCh:
-			// Something mutated the inbox; re-poll immediately.
 		case r := <-ch:
 			if r.err != nil {
 				if ctx.Err() != nil {
@@ -557,12 +520,12 @@ func (s *server) watchInbox(ctx context.Context) {
 				select {
 				case <-ctx.Done():
 					return
-				case <-s.refreshCh:
 				case <-time.After(3 * time.Second):
 				}
 				continue
 			}
 			s.hub.broadcast(inboxEvent{Type: "inbox", Files: r.files})
+			s.hub.broadcast(statusEvent{Type: "status"}) // daemon is reachable again
 			s.maybeAutoSave(ctx, r.files)
 		}
 	}
