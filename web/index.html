@@ -44,6 +44,10 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .dir-field input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font:inherit;font-size:13px}
 .dir-field input::placeholder{color:#5a6375}
 .dir-field select{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font:inherit;font-size:13.5px;appearance:none;cursor:pointer}
+/* The dropdown popup is rendered by the OS and inherits the select's text
+   color in Chromium-on-Linux, which made options invisible (light text on
+   KDE's light popup). Pin both colors explicitly. */
+.dir-field select option{background:var(--panel2);color:var(--text)}
 .btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600}
 .btn:hover{filter:brightness(1.1)}
 .btn.ghost{border-color:var(--border);background:var(--panel);color:var(--text)}
