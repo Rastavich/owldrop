@@ -6,7 +6,7 @@ set -e
 cd "$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(pwd)"
 
-if [ ! -x ./tailscale-drop ] || [ main.go -nt tailscale-drop ] || [ server.go -nt tailscale-drop ] || [ taildrop.go -nt tailscale-drop ] || [ ops.go -nt tailscale-drop ]; then
+if [ ! -x ./tailscale-drop ] || [ main.go -nt tailscale-drop ] || [ server.go -nt tailscale-drop ] || [ taildrop.go -nt tailscale-drop ] || [ ops.go -nt tailscale-drop ] || [ web/index.html -nt tailscale-drop ]; then
   echo "building tailscale-drop…"
   nix develop --command go build -o tailscale-drop .
 fi
@@ -18,7 +18,14 @@ fi
 # Install the wrapper + service into the user's systemd session.
 DEST="$HOME/.local/share/tailscale-drop"
 mkdir -p "$DEST"
-cp tailscale-drop "$DEST/"
+
+# Stop the service while updating so we can replace the running binary
+# (cp over an executing file fails with ETXTBSY).
+systemctl --user stop tailscale-drop.service 2>/dev/null || true
+
+# Copy via temp + rename: safe even if the old binary is still executing.
+cp tailscale-drop "$DEST/tailscale-drop.new"
+mv -f "$DEST/tailscale-drop.new" "$DEST/tailscale-drop"
 cp -r electron "$DEST/"
 cp flake.nix "$DEST/"
 
