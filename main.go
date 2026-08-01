@@ -1,7 +1,12 @@
-// tailscale-drop is a small cross-platform GUI for Tailscale's Taildrop.
+// tailscale-drop is a cross-platform desktop app for Tailscale's Taildrop.
 //
 // It talks to the local tailscaled daemon through its LocalAPI (the same
-// interface the `tailscale` CLI uses) and serves a browser UI on localhost.
+// interface the `tailscale` CLI uses) and renders a native UI with Fyne:
+// inbox with save/delete, sending with progress, desktop notifications,
+// system tray, and an optional auto-save mode.
+//
+// The browser UI from earlier versions still exists and can be enabled with
+// --web (handy for pointing a phone at your machine).
 package main
 
 import (
@@ -23,6 +28,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"fyne.io/fyne/v2/app"
 )
 
 //go:embed web
@@ -30,9 +37,9 @@ var webFS embed.FS
 
 func main() {
 	var (
-		port    = flag.Int("port", 8976, "port to serve the UI on (bound to 127.0.0.1)")
+		web     = flag.Bool("web", false, "also serve the browser UI on http://127.0.0.1:PORT")
+		port    = flag.Int("port", 8976, "port for the optional browser UI")
 		saveDir = flag.String("save-dir", "", "default folder for received files (defaults to your Downloads folder)")
-		noOpen  = flag.Bool("no-open", false, "don't open a browser automatically")
 	)
 	flag.Parse()
 
@@ -44,56 +51,47 @@ func main() {
 		}
 	}
 
-	srv := newServer(cfg)
-	httpSrv := &http.Server{
-		Handler:           srv.routes(),
-		ReadHeaderTimeout: 5 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-
-	addr := fmt.Sprintf("127.0.0.1:%d", *port)
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatalf("can't listen on %s: %v (use --port to pick another)", addr, err)
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	srv := newServer(cfg)
 	go srv.watchInbox(ctx)
 
-	n := 0
-	if files, err := tsInbox(ctx); err == nil {
-		n = len(files)
-	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/", *port)
-	fmt.Printf("\n  tailscale-drop\n")
-	fmt.Printf("  UI:    %s\n", url)
-	fmt.Printf("  inbox: %d file(s) waiting, saved to %s\n\n", n, cfg.SaveDir)
-	if !*noOpen {
+	if *web {
+		httpSrv := &http.Server{
+			Handler:           srv.routes(),
+			ReadHeaderTimeout: 5 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
+		addr := fmt.Sprintf("127.0.0.1:%d", *port)
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			log.Fatalf("can't listen on %s: %v", addr, err)
+		}
+		fmt.Printf("browser UI: http://%s/\n", addr)
 		go func() {
-			time.Sleep(200 * time.Millisecond)
-			openBrowser(url)
+			<-ctx.Done()
+			shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			httpSrv.Shutdown(shutCtx)
+		}()
+		go func() {
+			if err := httpSrv.Serve(ln); err != nil && ctx.Err() == nil {
+				log.Printf("web server: %v", err)
+			}
 		}()
 	}
 
-	go func() {
-		<-ctx.Done()
-		shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		httpSrv.Shutdown(shutCtx)
-	}()
-
-	if err := httpSrv.Serve(ln); err != nil && ctx.Err() == nil {
-		log.Fatal(err)
-	}
-	log.Println("bye")
+	a := app.NewWithID("dev.taildrop")
+	u := newUI(a, cfg, srv, ctx)
+	u.run()
 }
 
 // --- config ---------------------------------------------------------------
 
 type config struct {
-	SaveDir string `json:"save_dir"`
+	SaveDir  string `json:"save_dir"`
+	AutoSave bool   `json:"auto_save"`
 }
 
 func configPath() string {
@@ -152,21 +150,6 @@ func defaultDownloadsDir() string {
 	return "."
 }
 
-func openBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Printf("open browser: %v", err)
-	}
-}
-
 func openPath(path string) error {
 	switch runtime.GOOS {
 	case "darwin":
@@ -180,6 +163,8 @@ func openPath(path string) error {
 
 func newToken() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
 	return hex.EncodeToString(b)
 }

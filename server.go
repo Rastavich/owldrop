@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -21,28 +22,47 @@ import (
 // --- event hub (Server-Sent Events) --------------------------------------
 
 type hub struct {
-	mu          sync.Mutex
-	clients     map[chan []byte]struct{}
-	lastInbox   []byte // replayed to late-joining pages
-	lastDevices []byte
+	mu            sync.Mutex
+	webClients    map[chan []byte]struct{}
+	nativeClients map[chan any]struct{}
+	lastInbox     []byte // replayed to late-joining pages
+	lastDevices   []byte
 }
 
 func newHub() *hub {
-	return &hub{clients: map[chan []byte]struct{}{}}
+	return &hub{
+		webClients:    map[chan []byte]struct{}{},
+		nativeClients: map[chan any]struct{}{},
+	}
 }
 
-func (h *hub) subscribe() chan []byte {
+func (h *hub) subscribeWeb() chan []byte {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	c := make(chan []byte, 64)
-	h.clients[c] = struct{}{}
+	h.webClients[c] = struct{}{}
 	return c
 }
 
-func (h *hub) unsubscribe(c chan []byte) {
+func (h *hub) unsubscribeWeb(c chan []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.clients, c)
+	delete(h.webClients, c)
+}
+
+// subscribeNative hands typed events to in-process consumers (the Fyne UI).
+func (h *hub) subscribeNative() chan any {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := make(chan any, 64)
+	h.nativeClients[c] = struct{}{}
+	return c
+}
+
+func (h *hub) unsubscribeNative(c chan any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.nativeClients, c)
 }
 
 func (h *hub) broadcast(v any) {
@@ -58,10 +78,16 @@ func (h *hub) broadcast(v any) {
 	case devicesEvent:
 		h.lastDevices = b
 	}
-	for c := range h.clients {
+	for c := range h.webClients {
 		select {
 		case c <- b:
 		default: // drop for slow consumers
+		}
+	}
+	for c := range h.nativeClients {
+		select {
+		case c <- v:
+		default:
 		}
 	}
 }
@@ -133,7 +159,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/events", s.guard(false, s.handleEvents))
 	mux.HandleFunc("/api/inbox", s.guard(false, s.handleInbox))
 	mux.HandleFunc("/api/devices", s.guard(false, s.handleDevices))
+	mux.HandleFunc("/api/browse", s.guard(false, s.handleBrowse))
 	mux.HandleFunc("/api/config", s.guard(true, s.handleConfig))
+	mux.HandleFunc("/api/mkdir", s.guard(true, s.handleMkdir))
 	mux.HandleFunc("/api/save", s.guard(true, s.handleSave))
 	mux.HandleFunc("/api/delete", s.guard(true, s.handleDelete))
 	mux.HandleFunc("/api/send", s.guard(true, s.handleSend))
@@ -220,8 +248,8 @@ func (s *server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	fl.Flush()
 
-	c := s.hub.subscribe()
-	defer s.hub.unsubscribe(c)
+	c := s.hub.subscribeWeb()
+	defer s.hub.unsubscribeWeb(c)
 
 	// Replay the latest known state so a newly opened page is immediately
 	// up to date.
@@ -272,6 +300,70 @@ func (s *server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hub.broadcast(devicesEvent{Type: "devices", Devices: devs})
 	writeJSON(w, map[string]any{"devices": devs})
+}
+
+// handleBrowse lists the subdirectories of path (default: the configured
+// save dir) for the in-UI folder picker.
+func (s *server) handleBrowse(w http.ResponseWriter, r *http.Request) {
+	p := r.URL.Query().Get("path")
+	if p == "" {
+		p = s.cfg.SaveDir
+	}
+	if !filepath.IsAbs(p) {
+		http.Error(w, "path must be absolute", http.StatusBadRequest)
+		return
+	}
+	p = filepath.Clean(p)
+	fi, err := os.Stat(p)
+	if err != nil || !fi.IsDir() {
+		http.Error(w, "not a directory: "+p, http.StatusBadRequest)
+		return
+	}
+	entries, err := os.ReadDir(p)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	dirs := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, e.Name())
+		}
+	}
+	slices.SortFunc(dirs, func(a, b string) int {
+		return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+	})
+	parent := filepath.Dir(p)
+	if parent == p {
+		parent = "" // at the filesystem root
+	}
+	writeJSON(w, map[string]any{"path": p, "parent": parent, "dirs": dirs})
+}
+
+// handleMkdir creates a single new directory under path (used by the folder
+// picker's "New folder" button).
+func (s *server) handleMkdir(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Path string `json:"path"`
+		Name string `json:"name"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !filepath.IsAbs(req.Path) {
+		http.Error(w, "path must be absolute", http.StatusBadRequest)
+		return
+	}
+	if !validBaseName(req.Name) {
+		http.Error(w, "bad folder name", http.StatusBadRequest)
+		return
+	}
+	if err := os.Mkdir(filepath.Join(req.Path, req.Name), 0o755); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
@@ -327,29 +419,11 @@ func (s *server) handleSave(w http.ResponseWriter, r *http.Request) {
 	if dir == "" {
 		dir = s.cfg.SaveDir
 	}
-
-	var lastEmit time.Time
-	var size int64
-	emit := func(written int64, done bool, path, errMsg string) {
-		now := time.Now()
-		if !done && now.Sub(lastEmit) < 150*time.Millisecond {
-			return
-		}
-		lastEmit = now
-		s.hub.broadcast(saveEvent{Type: "save", Name: req.Name, Written: written, Size: size, Done: done, Path: path, Err: errMsg})
-	}
-
-	path, size, err := tsSaveFile(r.Context(), req.Name, dir, func(written, sz int64) {
-		size = sz
-		emit(written, false, "", "")
-	})
+	path, err := s.saveOne(r.Context(), req.Name, dir, nil)
 	if err != nil {
-		emit(0, true, "", err.Error())
 		writeErr(w, err)
 		return
 	}
-	emit(0, true, path, "")
-	s.refresh()
 	writeJSON(w, map[string]any{"path": path})
 }
 
@@ -391,38 +465,12 @@ func (s *server) handleSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	size := r.ContentLength
-	cr := &countingReader{r: r.Body}
-	done := make(chan error, 1)
-	go func() {
-		done <- tsClient.PushFile(r.Context(), peer, size, name, cr)
-	}()
-
-	ticker := time.NewTicker(150 * time.Millisecond)
-	defer ticker.Stop()
-	var last int64
-	for {
-		select {
-		case err := <-done:
-			ev := sendEvent{Type: "send", ID: id, Peer: peer, Name: name, Sent: cr.n.Load(), Size: size, Done: true}
-			if err != nil {
-				ev.Err = err.Error()
-			}
-			s.hub.broadcast(ev)
-			if err != nil {
-				writeErr(w, err)
-				return
-			}
-			writeJSON(w, map[string]any{"ok": true})
-			return
-		case <-ticker.C:
-			if n := cr.n.Load(); n != last {
-				last = n
-				s.hub.broadcast(sendEvent{Type: "send", ID: id, Peer: peer, Name: name, Sent: n, Size: size})
-			}
-		case <-r.Context().Done():
-			return
-		}
+	err := s.sendOne(r.Context(), id, peer, name, size, r.Body, nil)
+	if err != nil {
+		writeErr(w, err)
+		return
 	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {

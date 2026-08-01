@@ -1,96 +1,100 @@
 # tailscale-drop
 
-A small cross-platform GUI for [Tailscale's Taildrop](https://tailscale.com/kb/1082/taildrop)
-— see files sent to you, save or delete them with one click, and send files
-back to any device on your tailnet. No more `tailscale file get .` on the
-command line.
+A native, cross-platform desktop app for [Tailscale's Taildrop](https://tailscale.com/kb/1082/taildrop):
+see files sent to you, save or delete them with one click, send files back to
+any device on your tailnet, and optionally auto-save everything that arrives.
+No more `tailscale file get .` on the command line.
 
-```
-$ tailscale-drop
+Built with [Fyne](https://fyne.io/) (pure Go) on top of the same LocalAPI the
+`tailscale` CLI uses, so it works identically on Linux, macOS, and Windows.
 
-  tailscale-drop
-  UI:    http://127.0.0.1:8976/
-  inbox: 2 file(s) waiting, saved to /home/you/Downloads
-```
+## Features
 
-## How it works
-
-- A single Go binary talks to your **local `tailscaled` daemon** over its
-  LocalAPI — the exact same interface the `tailscale` CLI uses
-  (`tailscale.com/client/local`). The daemon socket/named pipe is discovered
-  automatically on Linux, macOS, and Windows.
-- The UI is a browser page served on `127.0.0.1` (embedded in the binary, no
-  build step, no web server to install). It updates live over
-  Server-Sent Events, using the daemon's long-poll (`?waitsec=`) so files
-  appear the moment they arrive — with a desktop notification if the tab
-  isn't focused.
-- Received files stay in the daemon's inbox until you click **Save** (to your
-  Downloads folder or any folder you choose) or **Delete** — the same inbox
-  `tailscale file get` drains, so the CLI still works alongside.
-- Sending uses the daemon's `PushFile` with per-file progress bars.
+- **Inbox** — files sent to this machine appear instantly (the daemon's
+  long-poll, not polling), with size, arrival time, per-file progress bars,
+  and Save / Save to… / Delete actions
+- **Send** — pick a device (offline ones are marked), choose a file or drag &
+  drop it onto the window, watch the progress
+- **Auto-save** — toggle in Settings or the tray: incoming files land in your
+  chosen folder the moment they arrive, like `tailscale file get --loop`,
+  with a desktop notification per file
+- **Desktop notifications** — arrival (when auto-save is off) and save/send
+  results; the app lives in the system tray (closing the window hides it)
+- **Native file dialogs** — folder picker for the save location, file picker
+  for sending
+- **Optional browser UI** — `--web` also serves the earlier web frontend on
+  `127.0.0.1` (handy from a phone on the same network)
 
 ## Build & run
 
+The app needs a GL-capable desktop and (on Linux) X11/Wayland dev headers to
+build. On NixOS, use the included dev shell:
+
 ```sh
-go build -o tailscale-drop .     # or: go run .
-./tailscale-drop                 # opens your browser automatically
+nix develop --command go build -tags migrated_fynedo -o tailscale-drop .
+./tailscale-drop            # or: ./run.sh (NixOS: builds & launches)
 ```
 
-Cross-compile for the other platforms:
+On any distro with pkg-config + X11/Wayland headers installed, plain
+`go build -tags migrated_fynedo .` works. Cross-compile for other platforms
+(with their toolchains):
 
 ```sh
-GOOS=windows GOARCH=amd64 go build -o tailscale-drop.exe .
-GOOS=darwin  GOARCH=arm64 go build -o tailscale-drop-darwin .
+GOOS=windows GOARCH=amd64 go build -tags migrated_fynedo -o tailscale-drop.exe .
+GOOS=darwin  GOARCH=arm64 go build -tags migrated_fynedo -o tailscale-drop .
 ```
 
 Flags:
 
 | Flag | Meaning |
 |------|---------|
-| `--port N` | UI port (default `8976`, bound to `127.0.0.1` only) |
 | `--save-dir PATH` | default folder for received files (persisted) |
-| `--no-open` | don't launch the browser on start |
+| `--web` | also serve the browser UI (see above) |
+| `--port N` | port for the browser UI (default `8976`, 127.0.0.1 only) |
 
-You must be able to talk to `tailscaled`: on Linux that means your user is in
-the `tailscale` group (or the socket is world-accessible), on macOS/Windows
-the app just works for the logged-in user. The app runs per-user; received
-files are saved under *your* home directory.
+You must be able to talk to `tailscaled`: on Linux your user needs access to
+its socket (the `tailscale` group on most distros); on macOS/Windows the app
+works for the logged-in user.
 
-## Security
+## How it works
 
-- The server binds to `127.0.0.1` only.
-- Mutating API calls require a random session token embedded in the served
-  page, plus an `Origin` check — a malicious website can't CSRF your inbox.
-- `Host` header validation blocks DNS-rebinding attacks.
-- Only the local daemon is ever contacted; nothing runs on a remote server.
-
-## Why not just the CLI?
-
-You still can — this is a frontend for the same inbox. The value is
-convenience:
-
-- files appear without polling or terminal commands,
-- save to any folder, with Chrome-style `name (1).ext` conflict handling,
-- send to any device from a drag & drop zone,
-- it works from a phone browser pointed at your machine (same LAN/tailnet).
+- The app talks to the **local** `tailscaled` daemon over its LocalAPI
+  (`tailscale.com/client/local`) — the identical interface the CLI uses.
+  Nothing is proxied through a server; only the daemon socket is touched.
+- Received files stay in the daemon's inbox until you save or delete them —
+  the same inbox `tailscale file get` drains, so the CLI still works
+  alongside.
+- Sender attribution: the daemon's file API currently exposes only
+  name+size (no sender identity), so auto-save applies to everything that
+  arrives. The Settings layout leaves room for a per-host trust list the
+  moment the daemon exposes senders.
 
 ## Layout
 
 ```
-main.go        flags, config, browser launch, OS helpers
+main.go        entry point, config, OS helpers, optional web server
 taildrop.go    daemon interactions: inbox, save, delete, devices, send
-server.go      HTTP API, SSE hub, CSRF/rebinding guards, inbox watcher
-web/index.html the UI (embedded into the binary via go:embed)
-main_test.go   unit tests for naming/validation logic
+ops.go         shared save/send operations with progress events
+server.go      event hub, browser-UI API, security guards, inbox watcher
+ui.go          the native Fyne app: window, tray, tabs, notifications
+web/index.html the optional browser UI (embedded via go:embed)
+flake.nix      NixOS dev shell (Go + GL/X11/Wayland headers)
+main_test.go   conflict-naming / validation unit tests
+ui_test.go     headless widget tests (Fyne test driver)
 ```
+
+## Security
+
+- The optional browser UI binds to `127.0.0.1` only, with a per-run session
+  token, Origin checks, and Host-header validation (no CSRF / DNS rebinding).
+- The native app makes no network listeners at all.
 
 ## Roadmap ideas
 
-- Auto-accept incoming files into a folder (a GUI `file get --loop`)
-- System tray + autostart so it's always running
-- Reveal-in-file-manager after save (partially done via "Open")
-- LAN binding with a password for phone access without localhost
-- Sender display name (the daemon's API currently exposes name/size only)
+- Per-host trust list for auto-save (blocked on daemon API exposing senders)
+- Reveal-in-file-manager after save
+- App icon + proper packaging (`fyne package`, Flatpak)
+- macOS/iOS-style "open the file" action on notification click
 
 ## License
 
