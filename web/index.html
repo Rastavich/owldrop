@@ -1076,8 +1076,8 @@ async function createDropLink() {
   try {
     const res = await api('/api/droplinks', { method: 'POST', json: { name, ttlMinutes: ttl, maxUses } });
     $('#drop-name').value = '';
-    copyText(res.url);
-    toast('Link created — URL copied to clipboard');
+    await copyText(res.url, true);
+    toast('Link created');
     fetchDropLinks();
   } catch (e) {
     toast("Couldn't create link: " + e.message, null, 'err');
@@ -1094,10 +1094,28 @@ async function revokeLink(token) {
   }
 }
 
-function copyText(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).catch(() => {});
-  }
+async function copyText(text, silent) {
+  const ok = await new Promise((resolve) => {
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      let did = false;
+      try { did = document.execCommand('copy'); } catch (_) {}
+      ta.remove();
+      resolve(did);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => resolve(true)).catch(() => fallback());
+    } else {
+      fallback();
+    }
+  });
+  if (!silent) toast(ok ? 'Copied to clipboard' : "Couldn't copy — select the URL and copy manually", null, ok ? 'ok' : 'err');
+  return ok;
 }
 
 $('#drop-create').addEventListener('click', createDropLink);

@@ -341,10 +341,10 @@ if (!gotLock) {
   app.on('second-instance', () => showWindow());
 
   app.whenReady().then(() => {
-    // Paste-to-send reads the clipboard from the renderer; clipboard-read
-    // needs an explicit grant in Electron.
+    // Paste-to-send reads the clipboard from the renderer; clipboard
+    // read/write need an explicit grant in Electron.
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-      callback(permission === 'clipboard-read' || permission === 'notifications');
+      callback(permission === 'clipboard-read' || permission === 'clipboard-sanitized-write' || permission === 'notifications');
     });
     // Summon the window from anywhere.
     const ok = globalShortcut.register('CommandOrControl+Shift+T', showWindow);
