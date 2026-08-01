@@ -17,7 +17,6 @@ app.commandLine.appendSwitch('enable-logging');
 let win = null;
 let tray = null;
 let sidecar = null;
-let notifStarted = false;
 let quitting = false;
 let port = 0;
 
@@ -65,10 +64,8 @@ function onServerUp() {
     createWindow();
   }
   if (!tray) setupTray();
-  if (!notifStarted) {
-    notifStarted = true;
-    setupNotifications();
-  }
+  // Reconnect notifications to the (possibly new) sidecar port.
+  setupNotifications();
 }
 
 // --- window ---------------------------------------------------------------
@@ -123,8 +120,17 @@ function setupTray() {
 
 let knownNames = new Set();
 let notifBuf = '';
+let notifReq = null;
+
+function stopNotifications() {
+  if (notifReq) {
+    notifReq.destroy();
+    notifReq = null;
+  }
+}
 
 function setupNotifications() {
+  stopNotifications();
   const req = http.get({ host: '127.0.0.1', port, path: '/events' }, (res) => {
     res.setEncoding('utf8');
     res.on('data', (chunk) => {
@@ -141,7 +147,12 @@ function setupNotifications() {
       }
     });
   });
-  req.on('error', () => setTimeout(setupNotifications, 2000));
+  req.on('error', () => {
+    // Sidecar down or restarting — keep trying; onServerUp reconnects on the
+    // fresh port once it's back.
+    if (!quitting) setTimeout(() => setupNotifications(), 2000);
+  });
+  notifReq = req;
 }
 
 function handleEvent(ev) {
