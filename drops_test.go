@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"archive/zip"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -181,4 +182,99 @@ func TestDropLinkListAndRevokeAPI(t *testing.T) {
 func readFile(t *testing.T, path string) ([]byte, error) {
 	t.Helper()
 	return os.ReadFile(path)
+}
+
+func uploadFilesToDrop(t *testing.T, base, token string, files map[string]string) *http.Response {
+	t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for name, content := range files {
+		fw, err := w.CreateFormFile("file", filepath.Base(name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fw.Write([]byte(content))
+		w.WriteField("path", name)
+	}
+	w.Close()
+	req, err := http.NewRequest("POST", base+"/drop/"+token+"/upload", &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func TestDropMultiFileBatch(t *testing.T) {
+	s, base := newDropTestServer(t)
+	token := createTestDropLink(t, s, "", time.Hour, 1)
+
+	// One request, two files: both delivered, counts as ONE use.
+	res := uploadFilesToDrop(t, base, token, map[string]string{"a.txt": "aaa", "b.txt": "bbb"})
+	if res.StatusCode != 200 {
+		t.Fatalf("batch upload = %d", res.StatusCode)
+	}
+	files, err := s.combinedInbox(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, f := range files {
+		names[f.Name] = true
+	}
+	if !names["a.txt"] || !names["b.txt"] {
+		t.Fatalf("inbox = %+v", files)
+	}
+	// Link is now used up (maxUses 1) even though two files arrived.
+	if ok, _ := s.drops.usable(token); ok {
+		t.Fatal("link still usable after one batch")
+	}
+}
+
+func TestDropFolderZip(t *testing.T) {
+	s, base := newDropTestServer(t)
+	token := createTestDropLink(t, s, "Folder Person", time.Hour, 0)
+
+	res := uploadFilesToDrop(t, base, token, map[string]string{
+		"Photos/one.jpg":  "jpeg1",
+		"Photos/two.jpg":  "jpeg2",
+		"Photos/sub/x.png": "png",
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("folder upload = %d", res.StatusCode)
+	}
+	files, err := s.combinedInbox(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected one zipped inbox item, got %+v", files)
+	}
+	lf := files[0]
+	if lf.Name != "Photos.zip" || lf.Source != "link" || lf.Sender != "Folder Person" {
+		t.Fatalf("zip item = %+v", lf)
+	}
+	// Verify the zip contents preserve the relative paths.
+	zlf := s.drops.file("Photos.zip")
+	if zlf == nil {
+		t.Fatal("zipped item missing from registry")
+	}
+	zr, err := zip.OpenReader(zlf.Path)
+	if err != nil {
+		t.Fatalf("open zip: %v", err)
+	}
+	defer zr.Close()
+	entries := map[string]bool{}
+	for _, f := range zr.File {
+		entries[f.Name] = true
+	}
+	for _, want := range []string{"Photos/one.jpg", "Photos/two.jpg", "Photos/sub/x.png"} {
+		if !entries[want] {
+			t.Fatalf("zip missing %s; entries = %v", want, entries)
+		}
+	}
 }

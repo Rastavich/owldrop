@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"archive/zip"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -205,9 +206,9 @@ func (m *dropManager) removeFile(name string) {
 	delete(m.files, name)
 }
 
-// upload accepts one multipart file for the given link. The name is made
-// unique against everything already in the combined inbox.
-func (m *dropManager) upload(token string, part multipart.File, size int64, baseName string, inboxHas func(string) bool) (*linkFile, error) {
+// storeFile writes one uploaded file into the quarantine area and registers
+// it as an inbox item. Does not touch the link's use count (see useOnce).
+func (m *dropManager) storeFile(token, baseName string, size int64, content io.Reader, inboxHas func(string) bool) (*linkFile, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	l := m.links[token]
@@ -227,7 +228,7 @@ func (m *dropManager) upload(token string, part multipart.File, size int64, base
 		return nil, err
 	}
 	defer f.Close()
-	if _, err := io.Copy(f, part); err != nil {
+	if _, err := io.Copy(f, content); err != nil {
 		os.Remove(f.Name())
 		return nil, err
 	}
@@ -240,8 +241,17 @@ func (m *dropManager) upload(token string, part multipart.File, size int64, base
 		Sender:  l.Name,
 	}
 	m.files[name] = lf
-	l.Uses++
 	return lf, nil
+}
+
+// useOnce counts one upload batch against the link's use budget.
+func (m *dropManager) useOnce(token string) {
+	m.mu.Lock()
+	if l := m.links[token]; l != nil {
+		l.Uses++
+	}
+	m.mu.Unlock()
+	m.persist()
 }
 
 // linkInbox returns the current uploaded files as waitingFile items.
@@ -295,15 +305,21 @@ func (s *server) handleDropUpload(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "upload too large or malformed"})
 		return
 	}
-	file, header, err := r.FormFile("file")
-	if err != nil {
+	parts := r.MultipartForm.File["file"]
+	if len(parts) == 0 {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "no file part named \"file\""})
 		return
 	}
-	defer file.Close()
-	base := filepath.Base(header.Filename)
-	if base == "." || base == "" {
-		base = "upload.bin"
+	paths := r.MultipartForm.Value["path"]
+	// Folder drops arrive with paths containing "/" (sent in the parallel
+	// 'path' field because Go's multipart parser strips paths from part
+	// filenames); zip those into a single inbox item.
+	isFolder := false
+	for _, p := range paths {
+		if strings.Contains(p, "/") {
+			isFolder = true
+			break
+		}
 	}
 
 	// Names must be unique against the whole inbox (daemon + other links).
@@ -322,16 +338,145 @@ func (s *server) handleDropUpload(w http.ResponseWriter, r *http.Request) {
 		return false
 	}
 
-	lf, err := s.drops.upload(token, file, header.Size, base, inboxHas)
-	if err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return
+	var lfs []*linkFile
+	if isFolder {
+		lf, err := s.storeFolderZip(token, parts, paths, inboxHas)
+		if err != nil {
+			writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		lfs = []*linkFile{lf}
+	} else {
+		for _, p := range parts {
+			f, err := p.Open()
+			if err != nil {
+				writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+				return
+			}
+			base := filepath.Base(p.Filename)
+			if base == "." || base == "" {
+				base = "upload.bin"
+			}
+			lf, err := s.drops.storeFile(token, base, p.Size, f, inboxHas)
+			f.Close()
+			if err != nil {
+				writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+				return
+			}
+			lfs = append(lfs, lf)
+		}
 	}
-	s.history.recordArrivals([]waitingFile{{
-		Name: lf.Name, Size: lf.Size, Arrived: lf.Arrived, Source: "link", Sender: lf.Sender,
-	}})
+
+	s.drops.useOnce(token)
+	files := make([]waitingFile, 0, len(lfs))
+	for _, lf := range lfs {
+		files = append(files, waitingFile{
+			Name: lf.Name, Size: lf.Size, Arrived: lf.Arrived, Source: "link", Sender: lf.Sender,
+		})
+	}
+	s.history.recordArrivals(files)
 	s.broadcastInboxNow()
-	writeJSON(w, map[string]any{"ok": true, "name": lf.Name, "size": lf.Size})
+	names := make([]string, 0, len(lfs))
+	var total int64
+	for _, lf := range lfs {
+		names = append(names, lf.Name)
+		total += lf.Size
+	}
+	writeJSON(w, map[string]any{"ok": true, "names": names, "size": total})
+}
+
+// storeFolderZip zips a dropped folder into one quarantined inbox item named
+// after the top-level folder. paths[i] is the relative path for parts[i]
+// (already sanitized; empty falls back to the part's basename).
+func (s *server) storeFolderZip(token string, parts []*multipart.FileHeader, paths []string, inboxHas func(string) bool) (*linkFile, error) {
+	zipName := "folder.zip"
+	for _, p := range paths {
+		if top := strings.SplitN(sanitizeZipPath(p), "/", 2)[0]; top != "" {
+			zipName = top
+			break
+		}
+	}
+	zipName += ".zip"
+
+	dir := filepath.Join(s.drops.dir, token)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	finalName := uniqueName(zipName, func(n string) bool {
+		_, exists := s.drops.files[n]
+		return exists || inboxHas(n)
+	})
+	out, err := os.OpenFile(filepath.Join(dir, finalName), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	zw := zip.NewWriter(out)
+	var total int64
+	for i, p := range parts {
+		entry := ""
+		if i < len(paths) {
+			entry = sanitizeZipPath(paths[i])
+		}
+		if entry == "" {
+			entry = filepath.Base(p.Filename)
+		}
+		w, err := zw.Create(entry)
+		if err != nil {
+			out.Close()
+			os.Remove(out.Name())
+			return nil, err
+		}
+		f, err := p.Open()
+		if err != nil {
+			out.Close()
+			os.Remove(out.Name())
+			return nil, err
+		}
+		n, err := io.Copy(w, f)
+		f.Close()
+		if err != nil {
+			out.Close()
+			os.Remove(out.Name())
+			return nil, err
+		}
+		total += n
+	}
+	if err := zw.Close(); err != nil {
+		out.Close()
+		os.Remove(out.Name())
+		return nil, err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(out.Name())
+		return nil, err
+	}
+	lf := &linkFile{
+		Token:   token,
+		Name:    finalName,
+		Path:    out.Name(),
+		Size:    total,
+		Arrived: time.Now(),
+		Sender:  s.drops.get(token).Name,
+	}
+	s.drops.mu.Lock()
+	s.drops.files[finalName] = lf
+	s.drops.mu.Unlock()
+	return lf, nil
+}
+
+// sanitizeZipPath makes a dropped relative path safe as a zip entry name:
+// no leading slashes, no ".." segments.
+func sanitizeZipPath(p string) string {
+	p = strings.ReplaceAll(p, "\\", "/")
+	parts := strings.Split(p, "/")
+	out := make([]string, 0, len(parts))
+	for _, seg := range parts {
+		if seg == "" || seg == "." || seg == ".." {
+			continue
+		}
+		out = append(out, seg)
+	}
+	return strings.Join(out, "/")
 }
 
 func dropTokenFromPath(p string) string {
@@ -441,10 +586,10 @@ h1{margin:0 0 6px;font-size:20px}
   <h1>Send a file</h1>
   <p class="meta" id="meta">to <b>__NAME__</b> · link expires __EXPIRES__</p>
   <div class="drop" id="drop">
-    <p class="t">Drop your file here</p>
+    <p class="t">Drop files or a folder here</p>
     <p>or click to choose</p>
   </div>
-  <input type="file" id="file" hidden>
+  <input type="file" id="file" multiple hidden>
   <div class="bar" id="bar"><div class="fill" id="fill"></div></div>
   <div id="status"></div>
 </div>
@@ -456,27 +601,38 @@ const bar = document.getElementById('bar');
 const fill = document.getElementById('fill');
 function setStatus(msg, kind) { status.textContent = msg; status.className = kind || ''; }
 drop.addEventListener('click', () => document.getElementById('file').click());
-document.getElementById('file').addEventListener('change', e => { if (e.target.files.length) send(e.target.files[0]); e.target.value = ''; });
+document.getElementById('file').addEventListener('change', e => { if (e.target.files.length) send(Array.from(e.target.files)); e.target.value = ''; });
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
 drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files.length) send(e.dataTransfer.files[0]); });
-async function send(file) {
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files.length) send(Array.from(e.dataTransfer.files)); });
+async function send(files) {
+  if (!files.length) return;
   const fd = new FormData();
-  fd.append('file', file);
-  setStatus('Uploading ' + file.name + '…');
+  for (const file of files) {
+    // Go's multipart parser strips paths from part filenames, so the folder
+    // structure travels in a parallel 'path' field; the server re-zips it.
+    fd.append('file', file, file.name);
+    fd.append('path', file.webkitRelativePath || file.name);
+  }
+  const first = files[0];
+  const what = files.length > 1 ? files.length + ' files'
+    : (first.webkitRelativePath ? first.webkitRelativePath.split('/')[0] + ' folder' : first.name);
+  setStatus('Uploading ' + what + '…');
   bar.classList.add('on');
   fill.style.width = '0';
+  let data = null;
   try {
     await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/drop/' + token + '/upload');
       xhr.upload.onprogress = e => { if (e.lengthComputable) fill.style.width = Math.round(e.loaded * 100 / e.total) + '%'; };
-      xhr.onload = () => { if (xhr.status === 200) resolve(); else { try { reject(new Error(JSON.parse(xhr.responseText).error || 'upload failed')); } catch { reject(new Error('upload failed (' + xhr.status + ')')); } } };
+      xhr.onload = () => { if (xhr.status === 200) { try { data = JSON.parse(xhr.responseText); } catch {} resolve(); } else { try { reject(new Error(JSON.parse(xhr.responseText).error || 'upload failed')); } catch { reject(new Error('upload failed (' + xhr.status + ')')); } } };
       xhr.onerror = () => reject(new Error('network error'));
       xhr.send(fd);
     });
     bar.classList.remove('on');
-    setStatus('Sent! ' + file.name + ' arrived. You can close this page.', 'ok');
+    const n = data && data.names ? data.names.length : 1;
+    setStatus('Sent! ' + (n > 1 ? n + ' files arrived' : what + ' arrived') + '. You can close this page.', 'ok');
   } catch (e) {
     bar.classList.remove('on');
     setStatus(e.message, 'err');
