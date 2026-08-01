@@ -146,26 +146,28 @@ func (s *server) autoSave() bool {
 
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/events", s.guard(false, s.handleEvents))
-	mux.HandleFunc("/api/inbox", s.guard(false, s.handleInbox))
-	mux.HandleFunc("/api/devices", s.guard(false, s.handleDevices))
-	mux.HandleFunc("/api/browse", s.guard(false, s.handleBrowse))
-	mux.HandleFunc("/api/config", s.guard(true, s.handleConfig))
-	mux.HandleFunc("/api/mkdir", s.guard(true, s.handleMkdir))
-	mux.HandleFunc("/api/save", s.guard(true, s.handleSave))
-	mux.HandleFunc("/api/delete", s.guard(true, s.handleDelete))
-	mux.HandleFunc("/api/send", s.guard(true, s.handleSend))
-	mux.HandleFunc("/api/open", s.guard(true, s.handleOpen))
-	mux.HandleFunc("/api/history", s.guard(true, s.handleHistory))
+	mux.HandleFunc("/", s.guard(s.handleIndex))
+	mux.HandleFunc("/events", s.guard(s.handleEvents))
+	mux.HandleFunc("/api/inbox", s.guard(s.handleInbox))
+	mux.HandleFunc("/api/devices", s.guard(s.handleDevices))
+	mux.HandleFunc("/api/browse", s.guard(s.handleBrowse))
+	mux.HandleFunc("/api/config", s.guard(s.handleConfig))
+	mux.HandleFunc("/api/mkdir", s.guard(s.handleMkdir))
+	mux.HandleFunc("/api/save", s.guard(s.handleSave))
+	mux.HandleFunc("/api/delete", s.guard(s.handleDelete))
+	mux.HandleFunc("/api/send", s.guard(s.handleSend))
+	mux.HandleFunc("/api/open", s.guard(s.handleOpen))
+	mux.HandleFunc("/api/history", s.guard(s.handleHistory))
 	return mux
 }
 
 // guard rejects cross-site requests (CSRF + DNS rebinding). Mutating
-// endpoints additionally need the session token that was embedded in the
+// methods additionally need the session token that was embedded in the
 // served page — a malicious website can't read that page (CORS) and can't
-// send the custom header (preflight).
-func (s *server) guard(mutating bool, next http.HandlerFunc) http.HandlerFunc {
+// send the custom header (preflight). GET requests stay tokenless so the
+// Electron main process can read config/devices for the tray and
+// notifications.
+func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !hostAllowed(r.Host) {
 			http.Error(w, "bad host", http.StatusForbidden)
@@ -175,7 +177,7 @@ func (s *server) guard(mutating bool, next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		if mutating {
+		if r.Method != http.MethodGet {
 			tok := r.Header.Get("X-Taildrop-Token")
 			if subtle.ConstantTimeCompare([]byte(tok), []byte(s.token)) != 1 {
 				http.Error(w, "forbidden", http.StatusForbidden)
@@ -362,14 +364,24 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		s.cfgMu.Lock()
-		saveDir := s.cfg.SaveDir
-		autoSave := s.cfg.AutoSave
+		c := *s.cfg
 		s.cfgMu.Unlock()
-		writeJSON(w, map[string]any{"saveDir": saveDir, "autoSave": autoSave})
+		writeJSON(w, map[string]any{
+			"saveDir":       c.SaveDir,
+			"autoSave":      c.AutoSave,
+			"notifyArrival": c.NotifyArrival,
+			"notifySave":    c.NotifySave,
+			"notifySend":    c.NotifySend,
+			"notifyError":   c.NotifyError,
+		})
 	case http.MethodPost:
 		var req struct {
-			SaveDir  string `json:"saveDir"`
-			AutoSave *bool  `json:"autoSave"`
+			SaveDir       string `json:"saveDir"`
+			AutoSave      *bool  `json:"autoSave"`
+			NotifyArrival *bool  `json:"notifyArrival"`
+			NotifySave    *bool  `json:"notifySave"`
+			NotifySend    *bool  `json:"notifySend"`
+			NotifyError   *bool  `json:"notifyError"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -393,14 +405,32 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if req.AutoSave != nil {
 			s.cfg.AutoSave = *req.AutoSave
 		}
-		saveDir := s.cfg.SaveDir
-		autoSave := s.cfg.AutoSave
+		if req.NotifyArrival != nil {
+			s.cfg.NotifyArrival = *req.NotifyArrival
+		}
+		if req.NotifySave != nil {
+			s.cfg.NotifySave = *req.NotifySave
+		}
+		if req.NotifySend != nil {
+			s.cfg.NotifySend = *req.NotifySend
+		}
+		if req.NotifyError != nil {
+			s.cfg.NotifyError = *req.NotifyError
+		}
+		c := *s.cfg
 		s.cfgMu.Unlock()
 		if err := s.cfg.save(); err != nil {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, map[string]any{"saveDir": saveDir, "autoSave": autoSave})
+		writeJSON(w, map[string]any{
+			"saveDir":       c.SaveDir,
+			"autoSave":      c.AutoSave,
+			"notifyArrival": c.NotifyArrival,
+			"notifySave":    c.NotifySave,
+			"notifySend":    c.NotifySend,
+			"notifyError":   c.NotifyError,
+		})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}

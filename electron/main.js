@@ -3,7 +3,7 @@
 // Spawns the Go sidecar (tailscale-drop), which talks to the local
 // tailscaled daemon and serves the UI on a random localhost port, then
 // shows that UI in a native window with tray + notifications.
-const { app, BrowserWindow, Tray, Menu, Notification, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, dialog, globalShortcut, session } = require('electron');
 const { spawn } = require('child_process');
 const http = require('http');
 const path = require('path');
@@ -64,6 +64,8 @@ function onServerUp() {
     createWindow();
   }
   if (!tray) setupTray();
+  refreshTrayDevices();
+  refreshPrefs();
   // Reconnect notifications to the (possibly new) sidecar port.
   setupNotifications();
 }
@@ -96,14 +98,30 @@ function createWindow() {
   });
 }
 
-// --- tray -----------------------------------------------------------------
+function showWindow() {
+  if (!win) return;
+  win.show();
+  win.focus();
+}
+
+// --- tray: show + quick-send ----------------------------------------------
+
+let trayDevices = []; // {id, name, label, usable}
 
 function setupTray() {
   const img = nativeImage.createFromPath(ICON_PATH);
   tray = new Tray(img.isEmpty() ? undefined : img.resize({ width: 22, height: 22 }));
   tray.setToolTip('Taildrop');
+  tray.on('click', showWindow);
+  setupTrayMenu();
+}
+
+function setupTrayMenu() {
+  if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Show Taildrop', click: () => { win.show(); win.focus(); } },
+    { label: 'Show Taildrop', click: showWindow },
+    { type: 'separator' },
+    { label: 'Send file to…', submenu: trayDeviceItems() },
     { type: 'separator' },
     {
       label: 'Quit',
@@ -113,7 +131,93 @@ function setupTray() {
       },
     },
   ]));
-  tray.on('click', () => { win.show(); win.focus(); });
+}
+
+function trayDeviceItems() {
+  const items = trayDevices
+    .filter((d) => d.usable)
+    .map((d) => ({
+      label: d.label,
+      click: () => pickFileAndSend(d),
+    }));
+  if (!items.length) {
+    items.push({ label: '(no devices — is your tailnet up?)', enabled: false });
+  }
+  return items;
+}
+
+function refreshTrayDevices() {
+  if (!port) return;
+  http.get({ host: '127.0.0.1', port, path: '/api/devices' }, (res) => {
+    let b = '';
+    res.on('data', (d) => (b += d));
+    res.on('end', () => {
+      try {
+        const data = JSON.parse(b);
+        trayDevices = (data.devices || []).map((d) => ({
+          id: d.id,
+          name: d.name,
+          usable: d.taildrop === 'available',
+          label: d.name + (d.os ? ` (${d.os})` : '') + (d.online ? '' : ' · offline'),
+        }));
+        setupTrayMenu();
+      } catch { /* sidecar not ready */ }
+    });
+  }).on('error', () => {});
+}
+
+// The mutating send API needs the session token that lives in the page.
+function getToken() {
+  return new Promise((resolve) => {
+    http.get({ host: '127.0.0.1', port, path: '/' }, (res) => {
+      let html = '';
+      res.on('data', (d) => (html += d));
+      res.on('end', () => {
+        const m = html.match(/"token":"([0-9a-f]+)"/);
+        resolve(m ? m[1] : '');
+      });
+    }).on('error', () => resolve(''));
+  });
+}
+
+async function pickFileAndSend(device) {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: `Send to ${device.name}`,
+    properties: ['openFile'],
+  });
+  if (canceled || !filePaths.length) return;
+  const filePath = filePaths[0];
+  const name = path.basename(filePath);
+  const token = await getToken();
+  if (!token) {
+    showNotification('Taildrop', 'Could not authenticate with the local daemon');
+    return;
+  }
+  let size;
+  try {
+    size = fs.statSync(filePath).size;
+  } catch (e) {
+    showNotification('Taildrop', e.message);
+    return;
+  }
+  const req = http.request({
+    host: '127.0.0.1',
+    port,
+    path: `/api/send?peer=${encodeURIComponent(device.id)}&name=${encodeURIComponent(name)}`,
+    method: 'POST',
+    headers: { 'X-Taildrop-Token': token, 'Content-Length': size },
+  }, (res) => {
+    res.resume();
+    res.on('end', () => {
+      if (res.statusCode === 200) {
+        showNotification('Taildrop: sent', `${name} → ${device.name}`);
+      } else {
+        showNotification('Taildrop: send failed', `${name}: HTTP ${res.statusCode}`);
+      }
+    });
+  });
+  req.on('error', (e) => showNotification('Taildrop: send failed', e.message));
+  fs.createReadStream(filePath).pipe(req);
 }
 
 // --- notifications (native, driven by the sidecar's SSE stream) -----------
@@ -121,6 +225,31 @@ function setupTray() {
 let knownNames = new Set();
 let notifBuf = '';
 let notifReq = null;
+let prefs = { arrival: true, save: true, send: true, errors: true };
+
+function refreshPrefs() {
+  if (!port) return;
+  http.get({ host: '127.0.0.1', port, path: '/api/config' }, (res) => {
+    let b = '';
+    res.on('data', (d) => (b += d));
+    res.on('end', () => {
+      try {
+        const c = JSON.parse(b);
+        prefs = {
+          arrival: c.notifyArrival !== false,
+          save: c.notifySave !== false,
+          send: c.notifySend !== false,
+          errors: c.notifyError !== false,
+        };
+      } catch { /* keep defaults */ }
+    });
+  }).on('error', () => {});
+}
+
+function showNotification(title, body) {
+  if (Notification.isSupported() === false) return;
+  new Notification({ title, body, icon: ICON_PATH, silent: true }).show();
+}
 
 function stopNotifications() {
   if (notifReq) {
@@ -156,18 +285,35 @@ function setupNotifications() {
 }
 
 function handleEvent(ev) {
-  if (ev.type !== 'inbox') return;
-  const names = new Set(ev.files.map((f) => f.name));
-  const fresh = ev.files.filter((f) => !knownNames.has(f.name));
-  knownNames = names;
-  if (fresh.length === 0 || Notification.isSupported() === false) return;
-  for (const f of fresh) {
-    new Notification({
-      title: 'Taildrop: new file',
-      body: `${f.name} (${fmtSize(f.size)})`,
-      icon: ICON_PATH,
-      silent: true,
-    }).show();
+  switch (ev.type) {
+    case 'inbox': {
+      const names = new Set(ev.files.map((f) => f.name));
+      const fresh = ev.files.filter((f) => !knownNames.has(f.name));
+      knownNames = names;
+      if (fresh.length && prefs.arrival) {
+        for (const f of fresh) {
+          showNotification('Taildrop: new file', `${f.name} (${fmtSize(f.size)})`);
+        }
+      }
+      break;
+    }
+    case 'save':
+      if (ev.done && prefs.save) {
+        if (ev.err) showNotification('Taildrop: save failed', `${ev.name}: ${ev.err}`);
+        else showNotification('Taildrop: saved', `${ev.name} → ${ev.path || 'saved'}`);
+      }
+      break;
+    case 'send':
+      if (ev.done && prefs.send) {
+        if (ev.err) showNotification('Taildrop: send failed', `${ev.name}: ${ev.err}`);
+        else showNotification('Taildrop: sent', ev.name);
+      }
+      break;
+    case 'status':
+      if (ev.err && prefs.errors) {
+        showNotification('Taildrop', 'tailscaled unreachable: ' + ev.err);
+      }
+      break;
   }
 }
 
@@ -191,13 +337,24 @@ if (!gotLock) {
   if (!process.argv.includes('--remote-debugging-port') && process.env.TSD_DEBUG_PORT) {
     app.commandLine.appendSwitch('remote-debugging-port', process.env.TSD_DEBUG_PORT);
   }
-  app.on('second-instance', () => {
-    if (win) { win.show(); win.focus(); }
-  });
+  app.on('second-instance', () => showWindow());
 
   app.whenReady().then(() => {
+    // Paste-to-send reads the clipboard from the renderer; clipboard-read
+    // needs an explicit grant in Electron.
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+      callback(permission === 'clipboard-read' || permission === 'notifications');
+    });
+    // Summon the window from anywhere.
+    const ok = globalShortcut.register('CommandOrControl+Shift+T', showWindow);
+    console.log(`global shortcut Ctrl+Shift+T: ${ok ? 'registered' : 'failed (Wayland compositor may not support it)'}`);
+    // Keep tray devices + notification prefs fresh.
+    setInterval(refreshTrayDevices, 15000);
+    setInterval(refreshPrefs, 30000);
     startSidecar();
   });
+
+  app.on('will-quit', () => globalShortcut.unregisterAll());
 
   app.on('before-quit', () => {
     quitting = true;

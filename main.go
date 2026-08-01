@@ -82,8 +82,12 @@ func main() {
 // --- config ---------------------------------------------------------------
 
 type config struct {
-	SaveDir  string `json:"save_dir"`
-	AutoSave bool   `json:"auto_save"`
+	SaveDir       string `json:"save_dir"`
+	AutoSave      bool   `json:"auto_save"`
+	NotifyArrival bool   `json:"notify_arrival"`
+	NotifySave    bool   `json:"notify_save"`
+	NotifySend    bool   `json:"notify_send"`
+	NotifyError   bool   `json:"notify_error"`
 }
 
 func configPath() string {
@@ -95,9 +99,34 @@ func configPath() string {
 }
 
 func loadConfig() *config {
-	c := &config{}
+	// Notify prefs default ON; pointers distinguish "unset" from "false" so
+	// configs written before they existed keep the defaults.
+	var f struct {
+		SaveDir       string `json:"save_dir"`
+		AutoSave      *bool  `json:"auto_save"`
+		NotifyArrival *bool  `json:"notify_arrival"`
+		NotifySave    *bool  `json:"notify_save"`
+		NotifySend    *bool  `json:"notify_send"`
+		NotifyError   *bool  `json:"notify_error"`
+	}
 	if b, err := os.ReadFile(configPath()); err == nil {
-		json.Unmarshal(b, c)
+		json.Unmarshal(b, &f)
+	}
+	c := &config{SaveDir: f.SaveDir, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
+	if f.AutoSave != nil {
+		c.AutoSave = *f.AutoSave
+	}
+	if f.NotifyArrival != nil {
+		c.NotifyArrival = *f.NotifyArrival
+	}
+	if f.NotifySave != nil {
+		c.NotifySave = *f.NotifySave
+	}
+	if f.NotifySend != nil {
+		c.NotifySend = *f.NotifySend
+	}
+	if f.NotifyError != nil {
+		c.NotifyError = *f.NotifyError
 	}
 	if c.SaveDir == "" {
 		c.SaveDir = defaultDownloadsDir()

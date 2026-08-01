@@ -107,6 +107,13 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .drop-zone .t{font-weight:600;color:var(--text)}
 .drop-zone .sub{font-size:12.5px;margin-top:4px}
 .drop-zone .link{color:var(--accent);cursor:pointer;text-decoration:underline}
+.drop-zone .linkbtn{background:none;border:none;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit;padding:0}
+.settings h3{font-size:13.5px;margin:20px 0 8px;color:var(--text)}
+.settings h3:first-child{margin-top:0}
+.settings .check{margin:6px 0}
+.settings .sub2{color:var(--muted);font-size:13px;margin:2px 0;line-height:1.6}
+.settings code{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12px}
+.confirm-text{white-space:pre-wrap;word-break:break-all;color:var(--text);font-size:13.5px;margin:0}
 .drop-zone.over{border-color:var(--accent);background:var(--accent-soft)}
 
 .toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:360px}
@@ -156,6 +163,7 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
   <button id="tab-inbox" class="tab active">Inbox <span class="badge" id="inbox-badge" hidden></span></button>
   <button id="tab-send" class="tab">Send</button>
   <button id="tab-history" class="tab">History</button>
+  <button id="tab-settings" class="tab">Settings</button>
 </nav>
 
 <main>
@@ -174,6 +182,13 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
     <div class="toolbar searchbar">
       <input id="inbox-search" class="search" type="text" placeholder="Filter files…  ( / )" spellcheck="false" autocomplete="off">
       <span class="hint" id="inbox-hint"></span>
+    </div>
+    <div class="chips" id="inbox-chips">
+      <button class="chip-btn active" data-type="all">All</button>
+      <button class="chip-btn" data-type="img">Images</button>
+      <button class="chip-btn" data-type="vid">Videos</button>
+      <button class="chip-btn" data-type="doc">Docs</button>
+      <button class="chip-btn" data-type="other">Other</button>
     </div>
     <div id="inbox-list" class="list"></div>
     <div id="inbox-empty" class="empty" hidden>
@@ -194,7 +209,7 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
     <div id="drop-zone" class="drop-zone">
       <svg viewBox="0 0 48 48" fill="none"><path d="M14 36a9.5 9.5 0 1 1 1.4-18.9A12 12 0 0 1 39 19a9 9 0 0 1-2 17H14z" stroke="#8a93a8" stroke-width="2.5" stroke-linejoin="round"/><path d="M24 30.5v-11m0 0-4.2 4.2M24 19.5l4.2 4.2" stroke="#8a93a8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <p class="t">Drag &amp; drop files here</p>
-      <p class="sub">or <label class="link">browse<input type="file" id="file-input" multiple hidden></label> — sent straight over your tailnet</p>
+      <p class="sub">or <label class="link">browse<input type="file" id="file-input" multiple hidden></label> · or <button id="paste-btn" class="linkbtn">paste</button> an image or text from the clipboard (Ctrl+V)</p>
     </div>
     <div id="send-list" class="list"></div>
     <div id="send-empty" class="empty" hidden>
@@ -207,6 +222,7 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
     <div class="toolbar">
       <input id="history-search" class="search" type="text" placeholder="Search history…" spellcheck="false" autocomplete="off">
       <span id="history-stats" class="stats"></span>
+      <button id="history-export" class="btn ghost">Export</button>
       <button id="history-clear" class="btn ghost danger-text">Clear</button>
     </div>
     <div class="chips" id="history-chips">
@@ -221,9 +237,42 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
       <p class="s">Files you receive or send will be logged here, along with where they ended up.</p>
     </div>
   </section>
+
+  <section id="pane-settings" class="pane">
+    <div class="settings">
+      <h3>Notifications</h3>
+      <label class="check"><input type="checkbox" id="pref-arrival"> New file arrival</label>
+      <label class="check"><input type="checkbox" id="pref-save"> Save finished</label>
+      <label class="check"><input type="checkbox" id="pref-send"> Send finished</label>
+      <label class="check"><input type="checkbox" id="pref-error"> Errors</label>
+      <h3>Save folder</h3>
+      <p class="sub2">Incoming files are saved to <b id="settings-save-dir"></b></p>
+      <h3>Shortcuts</h3>
+      <p class="sub2"><code>/</code> filter · <code>j</code>/<code>k</code> select · <code>s</code> save · <code>d</code> delete · <code>Ctrl+V</code> paste to send</p>
+      <h3>About</h3>
+      <p class="sub2">Talks directly to your local tailscaled daemon. Nothing leaves this machine except files you send.</p>
+    </div>
+  </section>
 </main>
 
 <footer>Talks directly to your local tailscaled daemon — nothing leaves this machine except the files you send.</footer>
+
+<div id="confirm-modal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="confirm-title">Confirm</span>
+      <button id="confirm-close" class="btn x">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-text" class="confirm-text"></p>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer"></span>
+      <button id="confirm-no" class="btn ghost">Cancel</button>
+      <button id="confirm-yes" class="btn">Open anyway</button>
+    </div>
+  </div>
+</div>
 
 <div id="toasts" class="toasts"></div>
 
@@ -273,7 +322,9 @@ let devices = [];                  // {id,name,os,online,lastSeen,taildrop}
 let knownNames = new Set();
 let currentTab = 'inbox';
 let inboxFilter = '';
+let inboxType = 'all';
 let selIdx = -1;
+let prefs = { arrival: true, save: true, send: true, errors: true };
 let historyEvents = [];            // newest first, from /api/history
 let historyFilter = 'all';
 let historySearch = '';
@@ -384,9 +435,21 @@ function setDaemonState(ok, msg) {
 
 // ---------- inbox ----------
 
+function fileType(f) {
+  const cls = chipClass(f.name);
+  if (cls === 'c-img') return 'img';
+  if (cls === 'c-vid') return 'vid';
+  if (cls === 'c-aud' || cls === 'c-arc' || cls === 'c-doc' || cls === 'c-code') return 'doc';
+  return 'other';
+}
+
 function visibleInbox() {
   const q = inboxFilter.toLowerCase().trim();
-  return q ? inbox.filter(f => f.name.toLowerCase().includes(q)) : inbox;
+  return inbox.filter(f => {
+    if (inboxType !== 'all' && fileType(f) !== inboxType) return false;
+    if (q && !f.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
 }
 
 function renderInbox() {
@@ -837,7 +900,15 @@ function historyRow(s) {
 }
 
 async function clearHistory() {
-  if (!confirm('Clear the entire history?')) return;
+  if (!clearArmed) {
+    clearArmed = true;
+    const btn = $('#history-clear');
+    btn.textContent = 'Really clear?'; // confirm() is unsupported in Electron
+    setTimeout(() => { clearArmed = false; btn.textContent = 'Clear'; }, 3000);
+    return;
+  }
+  clearArmed = false;
+  $('#history-clear').textContent = 'Clear';
   try {
     await api('/api/history', { method: 'DELETE' });
     historyEvents = [];
@@ -846,6 +917,17 @@ async function clearHistory() {
   } catch (e) {
     toast("Couldn't clear history: " + e.message, null, 'err');
   }
+}
+
+function exportHistory() {
+  const blob = new Blob([JSON.stringify(historyEvents, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = el('a', { href: url, download: 'taildrop-history-' + new Date().toISOString().slice(0, 10) + '.json' });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast('History exported');
 }
 
 // ---------- keyboard shortcuts (inbox) ----------
@@ -891,6 +973,122 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ---------- paste-to-send ----------
+
+function stamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+function extFor(mime) {
+  if (mime === 'image/jpeg') return '.jpg';
+  if (mime === 'image/gif') return '.gif';
+  if (mime === 'image/webp') return '.webp';
+  return '.png';
+}
+
+function pasteImageBlob(blob, mime) {
+  const name = 'clipboard-' + stamp() + extFor(mime);
+  sendFile(new File([blob], name, { type: mime }));
+}
+
+function pasteText(text) {
+  const name = 'clipboard-' + stamp() + '.txt';
+  sendFile(new File([text], name, { type: 'text/plain' }));
+}
+
+// Ctrl+V while the Send tab is active (and not typing in a field).
+document.addEventListener('paste', e => {
+  if (currentTab !== 'send') return;
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  const dt = e.clipboardData;
+  if (!dt) return;
+  for (const it of dt.items) {
+    if (it.kind === 'file' && it.type.startsWith('image/')) {
+      e.preventDefault();
+      const f = it.getAsFile();
+      if (f) pasteImageBlob(f, f.type || 'image/png');
+      return;
+    }
+  }
+  const text = dt.getData('text/plain');
+  if (text && text.trim()) {
+    e.preventDefault();
+    pasteText(text);
+  }
+});
+
+$('#paste-btn').addEventListener('click', async () => {
+  try {
+    if (navigator.clipboard && navigator.clipboard.read) {
+      const items = await navigator.clipboard.read();
+      for (const it of items) {
+        for (const type of it.types) {
+          if (type.startsWith('image/')) {
+            const blob = await it.getType(type);
+            pasteImageBlob(blob, type);
+            return;
+          }
+        }
+      }
+    }
+    const text = await navigator.clipboard.readText();
+    if (text && text.trim()) {
+      pasteText(text);
+      return;
+    }
+    toast('Clipboard is empty', null, 'err');
+  } catch (err) {
+    toast("Couldn't read the clipboard: " + err.message, null, 'err');
+  }
+});
+
+// ---------- open-with-warning ----------
+
+const RISKY_EXT = ['exe','msi','bat','cmd','sh','appimage','deb','rpm','run','ps1','dll','scr','jar','bin','elf','com','cpl','gadget','ins','iso','js','jse','lnk','msc','msp','reg','vbs','vbe','wsf','wsh','py','php','pl','rb'];
+
+function riskyPath(p) {
+  const i = p.lastIndexOf('.');
+  if (i <= 0 || i === p.length - 1) return false;
+  return RISKY_EXT.includes(p.slice(i + 1).toLowerCase());
+}
+
+function confirmDialog(title, text, yesLabel, onYes) {
+  $('#confirm-title').textContent = title;
+  $('#confirm-text').textContent = text;
+  $('#confirm-yes').textContent = yesLabel || 'Open anyway';
+  window.__confirmYes = onYes;
+  $('#confirm-modal').hidden = false;
+}
+
+$('#confirm-yes').addEventListener('click', () => {
+  const f = window.__confirmYes;
+  window.__confirmYes = null;
+  $('#confirm-modal').hidden = true;
+  if (f) f();
+});
+$('#confirm-no').addEventListener('click', () => {
+  window.__confirmYes = null;
+  $('#confirm-modal').hidden = true;
+});
+$('#confirm-close').addEventListener('click', () => {
+  window.__confirmYes = null;
+  $('#confirm-modal').hidden = true;
+});
+
+function openPathWithWarning(path) {
+  const open = () => api('/api/open', { method: 'POST', json: { path } }).catch(() => {});
+  if (riskyPath(path)) {
+    confirmDialog('Open risky file?',
+      path + '\n\nThis file type can run code on your machine. Only open it if you trust where it came from.',
+      'Open anyway', open);
+  } else {
+    open();
+  }
+}
+
 // ---------- events ----------
 
 function handleEvent(ev) {
@@ -935,6 +1133,20 @@ function handleEvent(ev) {
   }
 }
 
+// notification prefs (Settings tab)
+for (const [id, key] of [['pref-arrival', 'arrival'], ['pref-save', 'save'], ['pref-send', 'send'], ['pref-error', 'errors']]) {
+  $('#' + id).addEventListener('change', async () => {
+    const body = {};
+    body['notify' + key[0].toUpperCase() + key.slice(1)] = $('#' + id).checked;
+    try {
+      await api('/api/config', { method: 'POST', json: body });
+    } catch (e) {
+      $('#' + id).checked = !$('#' + id).checked;
+      toast(e.message, null, 'err');
+    }
+  });
+}
+
 // ---------- boot ----------
 
 function connectEvents() {
@@ -958,6 +1170,11 @@ async function boot() {
     const cfg = await api('/api/config');
     $('#auto-save').checked = !!cfg.autoSave;
     CONFIG.autoSave = !!cfg.autoSave;
+    $('#pref-arrival').checked = cfg.notifyArrival !== false;
+    $('#pref-save').checked = cfg.notifySave !== false;
+    $('#pref-send').checked = cfg.notifySend !== false;
+    $('#pref-error').checked = cfg.notifyError !== false;
+    $('#settings-save-dir').textContent = cfg.saveDir;
   } catch (_) {}
   await refreshDevices();
   if (currentTab !== 'send') setInterval(() => { if (currentTab === 'send') refreshDevices(); }, 60000);
@@ -967,7 +1184,7 @@ async function boot() {
 // tabs
 function setTab(name) {
   currentTab = name;
-  for (const t of ['inbox', 'send', 'history']) {
+  for (const t of ['inbox', 'send', 'history', 'settings']) {
     $('#tab-' + t).classList.toggle('active', t === name);
     $('#pane-' + t).classList.toggle('active', t === name);
   }
@@ -978,6 +1195,7 @@ function setTab(name) {
 $('#tab-inbox').addEventListener('click', () => setTab('inbox'));
 $('#tab-send').addEventListener('click', () => setTab('send'));
 $('#tab-history').addEventListener('click', () => setTab('history'));
+$('#tab-settings').addEventListener('click', () => setTab('settings'));
 
 // toolbar
 $('#set-dir').addEventListener('click', async () => {
@@ -996,12 +1214,21 @@ $('#save-all-to').addEventListener('click', () => openDirPicker(null, 'batch'));
 $('#inbox-search').addEventListener('input', e => { inboxFilter = e.target.value; selIdx = -1; renderInbox(); });
 $('#history-search').addEventListener('input', e => { historySearch = e.target.value; renderHistory(); });
 $('#history-clear').addEventListener('click', clearHistory);
+$('#history-export').addEventListener('click', exportHistory);
 $('#history-chips').addEventListener('click', e => {
   const btn = e.target.closest('.chip-btn');
   if (!btn) return;
-  for (const b of document.querySelectorAll('.chip-btn')) b.classList.toggle('active', b === btn);
+  for (const b of document.querySelectorAll('#history-chips .chip-btn')) b.classList.toggle('active', b === btn);
   historyFilter = btn.dataset.filter;
   renderHistory();
+});
+$('#inbox-chips').addEventListener('click', e => {
+  const btn = e.target.closest('.chip-btn');
+  if (!btn) return;
+  for (const b of document.querySelectorAll('#inbox-chips .chip-btn')) b.classList.toggle('active', b === btn);
+  inboxType = btn.dataset.type;
+  selIdx = -1;
+  renderInbox();
 });
 $('#auto-save').addEventListener('change', async () => {
   try {

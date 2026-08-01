@@ -34,7 +34,15 @@ The two talk over localhost only; nothing is proxied through a remote server.
 - **Auto-save** — one checkbox: incoming files land in your folder the
   moment they arrive (like `tailscale file get --loop`), with notifications
 - **Notifications** — arrival + save/send results, native OS notifications
-  even when the window is hidden in the tray
+  even when the window is hidden in the tray; toggle each event type in
+  Settings
+- **Paste-to-send** — copy an image or text and press Ctrl+V in the Send
+  tab (or hit Paste) to send it as a file
+- **Tray quick-send** — right-click the tray icon → Send file to… → pick a
+  device → native file dialog
+- **Safety** — opening executable/script files asks for confirmation first
+- **Global shortcut** — Ctrl+Shift+T brings the window to the front
+- **History export** — one click dumps the full log as JSON
 
 ## Run (NixOS)
 
