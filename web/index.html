@@ -767,6 +767,7 @@ function historySessions() {
     }
     s.events.push(e);
     if (e.ts < s.arrived) s.arrived = e.ts;
+    if (e.kind === 'arrived' && e.size > 0) s.size = e.size; // arrival carries the real size
   }
   return [...byId.values()].sort((a, b) => (a.arrived < b.arrived ? 1 : -1));
 }
@@ -811,17 +812,17 @@ function historyRow(s) {
   row.appendChild(el('div', { class: 'chip ' + chipClass(s.name) }, chipLabel(s.name)));
   const meta = el('div', { class: 'meta' });
   meta.appendChild(el('div', { class: 'name' }, s.name));
-  const bits = [];
+  const sub = [];
   if (isSend) {
-    const badge = el('span', { class: 'status ' + (st.failed ? 'failed' : 'sent') }, st.failed ? 'failed' : 'sent');
-    bits.push(badge, 'to ' + (st.failed ? st.failed.peer : st.sent.peer));
+    sub.push(el('span', { class: 'status ' + (st.failed ? 'failed' : 'sent') }, st.failed ? 'failed' : 'sent'));
+    sub.push(' to ' + (st.failed ? st.failed.peer : st.sent.peer));
   } else {
     const status = st.saved ? 'saved' : (st.deleted ? 'deleted' : 'waiting');
-    bits.push(el('span', { class: 'status ' + status }, status));
+    sub.push(el('span', { class: 'status ' + status }, status));
   }
-  if (s.size > 0) bits.push(fmtSize(s.size));
-  bits.push(fmtAge(s.arrived));
-  meta.appendChild(el('div', { class: 'sub' }, bits));
+  if (s.size > 0) sub.push(' · ' + fmtSize(s.size));
+  sub.push(' · ' + fmtAge(s.arrived));
+  meta.appendChild(el('div', { class: 'sub' }, sub));
   row.appendChild(meta);
   if (st.saved) {
     const actions = el('div', { class: 'actions' });
@@ -902,6 +903,7 @@ function handleEvent(ev) {
       if (fresh.length && document.hidden && !IS_ELECTRON && 'Notification' in window && Notification.permission === 'granted') {
         for (const f of fresh) new Notification(f.name, { body: fmtSize(f.size) + ' — click to open Taildrop' });
       }
+      if (currentTab === 'history') fetchHistory();
       break;
     }
     case 'devices':
@@ -914,6 +916,7 @@ function handleEvent(ev) {
       if (ev.done) { st.done = true; if (ev.err) st.err = ev.err; if (ev.path) st.path = ev.path; }
       else { st.written = ev.written; st.size = ev.size; }
       renderInbox();
+      if (currentTab === 'history') fetchHistory();
       break;
     }
     case 'send': {
@@ -923,6 +926,7 @@ function handleEvent(ev) {
       if (ev.size >= 0) st.size = ev.size;
       if (ev.done) { st.done = true; if (ev.err) st.err = ev.err; }
       renderSends();
+      if (currentTab === 'history') fetchHistory();
       break;
     }
     case 'status':

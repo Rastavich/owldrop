@@ -27,18 +27,22 @@ type historyEvent struct {
 // history is a small append-only log of everything that happened to files.
 // Persisted as JSONL next to the config; rebuilt in memory at startup.
 type history struct {
-	mu     sync.Mutex
-	path   string
-	events []historyEvent
-	active map[string]string // waiting filename → open session ID (awaiting save/delete)
-	max    int
+	mu       sync.Mutex
+	path     string
+	events   []historyEvent
+	active   map[string]string        // waiting filename → open session ID (awaiting save/delete)
+	lastSeen map[string]time.Time     // filename → last poll where it was still waiting
+	goneGrace time.Duration           // how long a missing file must stay absent before being marked deleted
+	max      int
 }
 
 func newHistory(dir string) *history {
 	h := &history{
-		path:   filepath.Join(dir, "history.jsonl"),
-		active: map[string]string{},
-		max:    2000,
+		path:      filepath.Join(dir, "history.jsonl"),
+		active:    map[string]string{},
+		lastSeen:  map[string]time.Time{},
+		goneGrace: 60 * time.Second,
+		max:       2000,
 	}
 	h.load()
 	return h
@@ -74,30 +78,30 @@ func (h *history) trackActive(e *historyEvent) {
 
 // recordArrivals opens a session for every newly seen waiting file and
 // closes sessions for files that vanished without our save/delete (consumed
-// by the CLI or daemon cleanup).
+// by the CLI or daemon cleanup). Files are only marked deleted once they've
+// been absent for goneGrace — a save/delete in flight must not race with
+// this (that race previously recorded "deleted" for a file that was saved).
 func (h *history) recordArrivals(files []waitingFile) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	now := time.Now()
 	changed := false
 	for _, f := range files {
+		h.lastSeen[f.Name] = now
 		if _, ok := h.active[f.Name]; ok {
 			continue
 		}
-		e := historyEvent{ID: newID(), Ts: time.Now(), Kind: "arrived", Name: f.Name, Size: f.Size}
+		e := historyEvent{ID: newID(), Ts: now, Kind: "arrived", Name: f.Name, Size: f.Size}
 		h.events = append(h.events, e)
 		h.active[f.Name] = e.ID
 		changed = true
 	}
 	for name, id := range h.active {
-		found := false
-		for _, f := range files {
-			if f.Name == name {
-				found = true
-				break
-			}
+		if ls, ok := h.lastSeen[name]; ok && now.Sub(ls) < h.goneGrace {
+			continue // still within the grace period
 		}
-		if !found {
-			h.events = append(h.events, historyEvent{ID: id, Ts: time.Now(), Kind: "deleted", Name: name})
+		if !containsName(files, name) {
+			h.events = append(h.events, historyEvent{ID: id, Ts: now, Kind: "deleted", Name: name})
 			delete(h.active, name)
 			changed = true
 		}
@@ -108,12 +112,36 @@ func (h *history) recordArrivals(files []waitingFile) {
 	}
 }
 
+func containsName(files []waitingFile, name string) bool {
+	for _, f := range files {
+		if f.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// sessionIDFor resolves the session that should carry a save/delete for name:
+// the open session if there is one, otherwise the most recent recorded
+// arrival for that name (covers app restarts between arrival and save).
+func (h *history) sessionIDFor(name string) string {
+	if id, ok := h.active[name]; ok {
+		return id
+	}
+	for i := len(h.events) - 1; i >= 0; i-- {
+		if h.events[i].Kind == "arrived" && h.events[i].Name == name {
+			return h.events[i].ID
+		}
+	}
+	return ""
+}
+
 func (h *history) recordSaved(name, path string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	id, ok := h.active[name]
-	if !ok {
-		id = newID() // e.g. the arrival happened before this run
+	id := h.sessionIDFor(name)
+	if id == "" {
+		id = newID()
 	}
 	h.events = append(h.events, historyEvent{ID: id, Ts: time.Now(), Kind: "saved", Name: name, Path: path})
 	delete(h.active, name)
@@ -124,8 +152,8 @@ func (h *history) recordSaved(name, path string) {
 func (h *history) recordDeleted(name string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	id, ok := h.active[name]
-	if !ok {
+	id := h.sessionIDFor(name)
+	if id == "" {
 		id = newID()
 	}
 	h.events = append(h.events, historyEvent{ID: id, Ts: time.Now(), Kind: "deleted", Name: name})
