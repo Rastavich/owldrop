@@ -1,0 +1,14 @@
+{
+  "name": "tailscale-drop",
+  "version": "0.3.0",
+  "description": "Native Taildrop (Tailscale file sharing) desktop app",
+  "main": "main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --remote-debugging-port=9222"
+  },
+  "devDependencies": {
+    "electron": "^41.0.0"
+  }
+}

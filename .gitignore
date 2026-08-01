@@ -1,2 +1,4 @@
 /tailscale-drop
+electron/node_modules
+electron/dist
 *.exe

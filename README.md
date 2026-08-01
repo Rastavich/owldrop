@@ -1,100 +1,78 @@
 # tailscale-drop
 
-A native, cross-platform desktop app for [Tailscale's Taildrop](https://tailscale.com/kb/1082/taildrop):
+A native desktop app for [Tailscale's Taildrop](https://tailscale.com/kb/1082/taildrop):
 see files sent to you, save or delete them with one click, send files back to
 any device on your tailnet, and optionally auto-save everything that arrives.
 No more `tailscale file get .` on the command line.
 
-Built with [Fyne](https://fyne.io/) (pure Go) on top of the same LocalAPI the
-`tailscale` CLI uses, so it works identically on Linux, macOS, and Windows.
+## Architecture
+
+Two pieces, one app:
+
+- **Go sidecar** (`tailscale-drop`) — talks to the **local** `tailscaled`
+  daemon over its LocalAPI (the same interface the `tailscale` CLI uses) and
+  serves the UI on a random `127.0.0.1` port. Received files stay in the
+  daemon's inbox until you save/delete — the same inbox the CLI drains.
+- **Electron shell** (`electron/`) — a native window (Chromium), system tray
+  with Show/Quit, native desktop notifications driven by the sidecar's
+  event stream, close-to-tray behavior. The UI inside is the same one you'd
+  get in a browser at the sidecar's URL — handy from a phone too.
+
+The two talk over localhost only; nothing is proxied through a remote server.
 
 ## Features
 
-- **Inbox** — files sent to this machine appear instantly (the daemon's
-  long-poll, not polling), with size, arrival time, per-file progress bars,
-  and Save / Save to… / Delete actions
-- **Send** — pick a device (offline ones are marked), choose a file or drag &
-  drop it onto the window, watch the progress
-- **Auto-save** — toggle in Settings or the tray: incoming files land in your
-  chosen folder the moment they arrive, like `tailscale file get --loop`,
-  with a desktop notification per file
-- **Desktop notifications** — arrival (when auto-save is off) and save/send
-  results; the app lives in the system tray (closing the window hides it)
-- **Native file dialogs** — folder picker for the save location, file picker
-  for sending
-- **Optional browser UI** — `--web` also serves the earlier web frontend on
-  `127.0.0.1` (handy from a phone on the same network)
+- **Inbox** — files appear instantly (daemon long-poll), with size, arrival
+  time, progress bars, Save / Save to… (native folder dialog) / Delete
+- **Send** — device picker (offline & can't-receive reasons shown), file
+  picker, or drag & drop onto the window
+- **Auto-save** — one checkbox: incoming files land in your folder the
+  moment they arrive (like `tailscale file get --loop`), with notifications
+- **Notifications** — arrival + save/send results, native OS notifications
+  even when the window is hidden in the tray
 
-## Build & run
-
-The app needs a GL-capable desktop and (on Linux) X11/Wayland dev headers to
-build. On NixOS, use the included dev shell:
+## Run (NixOS)
 
 ```sh
-nix develop --command go build -tags migrated_fynedo -o tailscale-drop .
-./tailscale-drop            # or: ./run.sh (NixOS: builds & launches)
+./run.sh
 ```
 
-On any distro with pkg-config + X11/Wayland headers installed, plain
-`go build -tags migrated_fynedo .` works. Cross-compile for other platforms
-(with their toolchains):
+Builds the Go sidecar if needed, then launches Electron inside the nix dev
+shell (so Chromium's runtime libraries resolve). On other distros:
 
 ```sh
-GOOS=windows GOARCH=amd64 go build -tags migrated_fynedo -o tailscale-drop.exe .
-GOOS=darwin  GOARCH=arm64 go build -tags migrated_fynedo -o tailscale-drop .
+go build -o tailscale-drop .          # build the sidecar
+cd electron && npm install && npm start
 ```
 
-Flags:
+## Notes & limitations
 
-| Flag | Meaning |
-|------|---------|
-| `--save-dir PATH` | default folder for received files (persisted) |
-| `--web` | also serve the browser UI (see above) |
-| `--port N` | port for the browser UI (default `8976`, 127.0.0.1 only) |
-
-You must be able to talk to `tailscaled`: on Linux your user needs access to
-its socket (the `tailscale` group on most distros); on macOS/Windows the app
-works for the logged-in user.
-
-## How it works
-
-- The app talks to the **local** `tailscaled` daemon over its LocalAPI
-  (`tailscale.com/client/local`) — the identical interface the CLI uses.
-  Nothing is proxied through a server; only the daemon socket is touched.
-- Received files stay in the daemon's inbox until you save or delete them —
-  the same inbox `tailscale file get` drains, so the CLI still works
-  alongside.
-- Sender attribution: the daemon's file API currently exposes only
-  name+size (no sender identity), so auto-save applies to everything that
-  arrives. The Settings layout leaves room for a per-host trust list the
-  moment the daemon exposes senders.
+- Sender attribution: the daemon's file API (v1.98) exposes only name+size
+  for waiting files — no sender identity — so auto-save applies to
+  everything. A per-host trust list needs a daemon API that doesn't exist
+  yet.
+- The sidecar binds to `127.0.0.1` with a per-run session token + Origin and
+  Host checks on mutating calls; the Electron shell adds no network surface.
 
 ## Layout
 
 ```
-main.go        entry point, config, OS helpers, optional web server
+main.go        sidecar: config, HTTP server, OS helpers
 taildrop.go    daemon interactions: inbox, save, delete, devices, send
-ops.go         shared save/send operations with progress events
-server.go      event hub, browser-UI API, security guards, inbox watcher
-ui.go          the native Fyne app: window, tray, tabs, notifications
-web/index.html the optional browser UI (embedded via go:embed)
-flake.nix      NixOS dev shell (Go + GL/X11/Wayland headers)
-main_test.go   conflict-naming / validation unit tests
-ui_test.go     headless widget tests (Fyne test driver)
+ops.go         save/send operations with progress events
+server.go      event hub, API, security guards, inbox watcher + auto-save
+web/index.html the UI (embedded into the sidecar binary)
+electron/      desktop shell: main.js, package.json, icon
+tools/genicon  regenerates the icon PNG
+flake.nix      NixOS dev shell (go + electron)
+main_test.go   unit tests (conflict naming, validation)
 ```
 
-## Security
+## Packaging / roadmap
 
-- The optional browser UI binds to `127.0.0.1` only, with a per-run session
-  token, Origin checks, and Host-header validation (no CSRF / DNS rebinding).
-- The native app makes no network listeners at all.
-
-## Roadmap ideas
-
-- Per-host trust list for auto-save (blocked on daemon API exposing senders)
+- `electron-builder` for proper .deb/AppImage/Windows/macOS installers
+- Per-host trust list for auto-save (blocked on daemon API)
 - Reveal-in-file-manager after save
-- App icon + proper packaging (`fyne package`, Flatpak)
-- macOS/iOS-style "open the file" action on notification click
 
 ## License
 

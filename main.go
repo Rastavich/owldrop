@@ -1,12 +1,9 @@
-// tailscale-drop is a cross-platform desktop app for Tailscale's Taildrop.
+// tailscale-drop is a small local server for Tailscale's Taildrop.
 //
 // It talks to the local tailscaled daemon through its LocalAPI (the same
-// interface the `tailscale` CLI uses) and renders a native UI with Fyne:
-// inbox with save/delete, sending with progress, desktop notifications,
-// system tray, and an optional auto-save mode.
-//
-// The browser UI from earlier versions still exists and can be enabled with
-// --web (handy for pointing a phone at your machine).
+// interface the `tailscale` CLI uses) and serves a UI on localhost: the
+// bundled browser UI (web/index.html), typically wrapped in the Electron
+// desktop shell (electron/), or used directly from a browser.
 package main
 
 import (
@@ -28,8 +25,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"fyne.io/fyne/v2/app"
 )
 
 //go:embed web
@@ -37,8 +32,7 @@ var webFS embed.FS
 
 func main() {
 	var (
-		web     = flag.Bool("web", false, "also serve the browser UI on http://127.0.0.1:PORT")
-		port    = flag.Int("port", 8976, "port for the optional browser UI")
+		port    = flag.Int("port", 8976, "port for the UI (0 = pick a free port)")
 		saveDir = flag.String("save-dir", "", "default folder for received files (defaults to your Downloads folder)")
 	)
 	flag.Parse()
@@ -57,34 +51,32 @@ func main() {
 	srv := newServer(cfg)
 	go srv.watchInbox(ctx)
 
-	if *web {
-		httpSrv := &http.Server{
-			Handler:           srv.routes(),
-			ReadHeaderTimeout: 5 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
-		addr := fmt.Sprintf("127.0.0.1:%d", *port)
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			log.Fatalf("can't listen on %s: %v", addr, err)
-		}
-		fmt.Printf("browser UI: http://%s/\n", addr)
-		go func() {
-			<-ctx.Done()
-			shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			httpSrv.Shutdown(shutCtx)
-		}()
-		go func() {
-			if err := httpSrv.Serve(ln); err != nil && ctx.Err() == nil {
-				log.Printf("web server: %v", err)
-			}
-		}()
+	httpSrv := &http.Server{
+		Handler:           srv.routes(),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
+	addr := fmt.Sprintf("127.0.0.1:%d", *port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("can't listen on %s: %v", addr, err)
+	}
+	if *port == 0 {
+		addr = ln.Addr().String() // actual ephemeral port
+	}
+	fmt.Printf("tailscale-drop UI: http://%s/\n", addr)
+	fmt.Printf("inbox saved to: %s\n", cfg.SaveDir)
 
-	a := app.NewWithID("dev.taildrop")
-	u := newUI(a, cfg, srv, ctx)
-	u.run()
+	go func() {
+		<-ctx.Done()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		httpSrv.Shutdown(shutCtx)
+	}()
+	if err := httpSrv.Serve(ln); err != nil && ctx.Err() == nil {
+		log.Fatal(err)
+	}
+	log.Println("bye")
 }
 
 // --- config ---------------------------------------------------------------

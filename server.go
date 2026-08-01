@@ -132,18 +132,37 @@ type statusEvent struct {
 
 type server struct {
 	cfg       *config
+	cfgMu     sync.Mutex
 	token     string
 	hub       *hub
 	refreshCh chan struct{} // ping the inbox watcher to re-poll now
+
+	autosaveMu    sync.Mutex
+	autosaving    map[string]bool      // inbox files currently being auto-saved
+	autosaveFail  map[string]time.Time // failed auto-saves, for backoff
 }
 
 func newServer(cfg *config) *server {
 	return &server{
-		cfg:       cfg,
-		token:     newToken(),
-		hub:       newHub(),
-		refreshCh: make(chan struct{}, 1),
+		cfg:          cfg,
+		token:        newToken(),
+		hub:          newHub(),
+		refreshCh:    make(chan struct{}, 1),
+		autosaving:   map[string]bool{},
+		autosaveFail: map[string]time.Time{},
 	}
+}
+
+func (s *server) saveDir() string {
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
+	return s.cfg.SaveDir
+}
+
+func (s *server) autoSave() bool {
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
+	return s.cfg.AutoSave
 }
 
 func (s *server) refresh() {
@@ -225,7 +244,7 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	cfgJSON, _ := json.Marshal(struct {
 		Token   string `json:"token"`
 		SaveDir string `json:"saveDir"`
-	}{s.token, s.cfg.SaveDir})
+	}{s.token, s.saveDir()})
 	b, err := webFS.ReadFile("web/index.html")
 	if err != nil {
 		http.Error(w, "embedded UI missing", http.StatusInternalServerError)
@@ -307,7 +326,7 @@ func (s *server) handleDevices(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("path")
 	if p == "" {
-		p = s.cfg.SaveDir
+		p = s.saveDir()
 	}
 	if !filepath.IsAbs(p) {
 		http.Error(w, "path must be absolute", http.StatusBadRequest)
@@ -369,34 +388,46 @@ func (s *server) handleMkdir(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, map[string]any{"saveDir": s.cfg.SaveDir})
+		s.cfgMu.Lock()
+		saveDir := s.cfg.SaveDir
+		autoSave := s.cfg.AutoSave
+		s.cfgMu.Unlock()
+		writeJSON(w, map[string]any{"saveDir": saveDir, "autoSave": autoSave})
 	case http.MethodPost:
 		var req struct {
-			SaveDir string `json:"saveDir"`
+			SaveDir  string `json:"saveDir"`
+			AutoSave *bool  `json:"autoSave"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		dir := req.SaveDir
-		if dir == "" {
-			dir = defaultDownloadsDir()
+		s.cfgMu.Lock()
+		if req.SaveDir != "" {
+			abs, err := filepath.Abs(req.SaveDir)
+			if err != nil {
+				s.cfgMu.Unlock()
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+				s.cfgMu.Unlock()
+				http.Error(w, "not a directory: "+abs, http.StatusBadRequest)
+				return
+			}
+			s.cfg.SaveDir = abs
 		}
-		abs, err := filepath.Abs(dir)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+		if req.AutoSave != nil {
+			s.cfg.AutoSave = *req.AutoSave
 		}
-		if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
-			http.Error(w, "not a directory: "+abs, http.StatusBadRequest)
-			return
-		}
-		s.cfg.SaveDir = abs
+		saveDir := s.cfg.SaveDir
+		autoSave := s.cfg.AutoSave
+		s.cfgMu.Unlock()
 		if err := s.cfg.save(); err != nil {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, map[string]any{"saveDir": abs})
+		writeJSON(w, map[string]any{"saveDir": saveDir, "autoSave": autoSave})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -417,7 +448,7 @@ func (s *server) handleSave(w http.ResponseWriter, r *http.Request) {
 	}
 	dir := req.Dir
 	if dir == "" {
-		dir = s.cfg.SaveDir
+		dir = s.saveDir()
 	}
 	path, err := s.saveOne(r.Context(), req.Name, dir, nil)
 	if err != nil {
@@ -532,7 +563,43 @@ func (s *server) watchInbox(ctx context.Context) {
 				continue
 			}
 			s.hub.broadcast(inboxEvent{Type: "inbox", Files: r.files})
+			s.maybeAutoSave(ctx, r.files)
 		}
+	}
+}
+
+// maybeAutoSave saves incoming files automatically when auto-save is on.
+// Failed attempts are remembered so the watcher doesn't retry in a hot loop.
+func (s *server) maybeAutoSave(ctx context.Context, files []waitingFile) {
+	if !s.autoSave() {
+		return
+	}
+	dir := s.saveDir()
+	for _, f := range files {
+		s.autosaveMu.Lock()
+		if s.autosaving[f.Name] {
+			s.autosaveMu.Unlock()
+			continue
+		}
+		if time.Since(s.autosaveFail[f.Name]) < time.Minute {
+			s.autosaveMu.Unlock()
+			continue
+		}
+		s.autosaving[f.Name] = true
+		s.autosaveMu.Unlock()
+
+		go func(f waitingFile) {
+			defer func() {
+				s.autosaveMu.Lock()
+				delete(s.autosaving, f.Name)
+				s.autosaveMu.Unlock()
+			}()
+			if _, err := s.saveOne(ctx, f.Name, dir, nil); err != nil {
+				s.autosaveMu.Lock()
+				s.autosaveFail[f.Name] = time.Now()
+				s.autosaveMu.Unlock()
+			}
+		}(f)
 	}
 }
 

@@ -47,6 +47,8 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .btn:hover{filter:brightness(1.1)}
 .btn.ghost{border-color:var(--border);background:var(--panel);color:var(--text)}
 .btn.ghost:hover{border-color:#333d55}
+.check{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:13px;cursor:pointer;user-select:none;white-space:nowrap}
+.check input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
 .btn.danger{border-color:transparent;background:transparent;color:var(--muted);padding:7px 8px}
 .btn.danger:hover{color:var(--red)}
 .btn.mini{border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:8px;padding:4px 10px;font-size:12px}
@@ -123,6 +125,7 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
       </label>
       <button id="set-dir" class="btn ghost">Set default</button>
       <button id="save-all" class="btn">Save all</button>
+      <label class="check"><input type="checkbox" id="auto-save"> Auto-save incoming</label>
     </div>
     <div id="inbox-list" class="list"></div>
     <div id="inbox-empty" class="empty" hidden>
@@ -160,6 +163,7 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
 <script>
 'use strict';
 const CONFIG = __CONFIG__;
+const IS_ELECTRON = navigator.userAgent.includes('Electron');
 
 const $ = s => document.querySelector(s);
 const inboxList = $('#inbox-list'), sendList = $('#send-list');
@@ -469,7 +473,7 @@ function handleEvent(ev) {
       inbox = ev.files;
       knownNames = new Set(ev.files.map(f => f.name));
       renderInbox();
-      if (fresh.length && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      if (fresh.length && document.hidden && !IS_ELECTRON && 'Notification' in window && Notification.permission === 'granted') {
         for (const f of fresh) new Notification(f.name, { body: fmtSize(f.size) + ' — click to open Taildrop' });
       }
       break;
@@ -520,6 +524,11 @@ async function boot() {
   } catch (e) {
     setDaemonState(false, 'tailscaled unreachable: ' + e.message);
   }
+  try {
+    const cfg = await api('/api/config');
+    $('#auto-save').checked = !!cfg.autoSave;
+    CONFIG.autoSave = !!cfg.autoSave;
+  } catch (_) {}
   await refreshDevices();
   if (currentTab !== 'send') setInterval(() => { if (currentTab === 'send') refreshDevices(); }, 60000);
   setInterval(() => { if (currentTab === 'inbox' && inbox.length) renderInbox(); }, 30000); // refresh relative times
@@ -551,6 +560,16 @@ $('#set-dir').addEventListener('click', async () => {
     toast(e.message, null, 'err');
   }
 });
+$('#auto-save').addEventListener('change', async () => {
+  try {
+    const res = await api('/api/config', { method: 'POST', json: { autoSave: $('#auto-save').checked } });
+    CONFIG.autoSave = res.autoSave;
+    toast(res.autoSave ? 'Auto-save on — incoming files go straight to ' + res.saveDir : 'Auto-save off');
+  } catch (e) {
+    $('#auto-save').checked = !$('#auto-save').checked;
+    toast(e.message, null, 'err');
+  }
+});
 $('#save-all').addEventListener('click', async () => {
   for (const f of inbox) {
     if (saving.has(f.name)) continue;
@@ -573,9 +592,9 @@ $('#file-input').addEventListener('change', e => {
   e.target.value = '';
 });
 
-// notifications: request permission on first interaction
+// notifications: request permission on first interaction (browser mode only)
 document.addEventListener('pointerdown', () => {
-  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  if (!IS_ELECTRON && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 }, { once: true });
 
 boot();

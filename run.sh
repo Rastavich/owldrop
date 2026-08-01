@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Launch tailscale-drop inside the nix dev shell so the GL/X11/Wayland
-# libraries it links against resolve on NixOS.
+# Build the Go sidecar if needed, then launch the desktop app (Electron)
+# inside the nix dev shell so all runtime libraries resolve on NixOS.
+set -e
 cd "$(dirname "$0")"
-exec nix develop --command ./tailscale-drop "$@"
+if [ ! -x ./tailscale-drop ] || [ main.go -nt tailscale-drop ] || [ server.go -nt tailscale-drop ] || [ taildrop.go -nt tailscale-drop ] || [ ops.go -nt tailscale-drop ]; then
+  echo "building tailscale-drop…"
+  nix develop --command go build -o tailscale-drop .
+fi
+exec nix develop --command electron ./electron
