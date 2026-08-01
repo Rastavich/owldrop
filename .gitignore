@@ -1,4 +1,5 @@
 /tailscale-drop
 electron/node_modules
 electron/dist
+result
 *.exe

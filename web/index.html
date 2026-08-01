@@ -48,6 +48,20 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
    color in Chromium-on-Linux, which made options invisible (light text on
    KDE's light popup). Pin both colors explicitly. */
 .dir-field select option{background:var(--panel2);color:var(--text)}
+.picker-wrap{position:relative}
+.picker-btn{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font:inherit;font-size:13px;cursor:pointer;text-align:left;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.picker-btn:hover{color:var(--accent)}
+.popover{position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:280px;max-width:420px;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);padding:8px;display:flex;flex-direction:column;gap:6px}
+.popover[hidden]{display:none}
+.popover-list{display:flex;flex-direction:column;gap:2px;max-height:280px;overflow-y:auto}
+.popover-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13px}
+.popover-item:hover{background:var(--panel2)}
+.popover-item input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+.popover-item .pv-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.popover-item.disabled{opacity:.45;cursor:default}
+.popover-item.disabled:hover{background:transparent}
+.popover-foot{display:flex;gap:6px;padding-top:6px;border-top:1px solid var(--border)}
+.popover-foot .spacer{flex:1}
 .btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600}
 .btn:hover{filter:brightness(1.1)}
 .btn.ghost{border-color:var(--border);background:var(--panel);color:var(--text)}
@@ -200,10 +214,17 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
 
   <section id="pane-send" class="pane">
     <div class="toolbar">
-      <label class="dir-field">
+      <div class="dir-field picker-wrap">
         <span>Send to</span>
-        <select id="device-select"></select>
-      </label>
+        <button id="device-picker" class="picker-btn">Select devices…</button>
+        <div id="device-popover" class="popover" hidden>
+          <div id="device-popover-list"></div>
+          <div class="popover-foot">
+            <button id="dev-all" class="btn ghost mini">All online</button>
+            <button id="dev-clear" class="btn ghost mini">Clear</button>
+          </div>
+        </div>
+      </div>
       <button id="refresh-devices" class="btn ghost">Refresh</button>
     </div>
     <div id="drop-zone" class="drop-zone">
@@ -247,6 +268,10 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
       <label class="check"><input type="checkbox" id="pref-error"> Errors</label>
       <h3>Save folder</h3>
       <p class="sub2">Incoming files are saved to <b id="settings-save-dir"></b></p>
+      <h3>LAN access</h3>
+      <label class="check"><input type="checkbox" id="pref-lan"> Allow other devices on my tailnet to open this app</label>
+      <p class="sub2" id="lan-url" hidden></p>
+      <p class="sub2">Opening this app from another device is as powerful as being at this machine — only enable it if you trust your tailnet.</p>
       <h3>Shortcuts</h3>
       <p class="sub2"><code>/</code> filter · <code>j</code>/<code>k</code> select · <code>s</code> save · <code>d</code> delete · <code>Ctrl+V</code> paste to send</p>
       <h3>About</h3>
@@ -319,6 +344,8 @@ let inbox = [];                    // {name,size,arrived}
 let saving = new Map();            // name -> {written,size,done,path,err}
 let sending = new Map();           // id -> {name,peer,sent,size,done,err}
 let devices = [];                  // {id,name,os,online,lastSeen,taildrop}
+let devicesMap = {};               // id → device
+let selectedDevices = new Set();   // device IDs to send to
 let knownNames = new Set();
 let currentTab = 'inbox';
 let inboxFilter = '';
@@ -606,23 +633,62 @@ async function deleteFile(name) {
 // ---------- send ----------
 
 function renderDevices() {
-  const sel = $('#device-select');
-  sel.textContent = '';
-  const usable = devices.filter(d => d.taildrop === 'available');
-  for (const d of devices) {
-    const opt = el('option', { value: d.id });
-    const offline = d.online ? '' : ' · offline';
-    const reason = d.taildrop === 'available' ? '' : ` · can't receive (${d.taildrop})`;
-    opt.textContent = d.name + (d.os ? ` (${d.os})` : '') + offline + reason;
-    opt.disabled = d.taildrop !== 'available';
-    sel.appendChild(opt);
+  const byId = {};
+  for (const d of devices) byId[d.id] = d;
+  devicesMap = byId;
+  // Drop selections that no longer exist.
+  for (const id of selectedDevices) {
+    if (!byId[id]) selectedDevices.delete(id);
   }
-  $('#send-empty').hidden = devices.length > 0;
-  if (devices.length > 0) {
-    // try to keep a usable selection
-    if (sel.value === '' || sel.selectedOptions.length && sel.selectedOptions[0].disabled) {
-      const first = usable.find(d => d.online) || usable[0];
-      if (first) sel.value = first.id;
+  renderDevicePopover();
+  updateDevicePickerLabel();
+}
+
+function renderDevicePopover() {
+  const list = $('#device-popover-list');
+  list.textContent = '';
+  for (const d of devices) {
+    const usable = d.taildrop === 'available';
+    const item = el('label', { class: 'popover-item' + (usable ? '' : ' disabled') });
+    const cb = el('input', { type: 'checkbox' });
+    cb.checked = usable && selectedDevices.has(d.id);
+    cb.disabled = !usable;
+    cb.dataset.id = d.id;
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedDevices.add(d.id);
+      else selectedDevices.delete(d.id);
+      updateDevicePickerLabel();
+    });
+    item.appendChild(cb);
+    const suffix = !d.online ? ' · offline' : (usable ? '' : ' · ' + d.taildrop);
+    item.appendChild(el('span', { class: 'pv-name' }, d.name + (d.os ? ' (' + d.os + ')' : '') + suffix));
+    list.appendChild(item);
+  }
+}
+
+function updateDevicePickerLabel() {
+  const names = [...selectedDevices].map(id => devicesMap[id]?.name).filter(Boolean);
+  $('#device-picker').textContent = names.length
+    ? 'Send to: ' + names.join(', ') + (names.length > 1 ? ` (${names.length})` : '')
+    : 'Select devices…';
+}
+
+function selectedTargets() {
+  return [...selectedDevices]
+    .map(id => devicesMap[id])
+    .filter(d => d && d.taildrop === 'available')
+    .map(d => ({ id: d.id, name: d.name }));
+}
+
+// Ensure at least one device is selected by default.
+function ensureDefaultSelection() {
+  if (selectedDevices.size === 0) {
+    const first = devices.find(d => d.taildrop === 'available' && d.online)
+      || devices.find(d => d.taildrop === 'available');
+    if (first) {
+      selectedDevices.add(first.id);
+      updateDevicePickerLabel();
+      renderDevicePopover();
     }
   }
 }
@@ -632,6 +698,7 @@ async function refreshDevices() {
     const res = await api('/api/devices');
     devices = res.devices || [];
     renderDevices();
+    ensureDefaultSelection();
   } catch (e) {
     setDaemonState(false, 'tailscaled unreachable: ' + e.message);
     toast("Couldn't list devices: " + e.message, null, 'err');
@@ -648,7 +715,7 @@ function renderSends() {
     row.appendChild(el('div', { class: 'chip ' + chipClass(st.name) }, chipLabel(st.name)));
     const meta = el('div', { class: 'meta' });
     meta.appendChild(el('div', { class: 'name' }, st.name));
-    const dev = devices.find(d => d.id === st.peer);
+    const dev = st.peerName || devices.find(d => d.id === st.peer)?.name;
     if (st.err) {
       meta.appendChild(el('div', { class: 'sub', style: 'color:var(--red)' }, st.err));
     } else if (st.done) {
@@ -669,25 +736,29 @@ function renderSends() {
 }
 
 async function sendFile(file) {
-  const sel = $('#device-select');
-  if (!sel.value) { toast('Pick a device to send to first', null, 'err'); return; }
-  const id = uuid();
-  sending.set(id, { name: file.name, peer: sel.value, sent: 0, size: file.size, done: false });
-  renderSends();
-  try {
-    const q = new URLSearchParams({ id, peer: sel.value, name: file.name });
-    await api('/api/send?' + q, { method: 'POST', body: file });
-    const st = sending.get(id) || {};
-    sending.set(id, { ...st, done: true });
-    toast(`Sent ${file.name}`);
-    fetchHistory();
-  } catch (e) {
-    const st = sending.get(id) || {};
-    sending.set(id, { ...st, done: true, err: e.message });
-    toast(`Failed to send ${file.name}: ${e.message}`, null, 'err');
+  const targets = selectedTargets();
+  if (!targets.length) { toast('Pick a device to send to first', null, 'err'); return; }
+  for (const t of targets) {
+    const id = uuid();
+    sending.set(id, { name: file.name, peer: t.id, peerName: t.name, sent: 0, size: file.size, done: false });
+    renderSends();
+    (async () => {
+      try {
+        const q = new URLSearchParams({ id, peer: t.id, name: file.name });
+        await api('/api/send?' + q, { method: 'POST', body: file });
+        const st = sending.get(id) || {};
+        sending.set(id, { ...st, done: true });
+        toast(`Sent ${file.name} to ${t.name}`);
+        fetchHistory();
+      } catch (e) {
+        const st = sending.get(id) || {};
+        sending.set(id, { ...st, done: true, err: e.message });
+        toast(`Failed to send ${file.name} to ${t.name}: ${e.message}`, null, 'err');
+      }
+      renderSends();
+      setTimeout(() => { if (sending.get(id)?.done) { sending.delete(id); renderSends(); } }, 5000);
+    })();
   }
-  renderSends();
-  setTimeout(() => { if (sending.get(id)?.done) { sending.delete(id); renderSends(); } }, 5000);
 }
 
 function handleFiles(files) {
@@ -1147,6 +1218,17 @@ for (const [id, key] of [['pref-arrival', 'arrival'], ['pref-save', 'save'], ['p
   });
 }
 
+$('#pref-lan').addEventListener('change', async () => {
+  try {
+    await api('/api/config', { method: 'POST', json: { lan: $('#pref-lan').checked } });
+    toast('Restarting to apply LAN mode…', null, 'ok');
+    // The sidecar exits and the shell restarts it; the window reloads.
+  } catch (e) {
+    $('#pref-lan').checked = !$('#pref-lan').checked;
+    toast(e.message, null, 'err');
+  }
+});
+
 // ---------- boot ----------
 
 function connectEvents() {
@@ -1174,7 +1256,11 @@ async function boot() {
     $('#pref-save').checked = cfg.notifySave !== false;
     $('#pref-send').checked = cfg.notifySend !== false;
     $('#pref-error').checked = cfg.notifyError !== false;
+    $('#pref-lan').checked = !!cfg.lan;
     $('#settings-save-dir').textContent = cfg.saveDir;
+    const lu = $('#lan-url');
+    if (cfg.lan && cfg.lanUrl) { lu.textContent = cfg.lanUrl; lu.hidden = false; }
+    else lu.hidden = true;
   } catch (_) {}
   await refreshDevices();
   if (currentTab !== 'send') setInterval(() => { if (currentTab === 'send') refreshDevices(); }, 60000);
@@ -1247,6 +1333,25 @@ $('#save-all').addEventListener('click', async () => {
   }
 });
 $('#refresh-devices').addEventListener('click', refreshDevices);
+$('#device-picker').addEventListener('click', e => {
+  e.stopPropagation();
+  const pop = $('#device-popover');
+  pop.hidden = !pop.hidden;
+  if (!pop.hidden) renderDevicePopover();
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.picker-wrap')) $('#device-popover').hidden = true;
+});
+$('#dev-all').addEventListener('click', () => {
+  for (const d of devices) if (d.taildrop === 'available' && d.online) selectedDevices.add(d.id);
+  renderDevicePopover();
+  updateDevicePickerLabel();
+});
+$('#dev-clear').addEventListener('click', () => {
+  selectedDevices.clear();
+  renderDevicePopover();
+  updateDevicePickerLabel();
+});
 
 // drop zone + file picker
 const dz = $('#drop-zone');

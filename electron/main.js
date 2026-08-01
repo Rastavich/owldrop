@@ -32,7 +32,9 @@ function sidecarPath() {
 
 function startSidecar() {
   port = 0;
-  sidecar = spawn(sidecarPath(), ['--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  // Fixed port so the LAN URL stays stable/bookmarkable; --port 0 would
+  // pick a fresh ephemeral port on every restart.
+  sidecar = spawn(sidecarPath(), ['--port', '8976'], { stdio: ['ignore', 'pipe', 'pipe'] });
   sidecar.stdout.setEncoding('utf8');
   sidecar.stderr.setEncoding('utf8');
   sidecar.stdout.on('data', (d) => {

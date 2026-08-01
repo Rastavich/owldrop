@@ -111,6 +111,8 @@ type server struct {
 	token   string
 	hub     *hub
 	history *history
+	port    int
+	lan     bool
 
 	autosaveMu   sync.Mutex
 	autosaving   map[string]bool      // inbox files currently being auto-saved
@@ -127,9 +129,32 @@ func newServer(cfg *config) *server {
 		token:        newToken(),
 		hub:          newHub(),
 		history:      newHistory(filepath.Join(dir, "tailscale-drop")),
+		lan:          cfg.LAN,
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
 	}
+}
+
+func (s *server) setListenerPort(p int) {
+	s.port = p
+}
+
+// lanURLs returns the URLs other tailnet devices can use to open the UI.
+func (s *server) lanURLs() []string {
+	if !s.lan || s.port == 0 {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	st, err := tsClient.Status(ctx)
+	if err != nil || st.Self == nil {
+		return nil
+	}
+	var urls []string
+	for _, ip := range st.Self.TailscaleIPs {
+		urls = append(urls, fmt.Sprintf("http://%s:%d/", ip, s.port))
+	}
+	return urls
 }
 
 func (s *server) saveDir() string {
@@ -169,11 +194,11 @@ func (s *server) routes() http.Handler {
 // notifications.
 func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !hostAllowed(r.Host) {
+		if !s.hostAllowed(r.Host) {
 			http.Error(w, "bad host", http.StatusForbidden)
 			return
 		}
-		if o := r.Header.Get("Origin"); o != "" && !originAllowed(o) {
+		if o := r.Header.Get("Origin"); o != "" && !originAllowed(o, s) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -188,7 +213,9 @@ func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func hostAllowed(host string) bool {
+// hostAllowed: loopback always; in LAN mode any IP literal is accepted so
+// tailnet/LAN clients can connect. Hostnames stay blocked (DNS rebinding).
+func (s *server) hostAllowed(host string) bool {
 	h := host
 	if hh, _, err := net.SplitHostPort(host); err == nil {
 		h = hh
@@ -197,10 +224,13 @@ func hostAllowed(host string) bool {
 	case "127.0.0.1", "localhost", "::1", "[::1]":
 		return true
 	}
+	if s.lan {
+		return net.ParseIP(strings.Trim(h, "[]")) != nil
+	}
 	return false
 }
 
-func originAllowed(origin string) bool {
+func originAllowed(origin string, s *server) bool {
 	u, err := url.Parse(origin)
 	if err != nil {
 		return false
@@ -208,7 +238,7 @@ func originAllowed(origin string) bool {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return false
 	}
-	return hostAllowed(u.Host)
+	return s.hostAllowed(u.Host)
 }
 
 func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -366,18 +396,12 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		s.cfgMu.Lock()
 		c := *s.cfg
 		s.cfgMu.Unlock()
-		writeJSON(w, map[string]any{
-			"saveDir":       c.SaveDir,
-			"autoSave":      c.AutoSave,
-			"notifyArrival": c.NotifyArrival,
-			"notifySave":    c.NotifySave,
-			"notifySend":    c.NotifySend,
-			"notifyError":   c.NotifyError,
-		})
+		writeJSON(w, s.configResponse(c))
 	case http.MethodPost:
 		var req struct {
 			SaveDir       string `json:"saveDir"`
 			AutoSave      *bool  `json:"autoSave"`
+			Lan           *bool  `json:"lan"`
 			NotifyArrival *bool  `json:"notifyArrival"`
 			NotifySave    *bool  `json:"notifySave"`
 			NotifySend    *bool  `json:"notifySend"`
@@ -387,6 +411,7 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		restart := false
 		s.cfgMu.Lock()
 		if req.SaveDir != "" {
 			abs, err := filepath.Abs(req.SaveDir)
@@ -404,6 +429,11 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.AutoSave != nil {
 			s.cfg.AutoSave = *req.AutoSave
+		}
+		if req.Lan != nil && *req.Lan != s.cfg.LAN {
+			s.cfg.LAN = *req.Lan
+			s.lan = *req.Lan
+			restart = true // bind address changes; the Electron shell restarts us
 		}
 		if req.NotifyArrival != nil {
 			s.cfg.NotifyArrival = *req.NotifyArrival
@@ -423,17 +453,36 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, err)
 			return
 		}
-		writeJSON(w, map[string]any{
-			"saveDir":       c.SaveDir,
-			"autoSave":      c.AutoSave,
-			"notifyArrival": c.NotifyArrival,
-			"notifySave":    c.NotifySave,
-			"notifySend":    c.NotifySend,
-			"notifyError":   c.NotifyError,
-		})
+		writeJSON(w, s.configResponse(c))
+		if restart {
+			// The response is on the wire; now exit so the shell restarts us
+			// bound to the new interface.
+			go func() {
+				time.Sleep(300 * time.Millisecond)
+				os.Exit(0)
+			}()
+		}
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *server) configResponse(c config) map[string]any {
+	resp := map[string]any{
+		"saveDir":       c.SaveDir,
+		"autoSave":      c.AutoSave,
+		"lan":           c.LAN,
+		"notifyArrival": c.NotifyArrival,
+		"notifySave":    c.NotifySave,
+		"notifySend":    c.NotifySend,
+		"notifyError":   c.NotifyError,
+	}
+	if c.LAN {
+		if urls := s.lanURLs(); len(urls) > 0 {
+			resp["lanUrl"] = urls[0]
+		}
+	}
+	return resp
 }
 
 func (s *server) handleSave(w http.ResponseWriter, r *http.Request) {

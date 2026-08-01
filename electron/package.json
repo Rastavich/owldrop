@@ -1,14 +1,50 @@
 {
   "name": "tailscale-drop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Native Taildrop (Tailscale file sharing) desktop app",
+  "author": {
+    "name": "tailscale-drop",
+    "email": "dev@taildrop.local"
+  },
+  "homepage": "https://github.com/tailscale-drop/tailscale-drop",
   "main": "main.js",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --remote-debugging-port=9222"
+    "dev": "electron . --remote-debugging-port=9222",
+    "dist": "electron-builder"
   },
   "devDependencies": {
-    "electron": "^41.0.0"
+    "electron": "^41.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "dev.taildrop",
+    "productName": "Taildrop",
+    "files": [
+      "main.js",
+      "icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../tailscale-drop",
+        "to": "tailscale-drop"
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility",
+      "icon": "icon.png"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.utilities",
+      "icon": "icon.png"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "icon.png"
+    }
   }
 }

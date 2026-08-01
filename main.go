@@ -34,12 +34,19 @@ func main() {
 	var (
 		port    = flag.Int("port", 8976, "port for the UI (0 = pick a free port)")
 		saveDir = flag.String("save-dir", "", "default folder for received files (defaults to your Downloads folder)")
+		lan     = flag.Bool("lan", false, "bind to all interfaces so other tailnet devices can open the UI (token-protected)")
 	)
 	flag.Parse()
 
 	cfg := loadConfig()
 	if *saveDir != "" {
 		cfg.SaveDir = *saveDir
+		if err := cfg.save(); err != nil {
+			log.Printf("saving config: %v", err)
+		}
+	}
+	if *lan {
+		cfg.LAN = true
 		if err := cfg.save(); err != nil {
 			log.Printf("saving config: %v", err)
 		}
@@ -56,16 +63,25 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	addr := fmt.Sprintf("127.0.0.1:%d", *port)
-	ln, err := net.Listen("tcp", addr)
+	host := "127.0.0.1"
+	if cfg.LAN {
+		host = "0.0.0.0"
+	}
+	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, *port))
 	if err != nil {
-		log.Fatalf("can't listen on %s: %v", addr, err)
+		log.Fatalf("can't listen on %s:%d: %v", host, *port, err)
 	}
-	if *port == 0 {
-		addr = ln.Addr().String() // actual ephemeral port
-	}
-	fmt.Printf("tailscale-drop UI: http://%s/\n", addr)
+	portNum := ln.Addr().(*net.TCPAddr).Port
+	srv.setListenerPort(portNum)
+
+	fmt.Printf("tailscale-drop UI: http://127.0.0.1:%d/\n", portNum)
 	fmt.Printf("inbox saved to: %s\n", cfg.SaveDir)
+	if cfg.LAN {
+		for _, u := range srv.lanURLs() {
+			fmt.Printf("LAN UI: %s\n", u)
+		}
+		fmt.Println("note: anyone on your tailnet who knows the URL can control the app")
+	}
 
 	go func() {
 		<-ctx.Done()
@@ -84,6 +100,7 @@ func main() {
 type config struct {
 	SaveDir       string `json:"save_dir"`
 	AutoSave      bool   `json:"auto_save"`
+	LAN           bool   `json:"lan"`
 	NotifyArrival bool   `json:"notify_arrival"`
 	NotifySave    bool   `json:"notify_save"`
 	NotifySend    bool   `json:"notify_send"`
@@ -104,6 +121,7 @@ func loadConfig() *config {
 	var f struct {
 		SaveDir       string `json:"save_dir"`
 		AutoSave      *bool  `json:"auto_save"`
+		LAN           *bool  `json:"lan"`
 		NotifyArrival *bool  `json:"notify_arrival"`
 		NotifySave    *bool  `json:"notify_save"`
 		NotifySend    *bool  `json:"notify_send"`
@@ -115,6 +133,9 @@ func loadConfig() *config {
 	c := &config{SaveDir: f.SaveDir, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
 	if f.AutoSave != nil {
 		c.AutoSave = *f.AutoSave
+	}
+	if f.LAN != nil {
+		c.LAN = *f.LAN
 	}
 	if f.NotifyArrival != nil {
 		c.NotifyArrival = *f.NotifyArrival
