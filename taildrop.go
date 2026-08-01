@@ -28,7 +28,7 @@ var tsClient = &local.Client{}
 type waitingFile struct {
 	Name    string    `json:"name"`
 	Size    int64     `json:"size"`
-	Arrived time.Time `json:"arrived"` // when we first noticed it (daemon exposes no timestamp)
+	Arrived time.Time `json:"arrived"`          // when we first noticed it (daemon exposes no timestamp)
 	Source  string    `json:"source,omitempty"` // "" = taildrop, "link" = drop link
 	Sender  string    `json:"sender,omitempty"` // drop link label, for link drops
 }

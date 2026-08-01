@@ -297,9 +297,9 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"links": rows, "baseUrl": base})
 	case http.MethodPost:
 		var req struct {
-			Name     string `json:"name"`
-			TTLMin   int    `json:"ttlMinutes"`
-			MaxUses  int    `json:"maxUses"` // 0 = unlimited
+			Name    string `json:"name"`
+			TTLMin  int    `json:"ttlMinutes"`
+			MaxUses int    `json:"maxUses"` // 0 = unlimited
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

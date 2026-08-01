@@ -28,13 +28,13 @@ type historyEvent struct {
 // history is a small append-only log of everything that happened to files.
 // Persisted as JSONL next to the config; rebuilt in memory at startup.
 type history struct {
-	mu       sync.Mutex
-	path     string
-	events   []historyEvent
-	active   map[string]string        // waiting filename → open session ID (awaiting save/delete)
-	lastSeen map[string]time.Time     // filename → last poll where it was still waiting
-	goneGrace time.Duration           // how long a missing file must stay absent before being marked deleted
-	max      int
+	mu        sync.Mutex
+	path      string
+	events    []historyEvent
+	active    map[string]string    // waiting filename → open session ID (awaiting save/delete)
+	lastSeen  map[string]time.Time // filename → last poll where it was still waiting
+	goneGrace time.Duration        // how long a missing file must stay absent before being marked deleted
+	max       int
 }
 
 func newHistory(dir string) *history {
