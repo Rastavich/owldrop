@@ -29,8 +29,12 @@ The two talk over localhost only; nothing is proxied through a remote server.
   saves (with the destination path), deletes, and sends. Filter by
   received/sent, search, open or reveal a saved file, per-file stats, clear.
 - **Send** — device picker (offline & can't-receive reasons shown), file
-  picker, or drag & drop onto the window; Save all / Save all to… for batch
-  receiving.
+  picker, or drag & drop onto the window; **send to several devices at
+  once** via the checklist popover; Save all / Save all to… for batch
+  receiving
+- **LAN mode** — Settings toggle (or `--lan`): other devices on your
+  tailnet can open the app at `http://<tailnet-ip>:8976/` (token-
+  protected, hostnames blocked against DNS rebinding).
 - **Auto-save** — one checkbox: incoming files land in your folder the
   moment they arrive (like `tailscale file get --loop`), with notifications
 - **Notifications** — arrival + save/send results, native OS notifications
@@ -57,6 +61,15 @@ shell (so Chromium's runtime libraries resolve). On other distros:
 go build -o tailscale-drop .          # build the sidecar
 cd electron && npm install && npm start
 ```
+
+## Install / package
+
+- NixOS: `nix profile install .#default` (or `nix run .#default`) — builds
+  the Go sidecar + wraps nixpkgs' electron.
+- Other distros: `cd electron && npm install && npm run dist` produces an
+  AppImage / .deb on Linux, dmg on macOS, and an NSIS installer on Windows
+  (build each on its own OS). On NixOS, run AppImages with
+  `nix run nixpkgs#appimage-run -- Taildrop.AppImage`.
 
 ## Notes & limitations
 
