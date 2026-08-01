@@ -141,6 +141,7 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
         <input id="save-dir" type="text" spellcheck="false" autocomplete="off">
       </label>
       <button id="set-dir" class="btn ghost">Set default</button>
+      <button id="browse-dir" class="btn ghost">Browse…</button>
       <button id="save-all" class="btn">Save all</button>
       <label class="check"><input type="checkbox" id="auto-save"> Auto-save incoming</label>
     </div>
@@ -535,6 +536,7 @@ let picker = null; // { file, path }
 
 function openDirPicker(file) {
   picker = { file, path: '' };
+  document.querySelector('.modal-title').textContent = file ? 'Save to folder' : 'Default save folder';
   $('#dir-modal').hidden = false;
   browseTo(CONFIG.saveDir);
 }
@@ -599,7 +601,18 @@ $('#dir-use').addEventListener('click', async () => {
   const file = picker.file;
   const dir = picker.path;
   closeDirPicker();
-  saveFile(file.name, file.size, dir);
+  if (file) {
+    saveFile(file.name, file.size, dir);
+  } else {
+    try {
+      const res = await api('/api/config', { method: 'POST', json: { saveDir: dir } });
+      CONFIG.saveDir = res.saveDir;
+      $('#save-dir').value = res.saveDir;
+      toast('Default save folder: ' + res.saveDir);
+    } catch (e) {
+      toast(e.message, null, 'err');
+    }
+  }
 });
 $('#dir-new').addEventListener('click', () => {
   $('#dir-new').hidden = true;
@@ -721,6 +734,7 @@ $('#set-dir').addEventListener('click', async () => {
     toast(e.message, null, 'err');
   }
 });
+$('#browse-dir').addEventListener('click', () => openDirPicker(null));
 $('#auto-save').addEventListener('change', async () => {
   try {
     const res = await api('/api/config', { method: 'POST', json: { autoSave: $('#auto-save').checked } });
