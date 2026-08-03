@@ -3,7 +3,8 @@ name: release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'      # conventional v0.4.0
+      - '*.*.*'   # and plain 0.4.0 (matches build/config.yml verbatim)
   workflow_dispatch:
 
 permissions:
@@ -22,7 +23,8 @@ jobs:
         run: |
           V="$(sed -n 's/^[[:space:]]*version: "\([^"]*\)"/\1/p' build/config.yml)"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          if [[ "${{ github.ref_type }}" == "tag" && "v$V" != "${{ github.ref_name }}" ]]; then
+          # Accept both v0.4.0 and 0.4.0 tags; anything else is a mismatch.
+          if [[ "${{ github.ref_type }}" == "tag" && "v$V" != "${{ github.ref_name }}" && "$V" != "${{ github.ref_name }}" ]]; then
             echo "::error::build/config.yml version $V does not match tag ${{ github.ref_name }}. Re-tag or bump the version."
             exit 1
           fi
@@ -110,7 +112,10 @@ jobs:
 
   release:
     needs: [windows, macos, linux]
-    if: github.ref_type == 'tag'
+    # Tag pushes publish the tagged release; manual runs publish (or update)
+    # the release named after the packaged version, so a dispatch run's
+    # artifacts are downloadable too.
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -128,7 +133,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.ref_name }}"
+          # Tag runs (v0.4.0 or 0.4.0) publish under the actual tag name;
+          # branch dispatch publishes under v<version>.
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${{ needs.preflight.outputs.version }}"
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
