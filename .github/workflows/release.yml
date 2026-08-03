@@ -120,6 +120,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      # gh (below) needs the git repo to resolve owner/name — the job would
+      # otherwise have no checkout at all.
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
