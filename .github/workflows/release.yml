@@ -72,22 +72,17 @@ jobs:
 
   # Linux needs GTK4 + WebKitGTK 6.0 headers AND the WebKit helper binaries
   # at /usr for the AppImage — neither is on ubuntu-latest (24.04 ships
-  # WebKit 4.1). The wails-cross image has both, so the whole build+package
-  # runs inside it.
+  # WebKit 4.1, and the wails3 CLI itself needs the GTK dev headers to
+  # compile on Linux), so the whole build+package runs inside the wails-cross
+  # image. The host only needs docker: setup:docker is a plain `docker build`
+  # (see build/Taskfile.yml).
   linux:
     needs: preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
       - name: Build wails-cross image
-        run: |
-          export PATH="$PATH:$(go env GOPATH)/bin"
-          wails3 task setup:docker
+        run: docker build -t wails-cross -f build/docker/Dockerfile.cross build/docker/
       - name: Build and package inside wails-cross
         run: |
           docker run --rm --entrypoint bash \
