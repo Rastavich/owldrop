@@ -1,0 +1,94 @@
+# Common build tasks. The frontend is a Vite project (web/) whose output
+# (web/dist) is embedded into the Go binary — build:frontend must run before
+# any go build. The Wails window loads the served URL; there are no Wails
+# bindings.
+version: '3'
+
+tasks:
+  go:mod:tidy:
+    summary: Runs `go mod tidy`
+    internal: true
+    run: once
+    cmds:
+      - go mod tidy
+
+  install:frontend:deps:
+    summary: Install frontend dependencies
+    run: once
+    dir: web
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules
+    cmds:
+      - npm ci
+
+  build:frontend:
+    summary: Builds the frontend (Vite) into web/dist
+    run: once
+    dir: web
+    deps:
+      - task: install:frontend:deps
+    sources:
+      - "**/*"
+      - exclude: node_modules/**/*
+      - exclude: dist/**/*
+    generates:
+      - dist/**/*
+    cmds:
+      - npm run build
+
+  generate:icons:
+    summary: Generates Windows `.ico` and Mac `.icns` from build/appicon.png
+    run: once
+    dir: build
+    sources:
+      - "appicon.png"
+    generates:
+      - "darwin/icons.icns"
+      - "windows/icon.ico"
+    cmds:
+      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico
+
+  update:build-assets:
+    summary: Regenerates platform build assets from build/config.yml
+    dir: build
+    cmds:
+      - wails3 update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .
+
+  build:server:
+    summary: "Builds a headless server binary (-tags server: no window/tray/notifications)"
+    desc: |
+      Produces bin/tailscale-drop-server: the HTTP server + embedded UI only,
+      for LAN-only use without a desktop shell.
+    deps:
+      - task: build:frontend
+    preconditions:
+      - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'
+        msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0"
+    cmds:
+      - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}"'
+    vars:
+      BUILD_FLAGS: '-tags server{{if eq .DEV "true"}},dev{{end}}{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -buildvcs=false -trimpath -ldflags="-w -s"'
+
+  run:server:
+    summary: Builds and runs the headless server binary
+    deps:
+      - task: build:server
+        vars:
+          DEV: "true"
+    cmds:
+      - '"./{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}"'
+
+  setup:docker:
+    summary: Builds the wails-cross Docker image for cross-compilation (~800MB download)
+    desc: |
+      Needed once per machine to cross-compile macOS/Linux targets (CGO) from
+      non-native hosts. Windows targets cross-compile with native Go and do
+      not need it.
+    cmds:
+      - docker build -t wails-cross -f build/docker/Dockerfile.cross build/docker/
+    preconditions:
+      - sh: docker info > /dev/null 2>&1
+        msg: "Docker is required. Please install Docker first."

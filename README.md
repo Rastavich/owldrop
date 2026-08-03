@@ -7,18 +7,27 @@ No more `tailscale file get .` on the command line.
 
 ## Architecture
 
-Two pieces, one app:
+One Go binary, two halves:
 
-- **Go sidecar** (`tailscale-drop`) — talks to the **local** `tailscaled`
-  daemon over its LocalAPI (the same interface the `tailscale` CLI uses) and
-  serves the UI on a random `127.0.0.1` port. Received files stay in the
-  daemon's inbox until you save/delete — the same inbox the CLI drains.
-- **Electron shell** (`electron/`) — a native window (Chromium), system tray
-  with Show/Quit, native desktop notifications driven by the sidecar's
-  event stream, close-to-tray behavior. The UI inside is the same one you'd
-  get in a browser at the sidecar's URL — handy from a phone too.
+- **Server** (`main.go` + the `server.go`/`taildrop.go`/`ops.go`/`history.go`
+  files) — talks to the **local** `tailscaled` daemon over its LocalAPI (the
+  same interface the `tailscale` CLI uses) and serves the UI on
+  `127.0.0.1:8976`. Received files stay in the daemon's inbox until you
+  save/delete — the same inbox the CLI drains.
+- **Desktop shell** (`shell.go`) — a [Wails v3](https://v3.wails.io/) app in
+  the same process: a native window (WebKitGTK / WKWebView / WebView2)
+  pointed at the local UI, a system tray with quick-send, native
+  notifications driven by the server's event stream, a global shortcut
+  (Ctrl+Shift+T) and close-to-tray. Everything talks in-process — there is
+  no separate sidecar binary and no session-token plumbing.
 
-The two talk over localhost only; nothing is proxied through a remote server.
+The UI is a **Vite + React + TanStack** app (`web/`) built to static assets
+(`web/dist`) that are embedded into the binary. It talks REST + SSE to the
+server — so the same UI works from a plain browser too: LAN mode (`--lan` or
+the Settings toggle) serves it on your tailnet IP, and drop links can be
+public via Tailscale Funnel. (The public `/drop/<token>` upload page is a
+separate minimal page served by the Go binary — it must work on the Funnel
+hostname where nothing else is reachable.)
 
 ## Features
 
@@ -48,62 +57,78 @@ The two talk over localhost only; nothing is proxied through a remote server.
 - **Global shortcut** — Ctrl+Shift+T brings the window to the front
 - **History export** — one click dumps the full log as JSON
 
-## Run (NixOS)
+## Run
+
+NixOS (or anywhere with the nix dev shell):
 
 ```sh
-./run.sh
+./run.sh            # nix develop + go build + run
 ```
 
-Builds the Go sidecar if needed, then launches Electron inside the nix dev
-shell (so Chromium's runtime libraries resolve). On other distros:
+Other distros need GTK4 + WebKitGTK 6.0 dev libraries (this app's Linux
+rendering stack; `pkg-config` must find `webkitgtk-6.0`) plus Node for the
+frontend build:
 
 ```sh
-go build -o tailscale-drop .          # build the sidecar
-cd electron && npm install && npm start
+cd web && npm ci && npm run build   # → web/dist (embedded into the binary)
+cd .. && go build -o tailscale-drop . && ./tailscale-drop
 ```
+
+Or use the wails taskfile, which builds the frontend automatically:
+`wails3 task linux:build` (run: `wails3 task run`). For hot reload during
+development: `wails3 dev` rebuilds everything; for UI work specifically,
+run the app (`./tailscale-drop`) and `cd web && npm run dev` — the Vite dev
+server picks up the session config from the running app and proxies its API
+calls to it. A headless server-only build (no window/tray — just the HTTP
+server for LAN use) is available as `wails3 task build:server`
+(`-tags server`).
 
 ## Install / package
 
 - NixOS: `nix profile install .#default` (or `nix run .#default`) — builds
-  the Go sidecar + wraps nixpkgs' electron.
-- Other distros: `cd electron && npm install && npm run dist` produces an
-  AppImage / .deb on Linux, dmg on macOS, and an NSIS installer on Windows
-  (build each on its own OS). On NixOS, run AppImages with
-  `nix run nixpkgs#appimage-run -- Taildrop.AppImage`.
+  the binary against nixpkgs' webkitgtk_6_0 and wraps it in an FHS
+  environment so the dynamic libs resolve.
+- Other distros: `wails3 task linux:package` produces AppImage / DEB / RPM /
+  AUR in `bin/` (Windows: `wails3 task windows:package` → NSIS installer;
+  macOS: `wails3 task darwin:package:dmg` → .dmg; build each on its own OS).
+- **GitHub Releases**: tag a commit `vX.Y.Z` and CI builds and publishes
+  AppImage/deb/rpm (Linux), dmg (macOS) and NSIS installer (Windows)
+  automatically. `.github/workflows/release.yml`.
 
 ## Notes & limitations
 
+- **Linux system requirements**: default builds need WebKitGTK 6.0 (Debian
+  13+, Ubuntu 24.10+, Fedora 40+). Distros stuck on WebKit2GTK 4.1 (Ubuntu
+  22.04/24.04, Debian 12) can build with `-tags gtk3` — supported through
+  the v3.0.x line, removed in Wails v3.1.
+- **Linux desktop variance**: the tray icon uses the StatusNotifierItem
+  protocol (GNOME needs an AppIndicator extension); global shortcuts on
+  Wayland go through the XDG portal, so the compositor may re-map keys.
 - Sender attribution: the daemon's file API (v1.98) exposes only name+size
   for waiting files — no sender identity — so auto-save applies to
   everything. A per-host trust list needs a daemon API that doesn't exist
   yet.
-- The sidecar binds to `127.0.0.1` with a per-run session token + Origin and
-  Host checks on mutating calls; the Electron shell adds no network surface.
+- The server binds `127.0.0.1:8976` with a per-run session token + Origin
+  and Host checks on mutating calls; LAN mode exposes it to your tailnet
+  only, and Funnel exposes only the `/drop/*` pages.
 
 ## Layout
 
 ```
-main.go        sidecar: config, HTTP server, OS helpers
+main.go        server: config, HTTP server, OS helpers
+shell.go       Wails desktop shell: window, tray, notifications, shortcut
 taildrop.go    daemon interactions: inbox, save, delete, devices, send
 ops.go         save/send operations with progress events
 history.go     local event log (arrivals, saves, deletes, sends)
 server.go      event hub, API, security guards, inbox watcher + auto-save
-web/index.html the UI (embedded into the sidecar binary)
-electron/      desktop shell: main.js, package.json, icon
+web/         Vite + React + TanStack frontend (built to web/dist, embedded)
+build/         wails3 taskfiles + packaging assets (AppImage/deb/rpm/NSIS/dmg)
 tools/genicon  regenerates the icon PNG
-flake.nix      NixOS dev shell (go + electron)
+flake.nix      NixOS dev shell + package
+install.sh     installs a systemd user service
+docs/wails3-evaluation.md  why Wails v3 replaced Electron (evaluation)
 main_test.go   unit tests (conflict naming, validation)
 ```
-
-## Packaging / roadmap
-
-- `electron-builder` for proper .deb/AppImage/Windows/macOS installers
-- Per-host trust list for auto-save (blocked on daemon API)
-- Reveal-in-file-manager after save
-
-## License
-
-MIT — do whatever you like with it.
 
 ## Install as a service (NixOS)
 
@@ -111,11 +136,11 @@ MIT — do whatever you like with it.
 ./install.sh
 ```
 
-Installs the app into `~/.local/share/tailscale-drop` and runs it as a
-systemd user service (`tailscale-drop.service`), so it starts with your
-desktop session and restarts on failure. The window's close button hides
-to the tray; quit from the tray menu. `./install.sh --run` launches in the
-foreground instead.
+Builds the app and installs it into `~/.local/share/tailscale-drop`, then
+runs it as a systemd user service (`tailscale-drop.service`), so it starts
+with your desktop session and restarts on failure. The window's close button
+hides to the tray; quit from the tray menu. `./install.sh --run` launches in
+the foreground instead.
 
 ## Drop links (send files TO this machine from anyone)
 
@@ -134,3 +159,7 @@ be revoked instantly.
   `/drop/*` pages are reachable on that hostname; the full app (and its
   session token) is never exposed. (`./scripts/funnel.sh` still exists for
   manual control.)
+
+## License
+
+MIT — do whatever you like with it.

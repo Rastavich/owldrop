@@ -1,0 +1,40 @@
+# Build asset configuration. When you update `info`, run
+# `wails3 task common:update:build-assets` to regenerate the platform assets
+# (Info.plist, info.json, …). That overwrites any manual changes to them.
+version: '3'
+
+info:
+  companyName: "Tailscale Drop"
+  productName: "Taildrop"
+  productIdentifier: "dev.taildrop"
+  description: "Tailscale Taildrop desktop app"
+  copyright: "(c) 2026, tailscale-drop"
+  comments: "See files sent to you via Taildrop, save or delete them with one click, and send files back."
+  version: "0.4.0"
+
+# Dev mode configuration
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  ignore:
+    dir:
+      - .git
+      - bin
+      - build
+      - web
+    file:
+      - .DS_Store
+      - .gitignore
+      - .gitkeep
+      - "*_test.go"
+    watched_extension:
+      - "*.go"
+      - "*.js"
+      - "*.ts"
+    git_ignore: true
+  executes:
+    - cmd: wails3 build DEV=true
+      type: blocking
+    - cmd: wails3 task run
+      type: primary

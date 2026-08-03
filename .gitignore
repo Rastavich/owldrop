@@ -1,5 +1,14 @@
 /tailscale-drop
-electron/node_modules
-electron/dist
-result
+/bin
+/result
 *.exe
+.task
+web/node_modules
+web/dist
+build/linux/appimage/build
+build/linux/appimage/tailscale-drop
+build/linux/appimage/tailscale-drop.png
+build/darwin/icons.icns
+build/darwin/Assets.car
+build/windows/icon.ico
+build/linux/appimage/tailscale-drop.desktop

@@ -1,0 +1,133 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Fails in seconds if the tag and the packaged version disagree, before
+  # three OS builds burn ten minutes.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          V="$(sed -n 's/^[[:space:]]*version: "\([^"]*\)"/\1/p' build/config.yml)"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.ref_type }}" == "tag" && "v$V" != "${{ github.ref_name }}" ]]; then
+            echo "::error::build/config.yml version $V does not match tag ${{ github.ref_name }}. Re-tag or bump the version."
+            exit 1
+          fi
+
+  windows:
+    needs: preflight
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+      - name: Package (exe + NSIS installer)
+        shell: bash
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 task windows:package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: bin/*.exe
+          if-no-files-found: error
+
+  macos:
+    needs: preflight
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
+      - name: Package (.app bundle + dmg)
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 task darwin:package:dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: bin/*.dmg
+          if-no-files-found: error
+
+  # Linux needs GTK4 + WebKitGTK 6.0 headers AND the WebKit helper binaries
+  # at /usr for the AppImage — neither is on ubuntu-latest (24.04 ships
+  # WebKit 4.1). The wails-cross image has both, so the whole build+package
+  # runs inside it.
+  linux:
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build wails-cross image
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 task setup:docker
+      - name: Build and package inside wails-cross
+        run: |
+          docker run --rm --entrypoint bash \
+            -v "$PWD":/app -w /app \
+            wails-cross -c '
+              set -e
+              export PATH="$PATH:$(go env GOPATH)/bin"
+              go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
+              wails3 task linux:package
+            '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            bin/*.AppImage
+            bin/*.deb
+            bin/*.rpm
+          if-no-files-found: error
+
+  release:
+    needs: [windows, macos, linux]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "Taildrop $TAG" --generate-notes
+          fi

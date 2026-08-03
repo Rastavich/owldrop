@@ -2,8 +2,8 @@
 //
 // It talks to the local tailscaled daemon through its LocalAPI (the same
 // interface the `tailscale` CLI uses) and serves a UI on localhost: the
-// bundled browser UI (web/index.html), typically wrapped in the Electron
-// desktop shell (electron/), or used directly from a browser.
+// bundled browser UI (web/index.html), wrapped in the Wails desktop shell
+// (shell.go), or used directly from a browser (LAN mode, drop links).
 package main
 
 import (
@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-//go:embed web
+//go:embed web/dist
 var webFS embed.FS
 
 func main() {
@@ -56,7 +56,6 @@ func main() {
 	defer stop()
 
 	srv := newServer(cfg)
-	go srv.watchInbox(ctx)
 
 	httpSrv := &http.Server{
 		Handler:           srv.routes(),
@@ -83,13 +82,7 @@ func main() {
 		fmt.Println("note: anyone on your tailnet who knows the URL can control the app")
 	}
 
-	go func() {
-		<-ctx.Done()
-		shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		httpSrv.Shutdown(shutCtx)
-	}()
-	if err := httpSrv.Serve(ln); err != nil && ctx.Err() == nil {
+	if err := runApp(ctx, srv, httpSrv, ln); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("bye")

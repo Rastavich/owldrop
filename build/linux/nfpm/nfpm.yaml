@@ -1,0 +1,40 @@
+# nfpm config for DEB / RPM / Arch packages. Used by `wails3 task linux:package`.
+name: "tailscale-drop"
+arch: ${GOARCH}
+platform: "linux"
+version: "0.4.0"
+section: "default"
+priority: "extra"
+maintainer: "tailscale-drop <dev@taildrop.local>"
+description: "Tailscale Taildrop desktop app — see files sent to you, save or delete them, and send files back."
+vendor: "Tailscale Drop"
+homepage: "https://github.com/tailscale-drop/tailscale-drop"
+license: "MIT"
+release: "1"
+
+contents:
+  - src: "./bin/tailscale-drop"
+    dst: "/usr/bin/tailscale-drop"
+  - src: "./build/appicon.png"
+    dst: "/usr/share/icons/hicolor/512x512/apps/tailscale-drop.png"
+  - src: "./build/linux/tailscale-drop.desktop"
+    dst: "/usr/share/applications/tailscale-drop.desktop"
+
+# Dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
+depends:
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4
+
+# Distribution-specific overrides for different package formats
+overrides:
+  rpm:
+    depends:
+      - gtk4
+      - webkitgtk6.0
+  archlinux:
+    depends:
+      - gtk4
+      - webkitgtk-6.0
+
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

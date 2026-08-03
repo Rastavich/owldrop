@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=Taildrop
+Comment=Tailscale Taildrop desktop app
+Exec=/usr/bin/tailscale-drop %u
+Terminal=false
+Type=Application
+Icon=tailscale-drop
+Categories=Utility;
+StartupWMClass=tailscale-drop

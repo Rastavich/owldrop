@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/url"
@@ -102,6 +103,15 @@ type statusEvent struct {
 	Type string `json:"type"`
 	Err  string `json:"err,omitempty"`
 }
+
+// distFS is the built frontend (web/dist, embedded into the binary).
+var distFS fs.FS = func() fs.FS {
+	d, err := fs.Sub(webFS, "web/dist")
+	if err != nil {
+		panic("embedded frontend missing: " + err.Error())
+	}
+	return d
+}()
 
 // --- server ---------------------------------------------------------------
 
@@ -222,6 +232,10 @@ func (s *server) autoSave() bool {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.guard(s.handleIndex))
+	// Vite build output; through the funnel hostname the guard 404s these,
+	// so only /drop/* is ever public. distFS is rooted at web/dist, so the
+	// request path ("assets/…") maps straight into it.
+	mux.Handle("/assets/", s.guard(http.FileServer(http.FS(distFS)).ServeHTTP))
 	mux.HandleFunc("/events", s.guard(s.handleEvents))
 	mux.HandleFunc("/api/inbox", s.guard(s.handleInbox))
 	mux.HandleFunc("/api/devices", s.guard(s.handleDevices))
@@ -403,12 +417,12 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Token   string `json:"token"`
 		SaveDir string `json:"saveDir"`
 	}{s.token, s.saveDir()})
-	b, err := webFS.ReadFile("web/index.html")
+	b, err := webFS.ReadFile("web/dist/index.html")
 	if err != nil {
 		http.Error(w, "embedded UI missing", http.StatusInternalServerError)
 		return
 	}
-	html := strings.Replace(string(b), "__CONFIG__", string(cfgJSON), 1)
+	html := strings.Replace(string(b), "__TAILDROP_CONFIG__", string(cfgJSON), 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	io.WriteString(w, html)

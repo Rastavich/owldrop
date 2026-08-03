@@ -1,5 +1,5 @@
-// genicon generates electron/icon.png — a simple cloud + down-arrow glyph in
-// the brand indigo, matching the web UI's logo. Run with `go run ./tools/genicon`.
+// genicon generates icon.png — a simple cloud + down-arrow glyph in the
+// brand indigo, matching the web UI's logo. Run with `go run ./tools/genicon`.
 package main
 
 import (
@@ -12,16 +12,18 @@ import (
 
 func main() {
 	const (
-		size = 256
+		size = 512
 		ss   = 4 // supersampling factor
 	)
+	// Glyph coordinates below are in 256-space; scale them to the canvas.
+	u := float64(size) / 256
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 	brand := color.RGBA{0x5f, 0x6c, 0xff, 0xff}
 	white := color.RGBA{0xff, 0xff, 0xff, 0xff}
 
 	inCloud := func(x, y float64) bool {
 		circles := [][3]float64{
-			{96, 128, 40}, {128, 112, 48}, {160, 128, 40},
+			{96 * u, 128 * u, 40 * u}, {128 * u, 112 * u, 48 * u}, {160 * u, 128 * u, 40 * u},
 		}
 		for _, c := range circles {
 			dx, dy := x-c[0], y-c[1]
@@ -29,18 +31,18 @@ func main() {
 				return true
 			}
 		}
-		return x >= 56 && x <= 200 && y >= 128 && y <= 200
+		return x >= 56*u && x <= 200*u && y >= 128*u && y <= 200*u
 	}
 	inArrow := func(x, y float64) bool {
 		// stem
-		if x >= 121 && x <= 135 && y >= 148 && y <= 180 {
+		if x >= 121*u && x <= 135*u && y >= 148*u && y <= 180*u {
 			return true
 		}
-		// triangle pointing down: apex (128, 208), base y=180 from x=105..151
-		if y >= 180 && y <= 208 {
-			t := (y - 180) / (208 - 180) // 0 at base, 1 at apex
-			half := (151 - 105) / 2 * t
-			mid := 128.0
+		// triangle pointing down: apex (128*u, 208*u), base y=180*u from x=105..151
+		if y >= 180*u && y <= 208*u {
+			t := (y - 180*u) / (208*u - 180*u) // 0 at base, 1 at apex
+			half := (151*u - 105*u) / 2 * t
+			mid := 128 * u
 			return math.Abs(x-mid) <= half
 		}
 		return false
@@ -71,7 +73,7 @@ func main() {
 		}
 	}
 
-	f, err := os.Create("electron/icon.png")
+	f, err := os.Create("icon.png")
 	if err != nil {
 		panic(err)
 	}

@@ -4,13 +4,9 @@ After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/share/tailscale-drop/run.sh
+ExecStart=%h/.local/share/tailscale-drop/app/bin/tailscale-drop
 Restart=on-failure
 RestartSec=3
-# The stop path goes through `nix develop` which doesn't forward SIGTERM
-# reliably; bound the hang so systemctl stop is quick even on a full stop.
-TimeoutStopSec=10
-KillMode=mixed
 
 [Install]
 WantedBy=graphical-session.target
