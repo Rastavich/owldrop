@@ -105,10 +105,16 @@ jobs:
         with:
           name: linux
           path: |
-            bin/*.AppImage
             bin/*.deb
             bin/*.rpm
           if-no-files-found: error
+
+  # NOTE: no AppImage in the release. WebKitGTK hardcodes its helper-process
+  # path (/usr/lib/x86_64-linux-gnu/webkitgtk-6.0) at compile time and does
+  # not honor WEBKIT_EXEC_PATH, so a bundled-WebKit AppImage cannot spawn its
+  # own helpers (verified with the v0.4.0 build). The deb/rpm depend on the
+  # system WebKit and are the supported Linux artifacts; on NixOS use the
+  # flake package (install.sh).
 
   release:
     needs: [windows, macos, linux]
