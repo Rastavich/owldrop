@@ -14,6 +14,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -21,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -32,26 +34,22 @@ import (
 var trayIcon []byte
 
 // runApp starts the Wails desktop shell and blocks until it exits. The HTTP
-// server (httpSrv, already listening on ln) keeps serving the whole time; the
-// shell is just another client of it. When the app quits — or ctx is
-// cancelled by a signal, which also quits the app — the server is shut down.
-func runApp(ctx context.Context, srv *server, httpSrv *http.Server, ln net.Listener) error {
+// server keeps serving the whole time; the shell is just another client of
+// it. When the app quits — or ctx is cancelled by a signal, which also quits
+// the app — the server is shut down.
+func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string) error {
 	serverCtx, serverCancel := context.WithCancel(ctx)
 	defer serverCancel()
 
 	go srv.watchInbox(serverCtx)
-	go func() {
-		<-serverCtx.Done()
-		shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		httpSrv.Shutdown(shutCtx)
-	}()
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- httpSrv.Serve(ln) }()
 
 	ns := notifications.New()
 
 	var win *application.WebviewWindow
+	// Create the app first: this acquires the single-instance lock. When
+	// another instance already holds it (the installed service, a second
+	// AppImage, ...), wails notifies that instance — which shows and focuses
+	// its window — and exits this process before we ever touch the port.
 	app := application.New(application.Options{
 		Name:        "Taildrop",
 		Description: "Tailscale Taildrop desktop app",
@@ -72,6 +70,35 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, ln net.Liste
 			ActivationPolicy: application.ActivationPolicyAccessory,
 		},
 	})
+
+	// Now bind. With the single-instance lock held, a busy port means some
+	// other program owns it, not a second tailscale-drop.
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		if errors.Is(err, syscall.EADDRINUSE) {
+			return fmt.Errorf("port %s is already in use by another program (not a tailscale-drop instance) — stop it or pass --port", addr)
+		}
+		return fmt.Errorf("can't listen on %s: %w", addr, err)
+	}
+	portNum := ln.Addr().(*net.TCPAddr).Port
+	srv.setListenerPort(portNum)
+	fmt.Printf("tailscale-drop UI: http://127.0.0.1:%d/\n", portNum)
+	fmt.Printf("inbox saved to: %s\n", srv.saveDir())
+	if srv.lan {
+		for _, u := range srv.lanURLs() {
+			fmt.Printf("LAN UI: %s\n", u)
+		}
+		fmt.Println("note: anyone on your tailnet who knows the URL can control the app")
+	}
+
+	go func() {
+		<-serverCtx.Done()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		httpSrv.Shutdown(shutCtx)
+	}()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- httpSrv.Serve(ln) }()
 
 	win = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Taildrop",
@@ -135,7 +162,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, ln net.Liste
 		app.Quit()
 	}()
 
-	err := app.Run()
+	err = app.Run()
 	serverCancel()
 	<-serveErr
 	return err

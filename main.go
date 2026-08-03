@@ -13,7 +13,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -66,23 +66,12 @@ func main() {
 	if cfg.LAN {
 		host = "0.0.0.0"
 	}
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, *port))
-	if err != nil {
-		log.Fatalf("can't listen on %s:%d: %v", host, *port, err)
-	}
-	portNum := ln.Addr().(*net.TCPAddr).Port
-	srv.setListenerPort(portNum)
+	addr := net.JoinHostPort(host, strconv.Itoa(*port))
 
-	fmt.Printf("tailscale-drop UI: http://127.0.0.1:%d/\n", portNum)
-	fmt.Printf("inbox saved to: %s\n", cfg.SaveDir)
-	if cfg.LAN {
-		for _, u := range srv.lanURLs() {
-			fmt.Printf("LAN UI: %s\n", u)
-		}
-		fmt.Println("note: anyone on your tailnet who knows the URL can control the app")
-	}
-
-	if err := runApp(ctx, srv, httpSrv, ln); err != nil {
+	// runApp acquires the single-instance lock first, then binds the port —
+	// a second instance (service + AppImage, two AppImages, ...) focuses the
+	// running one instead of dying with "address already in use".
+	if err := runApp(ctx, srv, httpSrv, addr); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("bye")
