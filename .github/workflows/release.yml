@@ -39,6 +39,12 @@ jobs:
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
       - name: Install NSIS
         run: choco install nsis -y --no-progress
+      # The choco nsis package (a silent NSIS installer run) installs makensis
+      # to C:\Program Files (x86)\NSIS but never adds it to PATH — the runner
+      # needs it explicitly for `wails3 task windows:package`.
+      - name: Add NSIS to PATH
+        shell: bash
+        run: echo "C:\Program Files (x86)\NSIS" >> "$GITHUB_PATH"
       - name: Package (exe + NSIS installer)
         shell: bash
         run: |
