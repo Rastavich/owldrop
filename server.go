@@ -122,6 +122,7 @@ type server struct {
 	hub         *hub
 	history     *history
 	drops       *dropManager
+	premium     *premiumState
 	port        int
 	lan         bool
 	selfDNS     string
@@ -149,6 +150,7 @@ func newServerDir(cfg *config, dataDir string) *server {
 		hub:          newHub(),
 		history:      newHistory(dataDir),
 		drops:        newDropManager(dataDir),
+		premium:      newPremiumState(cfg.StripeSecretKey, cfg.StripePriceID),
 		lan:          cfg.LAN,
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
@@ -250,6 +252,10 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/droplinks", s.guard(s.handleDropLinks))
 	mux.HandleFunc("/api/droplinks/", s.guard(s.handleDropLinks))
 	mux.HandleFunc("/api/funnel", s.guard(s.handleFunnel))
+	mux.HandleFunc("/api/premium", s.guard(s.handlePremium))
+	mux.HandleFunc("/api/premium/refresh", s.guard(s.handlePremiumRefresh))
+	mux.HandleFunc("/api/premium/checkout", s.guard(s.handlePremiumCheckout))
+	mux.HandleFunc("/api/premium/portal", s.guard(s.handlePremiumPortal))
 	// Public drop-link pages: the URL token is the auth, not the session
 	// token. Host checks still apply; through the funnel hostname ONLY drop
 	// pages are reachable (everything else 404s there).
@@ -269,6 +275,19 @@ func (s *server) hostGuard(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *server) handleDropPageOrUpload(w http.ResponseWriter, r *http.Request) {
+	// Public (Funnel) drop links are a Premium feature; local and tailnet
+	// links are never gated. Fail-closed: an unverifiable subscription pauses
+	// the public link.
+	if s.funnelHost(r.Host) && s.premiumBlocks() {
+		if r.Method == http.MethodPost {
+			writeJSONStatus(w, http.StatusPaymentRequired, map[string]any{"error": "public drops are a Premium feature"})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		io.WriteString(w, dropPaywallHTML)
+		return
+	}
 	if r.Method == http.MethodPost {
 		s.handleDropUpload(w, r)
 		return

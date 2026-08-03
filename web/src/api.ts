@@ -10,6 +10,7 @@ import type {
   HistoryEvent,
   HistoryStats,
   PageConfig,
+  PremiumState,
   WaitingFile,
 } from './types';
 
@@ -67,3 +68,7 @@ export const revokeDropLink = (token: string) =>
 export const getFunnel = () => api<FunnelState>('/api/funnel');
 export const setFunnel = (enabled: boolean) =>
   api<FunnelState>('/api/funnel', { method: 'POST', json: { enabled } });
+export const getPremium = () => api<PremiumState>('/api/premium');
+export const refreshPremium = () => api<PremiumState>('/api/premium/refresh', { method: 'POST', json: {} });
+export const startCheckout = () => api('/api/premium/checkout', { method: 'POST', json: {} });
+export const openPortal = () => api('/api/premium/portal', { method: 'POST', json: {} });

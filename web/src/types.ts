@@ -72,6 +72,14 @@ export interface FunnelState {
   url?: string;
 }
 
+export interface PremiumState {
+  configured: boolean;
+  active: boolean;
+  status: 'active' | 'trialing' | 'inactive' | 'unconfigured';
+  priceLabel?: string;
+  periodEnd?: number; // unix seconds
+}
+
 export interface BrowseResult {
   path: string;
   parent?: string;

@@ -1,6 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { createDropLink, getConfig, getDropLinks, getFunnel, patchConfig, revokeDropLink, setFunnel } from '../api';
+import { useEffect, useState } from 'react';
+import {
+  createDropLink,
+  getConfig,
+  getDropLinks,
+  getFunnel,
+  getPremium,
+  openPortal,
+  patchConfig,
+  refreshPremium,
+  revokeDropLink,
+  setFunnel,
+  startCheckout,
+} from '../api';
 import { toast } from '../store';
 import { copyText, fmtAge } from '../utils';
 import type { AppConfig, DropLink } from '../types';
@@ -19,6 +31,7 @@ export default function Settings() {
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: getConfig });
   const { data: links = [] } = useQuery({ queryKey: ['droplinks'], queryFn: getDropLinks });
   const { data: funnel } = useQuery({ queryKey: ['funnel'], queryFn: getFunnel });
+  const { data: premium } = useQuery({ queryKey: ['premium'], queryFn: getPremium, refetchInterval: 30_000 });
   const [name, setName] = useState('');
   const [ttl, setTtl] = useState(60);
   const [single, setSingle] = useState(true);
@@ -36,6 +49,21 @@ export default function Settings() {
   };
 
   const toggleFunnel = async (want: boolean) => {
+    if (want && !premium?.active) {
+      // Public access is a paid feature: re-check Stripe before trusting a
+      // stale cache, then refuse with a pointer to Premium.
+      try {
+        const fresh = await refreshPremium();
+        qc.setQueryData(['premium'], fresh);
+        if (!fresh.active) {
+          toast('Public access is a Premium feature — subscribe to enable it.', undefined, 'err');
+          return;
+        }
+      } catch (e) {
+        toast('Could not verify subscription: ' + (e instanceof Error ? e.message : e), undefined, 'err');
+        return;
+      }
+    }
     setFunnelBusy(true);
     try {
       const res = await setFunnel(want);
@@ -71,6 +99,39 @@ export default function Settings() {
     }
   };
 
+  const subscribe = async () => {
+    try {
+      await startCheckout(); // the app opens the Stripe checkout page itself
+      toast('Opening Stripe checkout…');
+    } catch (e) {
+      toast('Checkout: ' + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+  };
+
+  const manage = async () => {
+    try {
+      await openPortal();
+      toast('Opening billing portal…');
+    } catch (e) {
+      toast('Billing portal: ' + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+  };
+
+  // Landed back from Stripe Checkout after paying (success_url carries
+  // ?premium=success): confirm and re-fetch the subscription state.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('premium') === 'success') {
+      toast('Subscription active — public access enabled');
+      qc.invalidateQueries({ queryKey: ['premium'] });
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+    }
+  }, [qc]);
+
+  const periodEndLabel = premium?.periodEnd
+    ? new Date(premium.periodEnd * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : undefined;
+
   return (
     <section className="pane settings">
       <h3>Notifications</h3>
@@ -102,6 +163,42 @@ export default function Settings() {
       {config?.lan && config.lanUrl && <p className="sub2">{config.lanUrl}</p>}
       <p className="sub2">Opening this app from another device is as powerful as being at this machine — only enable it if you trust your tailnet.</p>
 
+      <h3>Premium</h3>
+      {!premium?.configured ? (
+        <p className="sub2">
+          Public drop links are a Premium feature. Stripe isn't configured yet — set{' '}
+          <code>TAILDROP_STRIPE_SECRET_KEY</code> and <code>TAILDROP_STRIPE_PRICE_ID</code> (or{' '}
+          <code>stripe_secret_key</code>/<code>stripe_price_id</code> in the app config file) and restart to enable it.
+        </p>
+      ) : premium.active ? (
+        <div className="funnelrow">
+          <div className="funnel-info">
+            <p className="sub2">
+              <b>Premium active</b>
+              {premium.priceLabel ? ` — ${premium.priceLabel}` : ''}
+              {periodEndLabel ? ` · renews ${periodEndLabel}` : ''}
+              {premium.status === 'trialing' ? ' (trial)' : ''}
+            </p>
+            <p className="sub2">Public drop links are enabled.</p>
+          </div>
+          <button className="btn ghost" onClick={manage}>
+            Manage subscription
+          </button>
+        </div>
+      ) : (
+        <div className="funnelrow">
+          <div className="funnel-info">
+            <p className="sub2">
+              <b>Public access is a Premium feature</b> — {premium.priceLabel ?? 'a small monthly subscription'}. Enabling
+              public drop links requires an active subscription.
+            </p>
+          </div>
+          <button className="btn" onClick={subscribe}>
+            Subscribe
+          </button>
+        </div>
+      )}
+
       <h3>Drop links</h3>
       <p className="sub2">
         Create a short-lived link — anyone who opens it can drop a file into your inbox from a browser, no Tailscale needed. It
@@ -119,7 +216,7 @@ export default function Settings() {
               {funnel.enabled ? ' — public drop links live here' : ''}
             </p>
           )}
-          <p className="sub2">Makes drop links reachable at your public <code>*.ts.net</code> URL. Only the drop pages are ever exposed.</p>
+          <p className="sub2">Makes drop links reachable at your public <code>*.ts.net</code> URL. Only the drop pages are ever exposed. Requires an active Premium subscription.</p>
         </div>
         {funnel?.url && (
           <button className="btn ghost" onClick={() => copyText(funnel.url ?? '')}>

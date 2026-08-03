@@ -55,6 +55,8 @@ hostname where nothing else is reachable.)
   device → native file dialog
 - **Safety** — opening executable/script files asks for confirmation first
 - **Global shortcut** — Ctrl+Shift+T brings the window to the front
+- **Premium (public access)** — public drop links via Tailscale Funnel are a
+  Stripe subscription feature ($5/mo); subscribe/manage from Settings
 - **History export** — one click dumps the full log as JSON
 
 ## Run
@@ -121,6 +123,7 @@ taildrop.go    daemon interactions: inbox, save, delete, devices, send
 ops.go         save/send operations with progress events
 history.go     local event log (arrivals, saves, deletes, sends)
 server.go      event hub, API, security guards, inbox watcher + auto-save
+stripe.go      Premium: Stripe checkout/portal, subscription polling, paywall
 web/         Vite + React + TanStack frontend (built to web/dist, embedded)
 build/         wails3 taskfiles + packaging assets (AppImage/deb/rpm/NSIS/dmg)
 tools/genicon  regenerates the icon PNG
@@ -159,6 +162,43 @@ be revoked instantly.
   `/drop/*` pages are reachable on that hostname; the full app (and its
   session token) is never exposed. (`./scripts/funnel.sh` still exists for
   manual control.)
+
+## Premium (public access, via Stripe)
+
+Public access — the Funnel toggle and the public `/drop/*` pages — is a
+subscription feature. The app talks to Stripe directly (no SDK, no
+webhooks: it polls the subscriptions API lazily and caches the state for 10
+minutes). Gating is **fail-closed**: if no active subscription can be
+verified, public drop links show a "paused" page.
+
+Setup (needs a [Stripe account](https://dashboard.stripe.com/)):
+
+1. Create a recurring **price** in Stripe (e.g. a $5/month price) and copy
+   its ID (`price_…`).
+2. Give the app your keys — either in the app config file
+   (`~/.config/tailscale-drop/config.json`):
+
+   ```json
+   { "stripe_secret_key": "sk_live_…", "stripe_price_id": "price_…" }
+   ```
+
+   or as env vars (handy for the systemd service — `install.sh` copies a
+   unit that reads `~/.config/tailscale-drop/env`):
+
+   ```sh
+   # ~/.config/tailscale-drop/env
+   TAILDROP_STRIPE_SECRET_KEY=sk_test_…
+   TAILDROP_STRIPE_PRICE_ID=price_…
+   ```
+
+   Test mode (`sk_test_…`) is fine while you're trying it out; the Stripe
+   CLI can also generate test-mode checkout events locally.
+3. Restart the app. Settings → **Premium** shows the state: subscribe
+   (opens Stripe Checkout), manage/cancel (billing portal). Once active,
+   the Funnel toggle unlocks and public links go live. Local and tailnet
+   drop links are never affected — only the public hostname is gated.
+4. Use the billing portal (or Stripe) to cancel; the next poll cycle then
+   pauses public links again.
 
 ## License
 

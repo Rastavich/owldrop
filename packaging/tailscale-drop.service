@@ -4,6 +4,9 @@ After=graphical-session.target
 
 [Service]
 Type=simple
+# Optional env vars (e.g. TAILDROP_STRIPE_SECRET_KEY for Premium); the "-"
+# means a missing file is fine.
+EnvironmentFile=-%h/.config/tailscale-drop/env
 ExecStart=%h/.local/share/tailscale-drop/app/bin/tailscale-drop
 Restart=on-failure
 RestartSec=3

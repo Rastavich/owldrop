@@ -98,6 +98,11 @@ type config struct {
 	NotifySave    bool   `json:"notify_save"`
 	NotifySend    bool   `json:"notify_send"`
 	NotifyError   bool   `json:"notify_error"`
+	// Stripe keys for the Premium (public drop links) subscription feature.
+	// Env vars TAILDROP_STRIPE_SECRET_KEY / TAILDROP_STRIPE_PRICE_ID override
+	// these at startup (handy for the systemd service via EnvironmentFile).
+	StripeSecretKey string `json:"stripe_secret_key"`
+	StripePriceID   string `json:"stripe_price_id"`
 }
 
 func configPath() string {
@@ -112,18 +117,20 @@ func loadConfig() *config {
 	// Notify prefs default ON; pointers distinguish "unset" from "false" so
 	// configs written before they existed keep the defaults.
 	var f struct {
-		SaveDir       string `json:"save_dir"`
-		AutoSave      *bool  `json:"auto_save"`
-		LAN           *bool  `json:"lan"`
-		NotifyArrival *bool  `json:"notify_arrival"`
-		NotifySave    *bool  `json:"notify_save"`
-		NotifySend    *bool  `json:"notify_send"`
-		NotifyError   *bool  `json:"notify_error"`
+		SaveDir         string `json:"save_dir"`
+		AutoSave        *bool  `json:"auto_save"`
+		LAN             *bool  `json:"lan"`
+		NotifyArrival   *bool  `json:"notify_arrival"`
+		NotifySave      *bool  `json:"notify_save"`
+		NotifySend      *bool  `json:"notify_send"`
+		NotifyError     *bool  `json:"notify_error"`
+		StripeSecretKey string `json:"stripe_secret_key"`
+		StripePriceID   string `json:"stripe_price_id"`
 	}
 	if b, err := os.ReadFile(configPath()); err == nil {
 		json.Unmarshal(b, &f)
 	}
-	c := &config{SaveDir: f.SaveDir, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
+	c := &config{SaveDir: f.SaveDir, StripeSecretKey: f.StripeSecretKey, StripePriceID: f.StripePriceID, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
 	if f.AutoSave != nil {
 		c.AutoSave = *f.AutoSave
 	}
@@ -144,6 +151,12 @@ func loadConfig() *config {
 	}
 	if c.SaveDir == "" {
 		c.SaveDir = defaultDownloadsDir()
+	}
+	if v := os.Getenv(premiumSecretEnvKey); v != "" {
+		c.StripeSecretKey = v
+	}
+	if v := os.Getenv(premiumPriceEnvKey); v != "" {
+		c.StripePriceID = v
 	}
 	return c
 }
