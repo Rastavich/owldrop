@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -123,6 +125,7 @@ type server struct {
 	history     *history
 	drops       *dropManager
 	premium     *premiumState
+	relay       *relayClient // nil unless config relay_url is set
 	port        int
 	lan         bool
 	selfDNS     string
@@ -151,10 +154,19 @@ func newServerDir(cfg *config, dataDir string) *server {
 		history:      newHistory(dataDir),
 		drops:        newDropManager(dataDir),
 		premium:      newPremiumState(cfg.StripeSecretKey, cfg.StripePriceID),
+		relay:        relayClientFor(cfg),
 		lan:          cfg.LAN,
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
 	}
+}
+
+// relayClientFor builds the relay client when relay mode is configured.
+func relayClientFor(cfg *config) *relayClient {
+	if cfg.RelayURL == "" {
+		return nil
+	}
+	return newRelayClient(cfg.RelayURL, cfg.DeviceKey)
 }
 
 func (s *server) dropBaseURL() string {
@@ -300,6 +312,11 @@ func (s *server) handleDropPageOrUpload(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
+	// Relay mode: links live on the relay (server-enforced premium).
+	if s.relay != nil {
+		s.handleRelayDropLinks(w, r)
+		return
+	}
 	// Revoke: POST /api/droplinks/<token>/revoke
 	if rest := strings.TrimPrefix(r.URL.Path, "/api/droplinks/"); rest != r.URL.Path && strings.HasSuffix(rest, "/revoke") {
 		if r.Method != http.MethodPost {
@@ -357,6 +374,68 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
 			resp["publicUrl"] = pub + "drop/" + l.Token
 		}
 		writeJSON(w, resp)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// writeRelayErr writes a relay error with its original status (4xx survive
+// as 4xx; anything else becomes 500).
+func (s *server) writeRelayErr(w http.ResponseWriter, err error) {
+	var ae *relayAPIError
+	if errors.As(err, &ae) && ae.Status >= 400 && ae.Status < 500 {
+		writeJSONStatus(w, ae.Status, map[string]any{"error": ae.Msg})
+		return
+	}
+	writeErr(w, err)
+}
+
+// handleRelayDropLinks proxies the drop-links API to the relay.
+func (s *server) handleRelayDropLinks(w http.ResponseWriter, r *http.Request) {
+	// Revoke: POST /api/droplinks/<token>/revoke
+	if rest := strings.TrimPrefix(r.URL.Path, "/api/droplinks/"); rest != r.URL.Path && strings.HasSuffix(rest, "/revoke") {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		token := strings.TrimSuffix(rest, "/revoke")
+		if err := s.relay.revokeLink(r.Context(), token); err != nil {
+			s.writeRelayErr(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		links, err := s.relay.linkList(r.Context())
+		if err != nil {
+			s.writeRelayErr(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"links": links})
+	case http.MethodPost:
+		var req struct {
+			Name    string `json:"name"`
+			TTLMin  int    `json:"ttlMinutes"`
+			MaxUses int    `json:"maxUses"` // 0 = unlimited
+		}
+		if err := decodeJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.TTLMin <= 0 {
+			req.TTLMin = 60
+		}
+		if req.TTLMin > 7*24*60 {
+			req.TTLMin = 7 * 24 * 60
+		}
+		l, err := s.relay.createLink(r.Context(), req.Name, req.TTLMin, req.MaxUses)
+		if err != nil {
+			s.writeRelayErr(w, err)
+			return
+		}
+		writeJSON(w, map[string]any{"link": l, "url": l.URL, "publicUrl": l.PublicURL})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -668,6 +747,9 @@ func (s *server) configResponse(c config) map[string]any {
 			resp["lanUrl"] = urls[0]
 		}
 	}
+	if s.relay != nil {
+		resp["relayUrl"] = s.relay.baseURL
+	}
 	return resp
 }
 
@@ -874,6 +956,70 @@ func (s *server) watchInbox(ctx context.Context) {
 			s.maybeAutoSave(ctx, r.files)
 		}
 	}
+}
+
+// relayLoop long-polls the relay for uploads to public drop links and lands
+// them in the inbox like any other drop-link upload. Runs only in relay
+// mode; the relay enforces Premium server-side.
+func (s *server) relayLoop(ctx context.Context) {
+	if s.relay == nil {
+		return
+	}
+	for {
+		items, err := s.relay.pollDeliveries(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
+			continue
+		}
+		for _, it := range items {
+			if err := s.receiveRelayDelivery(ctx, it); err != nil {
+				log.Printf("relay delivery %s: %v", it.ID, err)
+			}
+		}
+	}
+}
+
+// receiveRelayDelivery downloads one queued upload from the relay and stores
+// it in the drop-link quarantine, appearing in the inbox immediately.
+func (s *server) receiveRelayDelivery(ctx context.Context, it deliveryManifest) error {
+	dlCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	body, size, err := s.relay.openDelivery(dlCtx, it.ID)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	if size <= 0 {
+		size = it.Size
+	}
+	inboxHas := func(n string) bool {
+		files, err := tsInbox(dlCtx)
+		if err != nil {
+			return false
+		}
+		for _, f := range files {
+			if f.Name == n {
+				return true
+			}
+		}
+		return false
+	}
+	lf, err := s.drops.storeFile(it.Token, it.Name, size, body, inboxHas)
+	if err != nil {
+		return err
+	}
+	s.history.recordArrivals([]waitingFile{{
+		Name: lf.Name, Size: lf.Size, Arrived: lf.Arrived, Source: "link", Sender: lf.Sender,
+	}})
+	s.broadcastInboxNow()
+	return nil
 }
 
 // maybeAutoSave saves incoming files automatically when auto-save is on.

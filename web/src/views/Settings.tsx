@@ -32,6 +32,7 @@ export default function Settings() {
   const { data: links = [] } = useQuery({ queryKey: ['droplinks'], queryFn: getDropLinks });
   const { data: funnel } = useQuery({ queryKey: ['funnel'], queryFn: getFunnel });
   const { data: premium } = useQuery({ queryKey: ['premium'], queryFn: getPremium, refetchInterval: 30_000 });
+  const relayMode = !!config?.relayUrl;
   const [name, setName] = useState('');
   const [ttl, setTtl] = useState(60);
   const [single, setSingle] = useState(true);
@@ -165,11 +166,18 @@ export default function Settings() {
 
       <h3>Premium</h3>
       {!premium?.configured ? (
-        <p className="sub2">
-          Public drop links are a Premium feature. Stripe isn't configured yet — set{' '}
-          <code>TAILDROP_STRIPE_SECRET_KEY</code> and <code>TAILDROP_STRIPE_PRICE_ID</code> (or{' '}
-          <code>stripe_secret_key</code>/<code>stripe_price_id</code> in the app config file) and restart to enable it.
-        </p>
+        relayMode ? (
+          <p className="sub2">
+            Public drop links are a Premium feature. Payments aren't set up on the relay yet — subscribe here once they
+            are.
+          </p>
+        ) : (
+          <p className="sub2">
+            Public drop links are a Premium feature. Stripe isn't configured yet — set{' '}
+            <code>TAILDROP_STRIPE_SECRET_KEY</code> and <code>TAILDROP_STRIPE_PRICE_ID</code> (or{' '}
+            <code>stripe_secret_key</code>/<code>stripe_price_id</code> in the app config file) and restart to enable it.
+          </p>
+        )
       ) : premium.active ? (
         <div className="funnelrow">
           <div className="funnel-info">
@@ -204,26 +212,34 @@ export default function Settings() {
         Create a short-lived link — anyone who opens it can drop a file into your inbox from a browser, no Tailscale needed. It
         expires or dies after its first use, and you can revoke it anytime.
       </p>
-      <div className="funnelrow">
-        <div className="funnel-info">
-          <label className="check">
-            <input type="checkbox" checked={!!funnel?.enabled} disabled={funnelBusy} onChange={(e) => toggleFunnel(e.target.checked)} />
-            Public access (Funnel)
-          </label>
+      {!relayMode && (
+        <div className="funnelrow">
+          <div className="funnel-info">
+            <label className="check">
+              <input type="checkbox" checked={!!funnel?.enabled} disabled={funnelBusy} onChange={(e) => toggleFunnel(e.target.checked)} />
+              Public access (Funnel)
+            </label>
+            {funnel?.url && (
+              <p className="sub2">
+                {funnel.url}
+                {funnel.enabled ? ' — public drop links live here' : ''}
+              </p>
+            )}
+            <p className="sub2">Makes drop links reachable at your public <code>*.ts.net</code> URL. Only the drop pages are ever exposed. Requires an active Premium subscription.</p>
+          </div>
           {funnel?.url && (
-            <p className="sub2">
-              {funnel.url}
-              {funnel.enabled ? ' — public drop links live here' : ''}
-            </p>
+            <button className="btn ghost" onClick={() => copyText(funnel.url ?? '')}>
+              Copy public URL
+            </button>
           )}
-          <p className="sub2">Makes drop links reachable at your public <code>*.ts.net</code> URL. Only the drop pages are ever exposed. Requires an active Premium subscription.</p>
         </div>
-        {funnel?.url && (
-          <button className="btn ghost" onClick={() => copyText(funnel.url ?? '')}>
-            Copy public URL
-          </button>
-        )}
-      </div>
+      )}
+      {relayMode && (
+        <p className="sub2">
+          Public drop links are hosted on the <code>{config?.relayUrl}</code> relay — they work whenever you have an active
+          subscription; no funnel setup needed.
+        </p>
+      )}
       <div className="dropform">
         <input className="search" type="text" placeholder="Their name (optional)" value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} autoComplete="off" />
         <select className="search" style={{ flex: '0 0 auto', width: 'auto' }} value={ttl} onChange={(e) => setTtl(Number(e.target.value))}>

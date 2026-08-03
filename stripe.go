@@ -322,11 +322,29 @@ const dropPaywallHTML = `<!doctype html>
 // --- Premium HTTP handlers -------------------------------------------------
 
 func (s *server) handlePremium(w http.ResponseWriter, r *http.Request) {
+	if s.relay != nil {
+		info, err := s.relay.premiumInfo(r.Context())
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, info)
+		return
+	}
 	s.premium.refreshIfStale()
 	writeJSON(w, s.premium.info())
 }
 
 func (s *server) handlePremiumRefresh(w http.ResponseWriter, r *http.Request) {
+	if s.relay != nil {
+		info, err := s.relay.refreshBilling(r.Context())
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, info)
+		return
+	}
 	if err := s.premium.refresh(); err != nil {
 		writeErr(w, err)
 		return
@@ -335,6 +353,20 @@ func (s *server) handlePremiumRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlePremiumCheckout(w http.ResponseWriter, r *http.Request) {
+	if s.relay != nil {
+		base := s.localBaseURL()
+		u, err := s.relay.checkoutURL(r.Context(), base+"?premium=success#/settings", base+"#/settings")
+		if err != nil {
+			writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		if err := openPath(u); err != nil {
+			writeErr(w, fmt.Errorf("opening checkout: %w", err))
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+		return
+	}
 	u, err := s.premium.checkoutSessionURL(s.localBaseURL())
 	if err != nil {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -348,6 +380,19 @@ func (s *server) handlePremiumCheckout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlePremiumPortal(w http.ResponseWriter, r *http.Request) {
+	if s.relay != nil {
+		u, err := s.relay.portalURL(r.Context(), s.localBaseURL()+"#/settings")
+		if err != nil {
+			writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		if err := openPath(u); err != nil {
+			writeErr(w, fmt.Errorf("opening billing portal: %w", err))
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
+		return
+	}
 	u, err := s.premium.portalSessionURL(s.localBaseURL())
 	if err != nil {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})

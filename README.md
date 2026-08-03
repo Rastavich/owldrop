@@ -87,15 +87,19 @@ server for LAN use) is available as `wails3 task build:server`
 
 ## Install / package
 
-- NixOS: `nix profile install .#default` (or `nix run .#default`) — builds
-  the binary against nixpkgs' webkitgtk_6_0 and wraps it in an FHS
-  environment so the dynamic libs resolve.
-- Other distros: `wails3 task linux:package` produces AppImage / DEB / RPM /
-  AUR in `bin/` (Windows: `wails3 task windows:package` → NSIS installer;
-  macOS: `wails3 task darwin:package:dmg` → .dmg; build each on its own OS).
-- **GitHub Releases**: tag a commit `vX.Y.Z` and CI builds and publishes
-  AppImage/deb/rpm (Linux), dmg (macOS) and NSIS installer (Windows)
-  automatically. `.github/workflows/release.yml`.
+- **End users (NixOS)**: `nix profile install github:Rastavich/taildrop-install`
+  — a public binary-only repo (the source stays private). CI pushes the
+  built binary there on every release.
+- Developers: `nix profile install .#default` (or `nix run .#default`)
+  builds from this repo against nixpkgs' webkitgtk_6_0 and wraps it in an
+  FHS environment so the dynamic libs resolve.
+- Other distros: `wails3 task linux:package` produces DEB / RPM / AUR in
+  `bin/` (Windows: `wails3 task windows:package` → NSIS installer; macOS:
+  `wails3 task darwin:package:dmg` → .dmg; build each on its own OS).
+- **GitHub Releases**: tag a commit `vX.Y.Z` (or `X.Y.Z`) and CI builds and
+  publishes deb/rpm (Linux), dmg (macOS) and NSIS installer (Windows)
+  automatically, and ships the raw binary to the public install repo.
+  `.github/workflows/release.yml`.
 
 ## Notes & limitations
 
@@ -166,12 +170,22 @@ be revoked instantly.
 ## Premium (public access, via Stripe)
 
 Public access — the Funnel toggle and the public `/drop/*` pages — is a
-subscription feature. The app talks to Stripe directly (no SDK, no
-webhooks: it polls the subscriptions API lazily and caches the state for 10
-minutes). Gating is **fail-closed**: if no active subscription can be
-verified, public drop links show a "paused" page.
+subscription feature. There are two modes:
 
-Setup (needs a [Stripe account](https://dashboard.stripe.com/)):
+- **Self-host mode** (this repo's default for your own install): the app
+  talks to Stripe directly (no SDK, no webhooks — it polls the
+  subscriptions API lazily and caches for 10 minutes). Gating is
+  **fail-closed**: no verifiable subscription → public links show a
+  "paused" page. This mode is only as strong as the client; fine for your
+  own machine.
+- **Relay mode** (distributed builds, `relay/`): the app is key-less and
+  talks to the seller's relay (`relay_url` in config or
+  `TAILDROP_RELAY_URL`). The relay holds the Stripe secret, creates
+  Checkout sessions, and **enforces Premium server-side on every public
+  request** — a patched client cannot get free public drops. Uploads are
+  queued on the relay and delivered to the app over long-polling.
+
+Self-host setup (needs a [Stripe account](https://dashboard.stripe.com/)):
 
 1. Create a recurring **price** in Stripe (e.g. a $5/month price) and copy
    its ID (`price_…`).

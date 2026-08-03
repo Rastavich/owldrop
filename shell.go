@@ -42,6 +42,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	defer serverCancel()
 
 	go srv.watchInbox(serverCtx)
+	go srv.relayLoop(serverCtx)
 
 	ns := notifications.New()
 

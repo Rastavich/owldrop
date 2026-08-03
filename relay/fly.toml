@@ -1,0 +1,42 @@
+# Fly.io deployment for the Taildrop relay.
+#
+# First deploy (from relay/):
+#   fly launch --no-deploy
+#   fly secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_PRICE_ID=price_...
+#   fly deploy
+#
+# BASE_URL must match the app's public name (Fly sets it automatically from
+# the app name below; change it if you use a custom domain).
+app = "taildrop-relay"
+
+[build]
+
+[env]
+  PORT = "8080"
+  DATA_DIR = "/data"
+  BASE_URL = "https://taildrop-relay.fly.dev"
+
+# Persistent volume for devices, links, and queued uploads.
+[[mounts]]
+  source = "relay_data"
+  destination = "/data"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 800
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443

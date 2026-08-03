@@ -11,6 +11,7 @@ export interface AppConfig {
   autoSave: boolean;
   lan: boolean;
   lanUrl?: string;
+  relayUrl?: string; // set = relay mode: public drops via the seller's relay
   notifyArrival: boolean;
   notifySave: boolean;
   notifySend: boolean;

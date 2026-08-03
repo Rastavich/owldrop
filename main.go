@@ -57,6 +57,23 @@ func main() {
 
 	srv := newServer(cfg)
 
+	// Relay mode: register this device on first run so billing and public
+	// drops work without any Stripe keys on the client.
+	if srv.relay != nil && cfg.DeviceKey == "" {
+		regCtx, regCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		key, err := srv.relay.register(regCtx)
+		regCancel()
+		if err != nil {
+			log.Printf("relay registration: %v", err)
+		} else {
+			cfg.DeviceKey = key
+			srv.relay.setKey(key)
+			if err := cfg.save(); err != nil {
+				log.Printf("saving config: %v", err)
+			}
+		}
+	}
+
 	httpSrv := &http.Server{
 		Handler:           srv.routes(),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -92,6 +109,11 @@ type config struct {
 	// these at startup (handy for the systemd service via EnvironmentFile).
 	StripeSecretKey string `json:"stripe_secret_key"`
 	StripePriceID   string `json:"stripe_price_id"`
+	// Relay mode: set relay_url to route public drops and billing through
+	// the seller's relay (server-enforced Premium, no Stripe keys in the
+	// client). device_key is registered automatically on first run.
+	RelayURL  string `json:"relay_url"`
+	DeviceKey string `json:"device_key"`
 }
 
 func configPath() string {
@@ -115,11 +137,13 @@ func loadConfig() *config {
 		NotifyError     *bool  `json:"notify_error"`
 		StripeSecretKey string `json:"stripe_secret_key"`
 		StripePriceID   string `json:"stripe_price_id"`
+		RelayURL        string `json:"relay_url"`
+		DeviceKey       string `json:"device_key"`
 	}
 	if b, err := os.ReadFile(configPath()); err == nil {
 		json.Unmarshal(b, &f)
 	}
-	c := &config{SaveDir: f.SaveDir, StripeSecretKey: f.StripeSecretKey, StripePriceID: f.StripePriceID, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
+	c := &config{SaveDir: f.SaveDir, StripeSecretKey: f.StripeSecretKey, StripePriceID: f.StripePriceID, RelayURL: f.RelayURL, DeviceKey: f.DeviceKey, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
 	if f.AutoSave != nil {
 		c.AutoSave = *f.AutoSave
 	}
@@ -146,6 +170,9 @@ func loadConfig() *config {
 	}
 	if v := os.Getenv(premiumPriceEnvKey); v != "" {
 		c.StripePriceID = v
+	}
+	if v := os.Getenv("TAILDROP_RELAY_URL"); v != "" {
+		c.RelayURL = v
 	}
 	return c
 }
