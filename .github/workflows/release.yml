@@ -325,3 +325,5 @@ jobs:
           else
             gh release create "$TAG" dist/* --title "Taildrop $TAG" --generate-notes
           fi
+          # Defensive: a draft release is invisible to users — never ship one.
+          gh release edit "$TAG" --draft=false
