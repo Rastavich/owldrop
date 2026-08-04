@@ -23,13 +23,13 @@
       # the Go binary via go:embed web/dist.
       frontend = pkgs.buildNpmPackage {
         pname = "tailscale-drop-web";
-        version = "0.4.0";
+        version = appVersion;
         src = ./web;
         npmDepsHash = "sha256-dHT8x8rzyRIX8n/WQ+S/fKnnVXLjFXyHSE4ZOQ+CM9I=";
       };
       sidecar = pkgs.buildGoModule {
         pname = "tailscale-drop";
-        version = "0.4.0";
+        version = appVersion;
         src = pkgs.runCommand "tailscale-drop-src" { } ''
           cp -r ${self} $out
           chmod -R u+w $out
@@ -41,7 +41,7 @@
         # proxyVendor downloads the module cache instead — same result, no
         # embed resolution at fetch time.
         proxyVendor = true;
-        vendorHash = "sha256-YrJrhetCKWQqMV5hLgbhGdWrDbJPjbALYwdTarvrq5k=";
+        vendorHash = "sha256-yEry1C6gzYo9weLBEucMEw5cf1h+HVPgNgj7I0c4BuQ=";
         # relay/ is a separate Go module (own go.mod) nested in the repo;
         # newer nixpkgs auto-discovers package-main dirs, so pin the build to
         # the app module root.
