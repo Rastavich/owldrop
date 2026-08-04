@@ -103,7 +103,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build wails-cross image
-        run: docker build -t wails-cross -f build/docker/Dockerfile.cross build/docker/
+        # Docker Hub registry timeouts are flaky on runners; retry a few times.
+        run: |
+          for i in 1 2 3; do
+            if docker build -t wails-cross -f build/docker/Dockerfile.cross build/docker/; then
+              exit 0
+            fi
+            echo "docker build attempt $i failed — retrying in 20s"
+            sleep 20
+          done
+          exit 1
       - name: Build and package inside wails-cross
         run: |
           docker run --rm --entrypoint bash \
