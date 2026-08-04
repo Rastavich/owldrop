@@ -230,7 +230,8 @@ jobs:
   # The INSTALL_REPO_SSH_KEY secret is a private key whose public half is a
   # write-enabled deploy key on Rastavich/taildrop-install (one repo only).
   publish-updates:
-    needs: [windows, macos, linux]
+    # preflight is required: its `version` output names the release.
+    needs: [preflight, windows, macos, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -287,7 +288,7 @@ jobs:
           fi
 
   release:
-    needs: [windows, macos, linux]
+    needs: [preflight, windows, macos, linux]
     # Tag pushes publish the tagged release; manual runs publish (or update)
     # the release named after the packaged version, so a dispatch run's
     # artifacts are downloadable too.
