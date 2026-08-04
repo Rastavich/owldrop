@@ -14,7 +14,8 @@ vars:
   # Docker image for cross-compilation with CGO (used when CGO_ENABLED=1 on non-Windows)
   CROSS_IMAGE: wails-cross
   VERSION:
-    sh: sed -n 's/^[[:space:]]*version: "\([^"]*\)"/\1/p' build/config.yml
+    # Quoted so the embedded colon+space (in the awk pattern) parses as YAML.
+    sh: "awk -F'\"' '/^[[:space:]]*version: \"/{print $2; exit}' build/config.yml"
 
 tasks:
   build:
