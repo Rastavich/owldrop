@@ -135,4 +135,13 @@ export type SseEvent =
       done?: boolean;
       err?: string;
     }
-  | { type: 'status'; err?: string };
+  | { type: 'status'; err?: string }
+  | { type: 'update'; kind: 'available' | 'none' | 'downloading' | 'installed' | 'error'; detail?: unknown };
+
+export interface UpdateState {
+  current: string;
+  latest?: string;
+  available: boolean;
+  state: 'idle' | 'checking' | 'available' | 'downloading' | 'installed' | 'error' | 'disabled';
+  error?: string;
+}

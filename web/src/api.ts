@@ -12,6 +12,7 @@ import type {
   PageConfig,
   PremiumState,
   TailscaleState,
+  UpdateState,
   WaitingFile,
 } from './types';
 
@@ -72,6 +73,9 @@ export const setFunnel = (enabled: boolean) =>
 export const getTailscaleState = () => api<TailscaleState>('/api/tailscale');
 export const tailscaleUp = () => api('/api/tailscale/up', { method: 'POST', json: {} });
 export const getPremium = () => api<PremiumState>('/api/premium');
+export const getUpdateState = () => api<UpdateState>('/api/update');
+export const checkUpdate = () => api<UpdateState>('/api/update/check', { method: 'POST', json: {} });
+export const installUpdate = () => api('/api/update/install', { method: 'POST', json: {} });
 export const refreshPremium = () => api<PremiumState>('/api/premium/refresh', { method: 'POST', json: {} });
 export const startCheckout = () => api('/api/premium/checkout', { method: 'POST', json: {} });
 export const openPortal = () => api('/api/premium/portal', { method: 'POST', json: {} });

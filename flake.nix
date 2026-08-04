@@ -13,6 +13,12 @@
       # time (pkg-config) and at runtime.
       guiLibs = with pkgs; [ gtk4 webkitgtk_6_0 ];
 
+      # Version from build/config.yml — single source of truth for the
+      # updater's CurrentVersion (injected via ldflags).
+      appVersion = builtins.head (builtins.match
+        ".*version: \"([^\"]+)\".*"
+        (builtins.readFile ./build/config.yml));
+
       # The UI is a Vite project (web/); its build output is embedded into
       # the Go binary via go:embed web/dist.
       frontend = pkgs.buildNpmPackage {
@@ -48,8 +54,9 @@
         env.CGO_ENABLED = "1";
         buildTags = [ "production" ];
         # Distributed builds default to the seller's relay (the app is
-        # key-less; premium is enforced server-side).
-        ldflags = [ "-s" "-w" "-X main.defaultRelayURL=https://taildrop-relay.fly.dev" ];
+        # key-less; premium is enforced server-side) and carry the release
+        # version for the self-updater.
+        ldflags = [ "-s" "-w" "-X main.defaultRelayURL=https://taildrop-relay.fly.dev" "-X main.appVersion=${appVersion}" ];
       };
     in
     {

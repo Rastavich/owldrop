@@ -1,11 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import {
+  checkUpdate,
   createDropLink,
   getConfig,
   getDropLinks,
   getFunnel,
   getPremium,
+  getUpdateState,
+  installUpdate,
   openPortal,
   patchConfig,
   refreshPremium,
@@ -33,6 +36,8 @@ export default function Settings() {
   const { data: funnel } = useQuery({ queryKey: ['funnel'], queryFn: getFunnel });
   const { data: premium } = useQuery({ queryKey: ['premium'], queryFn: getPremium, refetchInterval: 30_000 });
   const relayMode = !!config?.relayUrl;
+  const { data: update } = useQuery({ queryKey: ['update'], queryFn: getUpdateState });
+  const [updateBusy, setUpdateBusy] = useState(false);
   const activeLinks = links.filter((l) => linkState(l) === 'active');
   const archivedCount = links.length - activeLinks.length;
   const [name, setName] = useState('');
@@ -118,6 +123,30 @@ export default function Settings() {
       toast('Opening billing portal…');
     } catch (e) {
       toast('Billing portal: ' + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+  };
+
+  const checkForUpdates = async () => {
+    setUpdateBusy(true);
+    try {
+      const st = await checkUpdate();
+      qc.setQueryData(['update'], st);
+      if (st.available) toast('Version ' + st.latest + ' is available — install it below');
+      else toast('You are on the latest version (' + st.current + ')');
+    } catch (e) {
+      toast('Update check failed: ' + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+    setUpdateBusy(false);
+  };
+
+  const doInstallUpdate = async () => {
+    setUpdateBusy(true);
+    try {
+      await installUpdate();
+      toast('Update downloaded — the app will restart to install it');
+    } catch (e) {
+      toast('Update failed: ' + (e instanceof Error ? e.message : e), undefined, 'err');
+      setUpdateBusy(false);
     }
   };
 
@@ -301,6 +330,35 @@ export default function Settings() {
           })}
         </div>
       )}
+
+      <h3>Updates</h3>
+      <div className="funnelrow">
+        <div className="funnel-info">
+          <p className="sub2">
+            {update?.state === 'disabled'
+              ? 'Updates are not available in this build.'
+              : `Running version ${update?.current ?? '…'}`}
+            {update?.latest && update.available ? ` — version ${update.latest} is available` : ''}
+            {update?.state === 'downloading' ? ' — downloading…' : ''}
+            {update?.state === 'error' ? ` — ${update.error ?? 'update failed'}` : ''}
+          </p>
+          {update?.state !== 'disabled' && (
+            <p className="sub2">Checks the release feed and replaces this app in place (Windows/macOS).</p>
+          )}
+        </div>
+        {update?.state !== 'disabled' && (
+          <div className="updrow">
+            <button className="btn ghost" onClick={checkForUpdates} disabled={updateBusy || update?.state === 'downloading'}>
+              Check for updates
+            </button>
+            {update?.available && (
+              <button className="btn" onClick={doInstallUpdate} disabled={updateBusy}>
+                Download &amp; install
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <h3>Shortcuts</h3>
       <p className="sub2">

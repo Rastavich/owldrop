@@ -72,10 +72,23 @@ jobs:
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           wails3 task darwin:package:dmg
+      # The self-updater's darwin artifact is a zip of the .app bundle (it
+      # replaces the bundle in place).
+      - name: Zip .app for the updater
+        run: |
+          APP=$(find bin -maxdepth 3 -name '*.app' | head -1)
+          if [ -z "$APP" ]; then
+            echo "no .app bundle found in bin/"; exit 1
+          fi
+          cd "$(dirname "$APP")"
+          zip -rq "$GITHUB_WORKSPACE/bin/tailscale-drop-darwin-amd64.zip" "$(basename "$APP")"
+          ls -la "$GITHUB_WORKSPACE/bin/tailscale-drop-darwin-amd64.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: bin/*.dmg
+          path: |
+            bin/*.dmg
+            bin/*.zip
           if-no-files-found: error
 
   # Linux needs GTK4 + WebKitGTK 6.0 headers AND the WebKit helper binaries
@@ -123,36 +136,11 @@ jobs:
           # leave bin/ root-owned on the runner.
           nix build .#sidecar -o /tmp/sidecar
           cp /tmp/sidecar/bin/tailscale-drop /tmp/tailscale-drop-nix
-      # Ship the nix-built binary to the public taildrop-install repo (source
-      # stays private). The INSTALL_REPO_SSH_KEY secret is a private key whose
-      # public half is a write-enabled deploy key on Rastavich/taildrop-install
-      # (scoped to that one repo — no PAT needed).
-      - name: Publish binary to public install repo
-        env:
-          INSTALL_REPO_SSH_KEY: ${{ secrets.INSTALL_REPO_SSH_KEY }}
-        run: |
-          if [ -z "$INSTALL_REPO_SSH_KEY" ]; then
-            echo "::warning::INSTALL_REPO_SSH_KEY not set — skipping publish to taildrop-install"
-            exit 0
-          fi
-          mkdir -p ~/.ssh
-          echo "$INSTALL_REPO_SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519"
-          rm -rf /tmp/taildrop-install
-          git clone git@github.com:Rastavich/taildrop-install.git /tmp/taildrop-install
-          cp /tmp/tailscale-drop-nix /tmp/taildrop-install/tailscale-drop
-          chmod +x /tmp/taildrop-install/tailscale-drop
-          cd /tmp/taildrop-install
-          git config user.name "release-bot"
-          git config user.email "release@taildrop.local"
-          git add tailscale-drop
-          if git diff --cached --quiet; then
-            echo "binary unchanged — nothing to publish"
-          else
-            git commit -m "release ${{ needs.preflight.outputs.version }}"
-            git push origin main
-          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-nix
+          path: /tmp/tailscale-drop-nix
+          if-no-files-found: error
 
   # NOTE: no AppImage in the release. WebKitGTK hardcodes its helper-process
   # path (/usr/lib/x86_64-linux-gnu/webkitgtk-6.0) at compile time and does
@@ -224,6 +212,69 @@ jobs:
           if [ "$OK" -ne 1 ]; then
             echo 'FAILED — app log:'; cat /tmp/tsd-smoke.log || true
             exit 1
+          fi
+
+  # Publishes to the public taildrop-install repo (source stays private):
+  # the nix-built linux binary (for `nix profile install`) plus the Wails
+  # update manifest and per-platform update artifacts (Windows exe, macOS
+  # .app zip) consumed by the app's built-in self-updater.
+  # The INSTALL_REPO_SSH_KEY secret is a private key whose public half is a
+  # write-enabled deploy key on Rastavich/taildrop-install (one repo only).
+  publish-updates:
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Build update manifest and stage files
+        run: |
+          set -e
+          V="${{ needs.preflight.outputs.version }}"
+          EXE=$(ls dl/windows/*.exe | grep -v installer | head -1)
+          ZIP=$(ls dl/macos/*.zip | head -1)
+          NIX=dl/linux-nix/tailscale-drop-nix
+          [ -n "$EXE" ] && [ -n "$ZIP" ] && [ -f "$NIX" ] || { echo "missing artifacts"; exit 1; }
+          exe_digest=$(sha256sum "$EXE" | cut -d' ' -f1 | xxd -r -p | base64)
+          zip_digest=$(sha256sum "$ZIP" | cut -d' ' -f1 | xxd -r -p | base64)
+          mkdir -p stage/updates
+          cp "$EXE" stage/updates/tailscale-drop-windows-amd64.exe
+          cp "$ZIP" stage/updates/tailscale-drop-darwin-amd64.zip
+          cp "$NIX" stage/tailscale-drop
+          chmod +x stage/tailscale-drop
+          cat > stage/updates/stable.json <<EOF
+          {"schemaVersion":1,"version":"$V","channel":"stable","name":"Taildrop $V","publishedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","artifacts":[
+          {"url":"https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-windows-amd64.exe","filename":"tailscale-drop-windows-amd64.exe","filetype":"exe","platform":"windows","arch":"amd64","size":$(stat -c%s "$EXE"),"digestAlgo":"sha256","digest":"$exe_digest"},
+          {"url":"https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-darwin-amd64.zip","filename":"tailscale-drop-darwin-amd64.zip","filetype":"zip","platform":"darwin","arch":"amd64","size":$(stat -c%s "$ZIP"),"digestAlgo":"sha256","digest":"$zip_digest"}
+          ]}
+          EOF
+          jq . stage/updates/stable.json > /dev/null
+          echo "manifest OK: $(jq -r .version stage/updates/stable.json)"
+      - name: Push to public install repo
+        env:
+          INSTALL_REPO_SSH_KEY: ${{ secrets.INSTALL_REPO_SSH_KEY }}
+        run: |
+          if [ -z "$INSTALL_REPO_SSH_KEY" ]; then
+            echo "::warning::INSTALL_REPO_SSH_KEY not set — skipping publish to taildrop-install"
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "$INSTALL_REPO_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519"
+          rm -rf /tmp/taildrop-install
+          git clone git@github.com:Rastavich/taildrop-install.git /tmp/taildrop-install
+          cd /tmp/taildrop-install
+          rm -rf updates tailscale-drop
+          cp -r "$GITHUB_WORKSPACE/stage/." .
+          git config user.name "release-bot"
+          git config user.email "release@taildrop.local"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing changed — nothing to publish"
+          else
+            git commit -m "release ${{ needs.preflight.outputs.version }}"
+            git push origin main
           fi
 
   release:

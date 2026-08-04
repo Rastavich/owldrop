@@ -101,6 +101,10 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- httpSrv.Serve(ln) }()
 
+	// Self-update wiring (release builds only): checks the public feed and
+	// surfaces updater events over SSE so the UI can toast.
+	srv.initUpdater(app)
+
 	win = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Taildrop",
 		Width:            980,

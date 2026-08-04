@@ -129,6 +129,7 @@ type server struct {
 	drops       *dropManager
 	premium     *premiumState
 	relay       *relayClient // nil unless config relay_url is set
+	update      *updateManager
 	port        int
 	lan         bool
 	selfDNS     string
@@ -278,6 +279,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/premium/refresh", s.guard(s.handlePremiumRefresh))
 	mux.HandleFunc("/api/premium/checkout", s.guard(s.handlePremiumCheckout))
 	mux.HandleFunc("/api/premium/portal", s.guard(s.handlePremiumPortal))
+	mux.HandleFunc("/api/update", s.guard(s.handleUpdate))
+	mux.HandleFunc("/api/update/check", s.guard(s.handleUpdateCheck))
+	mux.HandleFunc("/api/update/install", s.guard(s.handleUpdateInstall))
 	// Public drop-link pages: the URL token is the auth, not the session
 	// token. Host checks still apply; through the funnel hostname ONLY drop
 	// pages are reachable (everything else 404s there).
