@@ -161,6 +161,71 @@ jobs:
   # system WebKit and are the supported Linux artifacts; on NixOS use the
   # flake package (install.sh).
 
+  # Boots the Windows and macOS builds on GitHub's own runners and asserts
+  # the localhost UI answers — real-binary smoke coverage on platforms the
+  # maintainer doesn't own. (Linux is testable locally; the UI itself is the
+  # same web app on all platforms and is browser-tested.) The HTTP server
+  # binds before the window is created, so even a headless-window failure
+  # still proves the binary runs.
+  smoke:
+    needs: [windows, macos]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.os == 'windows-latest' && 'windows' || 'macos' }}
+          path: build
+      - name: Smoke — Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build -Filter *.exe | Where-Object { $_.Name -notmatch 'installer' } | Select-Object -First 1
+          if (-not $exe) { throw 'no app exe found' }
+          $p = Start-Process -FilePath $exe.FullName -PassThru
+          try {
+            $ok = $false
+            foreach ($i in 1..30) {
+              Start-Sleep -Seconds 2
+              try {
+                $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8976/' -UseBasicParsing -TimeoutSec 3
+                if ($r.StatusCode -eq 200) { $ok = $true; break }
+              } catch {}
+            }
+            if (-not $ok) { throw 'app did not answer on http://127.0.0.1:8976/' }
+            Write-Host "smoke OK: HTTP $($r.StatusCode)"
+          } finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          }
+      - name: Smoke — macOS
+        if: matrix.os == 'macos-14'
+        run: |
+          set -e
+          hdiutil attach build/*.dmg -nobrowse -quiet
+          trap 'hdiutil detach /Volumes/* -quiet || true' EXIT
+          APP=$(find /Volumes -maxdepth 2 -name '*.app' | head -1)
+          BIN=$(find "$APP" -path '*/MacOS/*' -type f | head -1)
+          echo "launching $BIN"
+          "$BIN" > /tmp/tsd-smoke.log 2>&1 &
+          PID=$!
+          OK=0
+          for i in $(seq 1 30); do
+            sleep 2
+            if curl -sf -o /dev/null http://127.0.0.1:8976/; then
+              echo "smoke OK"
+              OK=1
+              break
+            fi
+          done
+          kill $PID 2>/dev/null || true
+          if [ "$OK" -ne 1 ]; then
+            echo 'FAILED — app log:'; cat /tmp/tsd-smoke.log || true
+            exit 1
+          fi
+
   release:
     needs: [windows, macos, linux]
     # Tag pushes publish the tagged release; manual runs publish (or update)
