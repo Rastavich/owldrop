@@ -67,6 +67,14 @@ func newPremiumState(secretKey, priceID string) *premiumState {
 	if !p.configured {
 		p.status = "unconfigured"
 	}
+	// Dev-only escape hatch (compiled out of release builds): local builds
+	// can force Premium active without Stripe keys.
+	if devPremium() {
+		p.configured = true
+		p.active = true
+		p.status = "active"
+		p.priceLabel = "development"
+	}
 	return p
 }
 
