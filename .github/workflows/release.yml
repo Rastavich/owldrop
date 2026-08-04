@@ -109,18 +109,23 @@ jobs:
             bin/*.rpm
           if-no-files-found: error
       # Ship the raw binary to the public taildrop-install repo (source stays
-      # private). Needs an INSTALL_REPO_PAT secret: a fine-grained PAT with
-      # Contents read/write on Rastavich/taildrop-install.
+      # private). The INSTALL_REPO_SSH_KEY secret is a private key whose
+      # public half is a write-enabled deploy key on Rastavich/taildrop-install
+      # (scoped to that one repo — no PAT needed).
       - name: Publish binary to public install repo
         env:
-          INSTALL_REPO_PAT: ${{ secrets.INSTALL_REPO_PAT }}
+          INSTALL_REPO_SSH_KEY: ${{ secrets.INSTALL_REPO_SSH_KEY }}
         run: |
-          if [ -z "$INSTALL_REPO_PAT" ]; then
-            echo "::warning::INSTALL_REPO_PAT not set — skipping publish to taildrop-install"
+          if [ -z "$INSTALL_REPO_SSH_KEY" ]; then
+            echo "::warning::INSTALL_REPO_SSH_KEY not set — skipping publish to taildrop-install"
             exit 0
           fi
+          mkdir -p ~/.ssh
+          echo "$INSTALL_REPO_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519"
           rm -rf /tmp/taildrop-install
-          git clone "https://x-access-token:${INSTALL_REPO_PAT}@github.com/Rastavich/taildrop-install.git" /tmp/taildrop-install
+          git clone git@github.com:Rastavich/taildrop-install.git /tmp/taildrop-install
           cp bin/tailscale-drop /tmp/taildrop-install/tailscale-drop
           chmod +x /tmp/taildrop-install/tailscale-drop
           cd /tmp/taildrop-install
