@@ -311,3 +311,20 @@ func TestAdminDevicesBypassStripe(t *testing.T) {
 		t.Fatalf("non-admin device: %+v, want unconfigured/inactive", st)
 	}
 }
+
+// TestAdminDevicesByKey: ADMIN_DEVICES also accepts a device's API key (the
+// value a machine's config file actually holds), resolved via the store.
+func TestAdminDevicesByKey(t *testing.T) {
+	t.Setenv("ADMIN_DEVICES", "somekey")
+	b := newBilling("", "")
+	st, err := newStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.addDevice(&device{ID: "dev9", Key: "somekey", Created: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if st := b.status(st, "dev9"); !st.active {
+		t.Fatalf("admin by key: %+v, want active", st)
+	}
+}
