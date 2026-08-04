@@ -1,15 +1,15 @@
 {
 	"fixed": {
-		"file_version": "0.1.0"
+		"file_version": "0.5.1"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A tsd-scratch application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
+			"ProductVersion": "0.5.1",
+			"CompanyName": "Tailscale Drop",
+			"FileDescription": "Tailscale Taildrop desktop app",
+			"LegalCopyright": "(c) 2026, tailscale-drop",
+			"ProductName": "Taildrop",
+			"Comments": "See files sent to you via Taildrop, save or delete them with one click, and send files back."
 		}
 	}
 }

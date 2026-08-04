@@ -12,3 +12,4 @@ build/darwin/icons.icns
 build/darwin/Assets.car
 build/windows/icon.ico
 build/linux/appimage/tailscale-drop.desktop
+build/ios

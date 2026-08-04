@@ -2,9 +2,12 @@
 Version=1.0
 Name=Taildrop
 Comment=Tailscale Taildrop desktop app
+# The Exec line includes %u to pass the URL to the application
 Exec=/usr/bin/tailscale-drop %u
 Terminal=false
 Type=Application
 Icon=tailscale-drop
 Categories=Utility;
 StartupWMClass=tailscale-drop
+
+ 
