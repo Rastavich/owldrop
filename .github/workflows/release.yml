@@ -119,8 +119,10 @@ jobs:
           # No magic-nix-cache: its local substituter proxy has flaked on
           # GitHub's cache service (HTTP 418). cache.nixos.org serves the
           # whole closure directly and is reliable.
+          # The nix binary goes to /tmp, NOT bin/: the docker steps above
+          # leave bin/ root-owned on the runner.
           nix build .#sidecar -o /tmp/sidecar
-          cp /tmp/sidecar/bin/tailscale-drop bin/tailscale-drop-nix
+          cp /tmp/sidecar/bin/tailscale-drop /tmp/tailscale-drop-nix
       # Ship the nix-built binary to the public taildrop-install repo (source
       # stays private). The INSTALL_REPO_SSH_KEY secret is a private key whose
       # public half is a write-enabled deploy key on Rastavich/taildrop-install
@@ -139,7 +141,7 @@ jobs:
           export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519"
           rm -rf /tmp/taildrop-install
           git clone git@github.com:Rastavich/taildrop-install.git /tmp/taildrop-install
-          cp bin/tailscale-drop-nix /tmp/taildrop-install/tailscale-drop
+          cp /tmp/tailscale-drop-nix /tmp/taildrop-install/tailscale-drop
           chmod +x /tmp/taildrop-install/tailscale-drop
           cd /tmp/taildrop-install
           git config user.name "release-bot"
