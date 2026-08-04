@@ -293,3 +293,21 @@ func upload(t *testing.T, ts *httptest.Server, token string, empty bool) *http.R
 	}
 	return resp
 }
+
+// TestAdminDevicesBypassStripe: devices on the ADMIN_DEVICES list are
+// premium without any Stripe involvement (seller's machines, support
+// grants); every other device follows the normal Stripe path.
+func TestAdminDevicesBypassStripe(t *testing.T) {
+	t.Setenv("ADMIN_DEVICES", "dev1, dev2")
+	b := newBilling("", "") // no Stripe keys at all
+
+	if st := b.status(nil, "dev1"); !st.configured || !st.active || st.status != "active" {
+		t.Fatalf("admin device: %+v, want configured+active", st)
+	}
+	if st := b.status(nil, "dev2"); !st.active {
+		t.Fatalf("second admin device: %+v, want active", st)
+	}
+	if st := b.status(nil, "dev3"); st.configured || st.active {
+		t.Fatalf("non-admin device: %+v, want unconfigured/inactive", st)
+	}
+}

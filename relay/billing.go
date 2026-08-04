@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,10 @@ const (
 type billing struct {
 	secretKey string
 	priceID   string
+	// admin lists device IDs that are always premium (the seller's own
+	// machines, support grants) — no Stripe involved. ADMIN_DEVICES env,
+	// comma-separated.
+	admin map[string]bool
 
 	mu         sync.Mutex
 	priceLabel string
@@ -45,9 +50,16 @@ type billingStatus struct {
 }
 
 func newBilling(secretKey, priceID string) *billing {
+	admin := map[string]bool{}
+	for _, id := range strings.Split(os.Getenv("ADMIN_DEVICES"), ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			admin[id] = true
+		}
+	}
 	return &billing{
 		secretKey: secretKey,
 		priceID:   priceID,
+		admin:     admin,
 		statuses:  map[string]billingStatus{},
 	}
 }
@@ -62,8 +74,11 @@ func (b *billing) premium(s *store, deviceID string) bool {
 
 // status returns the device's subscription state; links the device to a
 // Stripe customer on first check (via the checkout session's
-// client_reference_id).
+// client_reference_id). Admin-listed devices skip Stripe entirely.
 func (b *billing) status(s *store, deviceID string) billingStatus {
+	if b.admin[deviceID] {
+		return billingStatus{configured: true, active: true, status: "active", checked: time.Now()}
+	}
 	if b.secretKey == "" || b.priceID == "" {
 		return billingStatus{}
 	}
