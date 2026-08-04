@@ -21,8 +21,17 @@ import (
 
 // tsClient talks to the local tailscaled daemon over its LocalAPI.
 // The zero value is valid: it discovers the daemon socket/named pipe
-// automatically on every platform (Linux, macOS, Windows).
-var tsClient = &local.Client{}
+// automatically on every platform (Linux, macOS, Windows). The socket
+// path is overridable via TAILDROP_TS_SOCKET (testing, unusual setups).
+var tsClient = newTSClient()
+
+func newTSClient() *local.Client {
+	c := &local.Client{}
+	if s := os.Getenv("TAILDROP_TS_SOCKET"); s != "" {
+		c.Socket = s
+	}
+	return c
+}
 
 // waitingFile is one file sitting in the Taildrop inbox on this machine.
 type waitingFile struct {

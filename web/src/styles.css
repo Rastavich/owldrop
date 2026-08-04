@@ -36,6 +36,10 @@ header{display:flex;align-items:center;justify-content:space-between;gap:16px;pa
 
 main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 
+.connect-banner{display:flex;align-items:center;gap:12px;max-width:860px;margin:12px auto 0;padding:10px 14px;background:var(--panel2);border:1px solid var(--amber);border-radius:10px;font-size:13px;color:var(--text)}
+.connect-banner .dot{background:var(--amber)}
+.connect-banner p{flex:1;margin:0}
+
 .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .dir-field{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:6px 12px;flex:1;min-width:240px}
 .dir-field span{color:var(--muted);font-size:12.5px;white-space:nowrap}
@@ -118,6 +122,8 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .drop-zone.over{border-color:var(--accent);background:var(--accent-soft)}
 .settings h3{font-size:13.5px;margin:20px 0 8px;color:var(--text)}
 .settings h3:first-child{margin-top:0}
+.settings-hrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:20px 0 8px}
+.settings-hrow h3{margin:0}
 .settings .check{margin:6px 0}
 .dropform{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
 .dropform .search{flex:1}

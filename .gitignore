@@ -1,5 +1,6 @@
 /tailscale-drop
 /bin
+.env
 /result
 *.exe
 .task
@@ -13,3 +14,4 @@ build/darwin/Assets.car
 build/windows/icon.ico
 build/linux/appimage/tailscale-drop.desktop
 build/ios
+relay/taildrop-relay

@@ -47,7 +47,9 @@
         buildInputs = guiLibs;
         env.CGO_ENABLED = "1";
         buildTags = [ "production" ];
-        ldflags = [ "-s" "-w" ];
+        # Distributed builds default to the seller's relay (the app is
+        # key-less; premium is enforced server-side).
+        ldflags = [ "-s" "-w" "-X main.defaultRelayURL=https://taildrop-relay.fly.dev" ];
       };
     in
     {

@@ -5,6 +5,7 @@ import { getInbox } from './api';
 import { connectEvents } from './events';
 import { setDaemon } from './store';
 import DaemonPill from './components/DaemonPill';
+import ConnectBanner from './components/ConnectBanner';
 import ConfirmModal from './components/ConfirmModal';
 import FolderPicker from './components/FolderPicker';
 import Toasts from './components/Toasts';
@@ -74,6 +75,8 @@ export default function App() {
           Settings
         </Link>
       </nav>
+
+      <ConnectBanner />
 
       <main>
         <Outlet />

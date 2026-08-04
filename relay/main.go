@@ -38,7 +38,7 @@ func main() {
 	}
 	r := &relay{
 		store:   st,
-		billing: newBilling(os.Getenv("STRIPE_SECRET_KEY"), os.Getenv("STRIPE_PRICE_ID")),
+		billing: newBilling(os.Getenv("STRIPE_SECRET_KEY"), stripePriceID()),
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 	}
 
@@ -52,4 +52,14 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// stripePriceID returns the Stripe price ID env var, accepting both
+// STRIPE_PRICE_ID and STRIPE_PRICE (the deployed Fly secret was created with
+// the shorter name).
+func stripePriceID() string {
+	if v := os.Getenv("STRIPE_PRICE_ID"); v != "" {
+		return v
+	}
+	return os.Getenv("STRIPE_PRICE")
 }

@@ -13,12 +13,15 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tailcfg"
 )
 
@@ -161,12 +164,17 @@ func newServerDir(cfg *config, dataDir string) *server {
 	}
 }
 
-// relayClientFor builds the relay client when relay mode is configured.
+// relayClientFor builds the relay client: config wins, then the build-time
+// default (set for distributed builds via ldflags), else nil = self-host.
 func relayClientFor(cfg *config) *relayClient {
-	if cfg.RelayURL == "" {
+	url := cfg.RelayURL
+	if url == "" {
+		url = defaultRelayURL
+	}
+	if url == "" {
 		return nil
 	}
-	return newRelayClient(cfg.RelayURL, cfg.DeviceKey)
+	return newRelayClient(url, cfg.DeviceKey)
 }
 
 func (s *server) dropBaseURL() string {
@@ -264,6 +272,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/droplinks", s.guard(s.handleDropLinks))
 	mux.HandleFunc("/api/droplinks/", s.guard(s.handleDropLinks))
 	mux.HandleFunc("/api/funnel", s.guard(s.handleFunnel))
+	mux.HandleFunc("/api/tailscale", s.guard(s.handleTailscale))
+	mux.HandleFunc("/api/tailscale/up", s.guard(s.handleTailscaleUp))
 	mux.HandleFunc("/api/premium", s.guard(s.handlePremium))
 	mux.HandleFunc("/api/premium/refresh", s.guard(s.handlePremiumRefresh))
 	mux.HandleFunc("/api/premium/checkout", s.guard(s.handlePremiumCheckout))
@@ -1061,6 +1071,91 @@ func (s *server) maybeAutoSave(ctx context.Context, files []waitingFile) {
 			}
 		}(f)
 	}
+}
+
+// --- Tailscale connection state ------------------------------------------
+
+// tailscaleState is the JSON snapshot of the local tailscaled connection,
+// served to the UI so it can offer to connect when the daemon is missing or
+// the node is logged out / stopped.
+type tailscaleState struct {
+	Reachable    bool   `json:"reachable"`
+	Connected    bool   `json:"connected"`
+	LoggedIn     bool   `json:"loggedIn"`
+	BackendState string `json:"backendState"`
+	Hint         string `json:"hint,omitempty"`
+}
+
+// tailscaleStatusInfo maps a LocalAPI Status response (or its error) to the
+// state the UI needs. An unreachable daemon is the "no tailscaled" case the
+// connect banner is for; every non-Running backend state gets a hint.
+func tailscaleStatusInfo(st *ipnstate.Status, err error) tailscaleState {
+	if err != nil || st == nil {
+		return tailscaleState{Reachable: false, Hint: tailscaledHint()}
+	}
+	s := tailscaleState{Reachable: true, BackendState: st.BackendState}
+	switch st.BackendState {
+	case "Running":
+		s.Connected = true
+		s.LoggedIn = true
+	case "NeedsLogin", "NoState":
+		s.Hint = "You're not logged in to a tailnet."
+	case "NeedsMachineAuth":
+		s.Hint = "This device is waiting for admin approval."
+	case "Stopped":
+		s.Hint = "Tailscale is stopped."
+	case "Starting":
+		s.Hint = "Connecting to your tailnet…"
+	default:
+		s.Hint = "Not connected to your tailnet."
+	}
+	return s
+}
+
+// tailscaledHintFor explains how to start the daemon, per platform.
+func tailscaledHintFor(goos string) string {
+	switch goos {
+	case "darwin":
+		return "tailscaled isn't running — open the Tailscale app, then retry."
+	case "windows":
+		return "tailscaled isn't running — start the Tailscale service, then retry."
+	default:
+		return "tailscaled isn't running — start it (e.g. `sudo systemctl start tailscaled` or the Tailscale app), then retry."
+	}
+}
+
+func tailscaledHint() string { return tailscaledHintFor(runtime.GOOS) }
+
+func (s *server) handleTailscale(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	st, err := tsClient.Status(ctx)
+	writeJSON(w, tailscaleStatusInfo(st, err))
+}
+
+func (s *server) handleTailscaleUp(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	st, err := tsClient.Status(ctx)
+	if err != nil || st == nil {
+		writeJSONStatus(w, http.StatusConflict, map[string]any{"error": tailscaledHint()})
+		return
+	}
+	if st.BackendState == "Running" {
+		writeJSON(w, map[string]any{"ok": true, "already": true})
+		return
+	}
+	// `tailscale up` brings the node up and, when logged out, starts the
+	// interactive login flow (opens the browser). It can block until login
+	// completes, so it runs in the background; the UI polls /api/tailscale.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := exec.CommandContext(ctx, "tailscale", "up").Run(); err != nil {
+			log.Printf("tailscale up: %v", err)
+		}
+	}()
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 // --- helpers --------------------------------------------------------------

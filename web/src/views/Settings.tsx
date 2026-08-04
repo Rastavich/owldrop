@@ -33,10 +33,13 @@ export default function Settings() {
   const { data: funnel } = useQuery({ queryKey: ['funnel'], queryFn: getFunnel });
   const { data: premium } = useQuery({ queryKey: ['premium'], queryFn: getPremium, refetchInterval: 30_000 });
   const relayMode = !!config?.relayUrl;
+  const activeLinks = links.filter((l) => linkState(l) === 'active');
+  const archivedCount = links.length - activeLinks.length;
   const [name, setName] = useState('');
   const [ttl, setTtl] = useState(60);
   const [single, setSingle] = useState(true);
   const [funnelBusy, setFunnelBusy] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const patch = async (body: Partial<AppConfig>, okMsg?: string) => {
     try {
@@ -207,7 +210,14 @@ export default function Settings() {
         </div>
       )}
 
-      <h3>Drop links</h3>
+      <div className="settings-hrow">
+        <h3>Drop links</h3>
+        {archivedCount > 0 && (
+          <button className="btn ghost mini" onClick={() => setShowArchived(!showArchived)}>
+            {showArchived ? 'Hide archived' : `Show archived (${archivedCount})`}
+          </button>
+        )}
+      </div>
       <p className="sub2">
         Create a short-lived link — anyone who opens it can drop a file into your inbox from a browser, no Tailscale needed. It
         expires or dies after its first use, and you can revoke it anytime.
@@ -254,9 +264,9 @@ export default function Settings() {
           Create link
         </button>
       </div>
-      {links.length > 0 && (
+      {(showArchived ? links : activeLinks).length > 0 && (
         <div className="drop-links">
-          {links.map((l) => {
+          {(showArchived ? links : activeLinks).map((l) => {
             const state = linkState(l);
             const publicUrl = l.publicUrl;
             const meta: string[] = [state];

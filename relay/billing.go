@@ -309,7 +309,8 @@ func formatPrice(cents int64, currency, interval string) string {
 	case "year":
 		per = "/year"
 	}
-	if currency == "usd" {
+	switch currency {
+	case "usd", "aud", "cad", "nzd":
 		return fmt.Sprintf("$%.2f%s", float64(cents)/100, per)
 	}
 	return fmt.Sprintf("%d %s%s", cents, strings.ToUpper(currency), per)

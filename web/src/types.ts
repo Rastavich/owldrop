@@ -73,6 +73,14 @@ export interface FunnelState {
   url?: string;
 }
 
+export interface TailscaleState {
+  reachable: boolean;
+  connected: boolean;
+  loggedIn: boolean;
+  backendState: string;
+  hint?: string;
+}
+
 export interface PremiumState {
   configured: boolean;
   active: boolean;

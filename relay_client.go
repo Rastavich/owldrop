@@ -1,8 +1,7 @@
-// Relay client: in relay mode (config relay_url) the app is key-less — all
-// Stripe calls and public-drop enforcement happen on the seller's relay, and
-// the app polls it for files uploaded through public drop links. The relay
-// enforces Premium server-side, so a patched client cannot get free public
-// drops.
+// Relay client: in relay mode the app is key-less — all Stripe calls and
+// public-drop enforcement happen on the seller's relay, and the app polls it
+// for files uploaded through public drop links. The relay enforces Premium
+// server-side, so a patched client cannot get free public drops.
 package main
 
 import (
@@ -14,6 +13,12 @@ import (
 	"strings"
 	"time"
 )
+
+// defaultRelayURL is the relay distributed builds point at. Overridden at
+// build time via -ldflags "-X main.defaultRelayURL=…" so dev builds stay
+// self-host (empty) while release builds default to the seller's relay.
+// Config relay_url / TAILDROP_RELAY_URL always win.
+var defaultRelayURL = ""
 
 type relayClient struct {
 	baseURL string

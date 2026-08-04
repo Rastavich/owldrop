@@ -16,6 +16,7 @@ func TestFormatPrice(t *testing.T) {
 		{499, "usd", "month", "$4.99/month"},
 		{4200, "usd", "year", "$42.00/year"},
 		{500, "usd", "", "$5.00"},
+		{500, "aud", "month", "$5.00/month"},
 		{500, "eur", "month", "500 EUR/month"},
 	}
 	for _, c := range cases {
