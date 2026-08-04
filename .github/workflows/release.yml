@@ -114,9 +114,11 @@ jobs:
       # wrapper doesn't provide.
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v4
-      - uses: DeterminateSystems/magic-nix-cache-action@v2
       - name: Build nix binary for the install repo
         run: |
+          # No magic-nix-cache: its local substituter proxy has flaked on
+          # GitHub's cache service (HTTP 418). cache.nixos.org serves the
+          # whole closure directly and is reliable.
           nix build .#sidecar -o /tmp/sidecar
           cp /tmp/sidecar/bin/tailscale-drop bin/tailscale-drop-nix
       # Ship the nix-built binary to the public taildrop-install repo (source
