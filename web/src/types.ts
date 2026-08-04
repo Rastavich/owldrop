@@ -77,6 +77,7 @@ export interface TailscaleState {
   reachable: boolean;
   connected: boolean;
   loggedIn: boolean;
+  installed: boolean; // false = no Tailscale client found on this machine
   backendState: string;
   hint?: string;
 }

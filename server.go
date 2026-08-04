@@ -275,6 +275,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/funnel", s.guard(s.handleFunnel))
 	mux.HandleFunc("/api/tailscale", s.guard(s.handleTailscale))
 	mux.HandleFunc("/api/tailscale/up", s.guard(s.handleTailscaleUp))
+	mux.HandleFunc("/api/tailscale/download", s.guard(s.handleTailscaleDownload))
 	mux.HandleFunc("/api/premium", s.guard(s.handlePremium))
 	mux.HandleFunc("/api/premium/refresh", s.guard(s.handlePremiumRefresh))
 	mux.HandleFunc("/api/premium/checkout", s.guard(s.handlePremiumCheckout))
@@ -1086,6 +1087,7 @@ type tailscaleState struct {
 	Reachable    bool   `json:"reachable"`
 	Connected    bool   `json:"connected"`
 	LoggedIn     bool   `json:"loggedIn"`
+	Installed    bool   `json:"installed"`
 	BackendState string `json:"backendState"`
 	Hint         string `json:"hint,omitempty"`
 }
@@ -1095,9 +1097,13 @@ type tailscaleState struct {
 // connect banner is for; every non-Running backend state gets a hint.
 func tailscaleStatusInfo(st *ipnstate.Status, err error) tailscaleState {
 	if err != nil || st == nil {
-		return tailscaleState{Reachable: false, Hint: tailscaledHint()}
+		s := tailscaleState{Reachable: false, Installed: tailscaleInstalled(), Hint: tailscaledHint()}
+		if !s.Installed {
+			s.Hint = "Tailscale isn't installed on this machine."
+		}
+		return s
 	}
-	s := tailscaleState{Reachable: true, BackendState: st.BackendState}
+	s := tailscaleState{Reachable: true, Installed: true, BackendState: st.BackendState}
 	switch st.BackendState {
 	case "Running":
 		s.Connected = true
@@ -1135,6 +1141,20 @@ func (s *server) handleTailscale(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	st, err := tsClient.Status(ctx)
 	writeJSON(w, tailscaleStatusInfo(st, err))
+}
+
+// handleTailscaleDownload opens the Tailscale download page in the system
+// browser. Fixed URL — nothing user-controlled is ever passed to openPath.
+func (s *server) handleTailscaleDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := openPath("https://tailscale.com/download"); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
 }
 
 func (s *server) handleTailscaleUp(w http.ResponseWriter, r *http.Request) {
