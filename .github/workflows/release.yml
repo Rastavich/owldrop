@@ -108,8 +108,19 @@ jobs:
             bin/*.deb
             bin/*.rpm
           if-no-files-found: error
-      # Ship the raw binary to the public taildrop-install repo (source stays
-      # private). The INSTALL_REPO_SSH_KEY secret is a private key whose
+      # The install-repo binary must be NIX-built: its RPATHs point into the
+      # nix store, so it runs inside the FHS wrapper on NixOS. A
+      # container-built (Debian) binary needs libX11 + the X stack, which the
+      # wrapper doesn't provide.
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v4
+      - uses: DeterminateSystems/magic-nix-cache-action@v2
+      - name: Build nix binary for the install repo
+        run: |
+          nix build .#sidecar -o /tmp/sidecar
+          cp /tmp/sidecar/bin/tailscale-drop bin/tailscale-drop-nix
+      # Ship the nix-built binary to the public taildrop-install repo (source
+      # stays private). The INSTALL_REPO_SSH_KEY secret is a private key whose
       # public half is a write-enabled deploy key on Rastavich/taildrop-install
       # (scoped to that one repo — no PAT needed).
       - name: Publish binary to public install repo
@@ -126,7 +137,7 @@ jobs:
           export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519"
           rm -rf /tmp/taildrop-install
           git clone git@github.com:Rastavich/taildrop-install.git /tmp/taildrop-install
-          cp bin/tailscale-drop /tmp/taildrop-install/tailscale-drop
+          cp bin/tailscale-drop-nix /tmp/taildrop-install/tailscale-drop
           chmod +x /tmp/taildrop-install/tailscale-drop
           cd /tmp/taildrop-install
           git config user.name "release-bot"

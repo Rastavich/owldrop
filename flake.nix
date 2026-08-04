@@ -12,46 +12,50 @@
       # The app links GTK4 + WebKitGTK 6.0 via CGO; both are needed at build
       # time (pkg-config) and at runtime.
       guiLibs = with pkgs; [ gtk4 webkitgtk_6_0 ];
+
+      # The UI is a Vite project (web/); its build output is embedded into
+      # the Go binary via go:embed web/dist.
+      frontend = pkgs.buildNpmPackage {
+        pname = "tailscale-drop-web";
+        version = "0.4.0";
+        src = ./web;
+        npmDepsHash = "sha256-dHT8x8rzyRIX8n/WQ+S/fKnnVXLjFXyHSE4ZOQ+CM9I=";
+      };
+      sidecar = pkgs.buildGoModule {
+        pname = "tailscale-drop";
+        version = "0.4.0";
+        src = pkgs.runCommand "tailscale-drop-src" { } ''
+          cp -r ${self} $out
+          chmod -R u+w $out
+          rm -rf $out/web/dist
+          cp -r ${frontend}/lib/node_modules/tailscale-drop-web/dist $out/web/dist
+        '';
+        # `go mod vendor` chokes on a wails embed pattern (WebView2Loader.dll
+        # files aren't in the module zip; they're opt-in via build tags).
+        # proxyVendor downloads the module cache instead — same result, no
+        # embed resolution at fetch time.
+        proxyVendor = true;
+        vendorHash = "sha256-YrJrhetCKWQqMV5hLgbhGdWrDbJPjbALYwdTarvrq5k=";
+        # relay/ is a separate Go module (own go.mod) nested in the repo;
+        # newer nixpkgs auto-discovers package-main dirs, so pin the build to
+        # the app module root.
+        subPackages = [ "." ];
+        # drops_test.go talks to a live tailscaled daemon; not available in
+        # the build sandbox (they run fine on a machine with tailscaled).
+        doCheck = false;
+        nativeBuildInputs = [ pkgs.pkg-config pkgs.gcc ];
+        buildInputs = guiLibs;
+        env.CGO_ENABLED = "1";
+        buildTags = [ "production" ];
+        ldflags = [ "-s" "-w" ];
+      };
     in
     {
       devShells.x86_64-linux.default = pkgs.mkShell {
         packages = with pkgs; [ go nodejs pkg-config gcc ] ++ guiLibs;
       };
 
-      packages.x86_64-linux.default = let
-        # The UI is a Vite project (web/); its build output is embedded into
-        # the Go binary via go:embed web/dist.
-        frontend = pkgs.buildNpmPackage {
-          pname = "tailscale-drop-web";
-          version = "0.4.0";
-          src = ./web;
-          npmDepsHash = "sha256-UIHqd1i35XCXdR+s01W2zAnCIr1wF6N8EjkR+de0Fhw=";
-        };
-        sidecar = pkgs.buildGoModule {
-          pname = "tailscale-drop";
-          version = "0.4.0";
-          src = pkgs.runCommand "tailscale-drop-src" { } ''
-            cp -r ${self} $out
-            chmod -R u+w $out
-            rm -rf $out/web/dist
-            cp -r ${frontend}/lib/node_modules/tailscale-drop-web/dist $out/web/dist
-          '';
-          # `go mod vendor` chokes on a wails embed pattern (WebView2Loader.dll
-          # files aren't in the module zip; they're opt-in via build tags).
-          # proxyVendor downloads the module cache instead — same result, no
-          # embed resolution at fetch time.
-          proxyVendor = true;
-          vendorHash = "sha256-YrJrhetCKWQqMV5hLgbhGdWrDbJPjbALYwdTarvrq5k=";
-          # drops_test.go talks to a live tailscaled daemon; not available in
-          # the build sandbox (they run fine on a machine with tailscaled).
-          doCheck = false;
-          nativeBuildInputs = [ pkgs.pkg-config pkgs.gcc ];
-          buildInputs = guiLibs;
-          env.CGO_ENABLED = "1";
-          buildTags = [ "production" ];
-          ldflags = [ "-s" "-w" ];
-        };
-      in
+      packages.x86_64-linux.default =
       # FHS wrapper so the CGO binary finds its dynamic libs (GTK, WebKitGTK,
       # and their transitive deps) plus GIO TLS modules and GTK settings
       # schemas at runtime — the NixOS equivalent of the old electron wrapper.
@@ -68,5 +72,11 @@
           exec ${sidecar}/bin/tailscale-drop "$@"
         '';
       };
+
+      # The raw nix-built binary (RPATHs point into the nix store, so it runs
+      # in the FHS wrapper above). CI publishes this to the public
+      # taildrop-install repo — a container-built binary would need the
+      # Debian X11 stack the wrapper doesn't provide.
+      packages.x86_64-linux.sidecar = sidecar;
     };
 }
