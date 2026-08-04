@@ -82,6 +82,13 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+
+   # A running instance locks $INSTDIR\${PRODUCT_EXECUTABLE} and the File
+   # instruction fails with "cannot access the exe". Kill it (exit codes are
+   # fine: 0 = killed, 128 = not running).
+   nsExec::Exec 'taskkill /F /IM "${PRODUCT_EXECUTABLE}"'
+   Pop $0
+   Sleep 500
 FunctionEnd
 
 Section

@@ -11,7 +11,7 @@ export default function ConnectBanner() {
   const { data } = useQuery({
     queryKey: ['tailscale'],
     queryFn: getTailscaleState,
-    refetchInterval: (q) => (!q.state.data || !q.state.data.connected ? 5000 : false),
+    refetchInterval: (q) => (q.state.data?.connected ? 10000 : 5000),
     retry: false,
   });
 

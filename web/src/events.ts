@@ -4,7 +4,7 @@
 // attempted when NOT running in the shell.
 import { IS_SHELL } from './api';
 import { queryClient } from './queryClient';
-import { setDaemon, toast, transfersStore, updateSaving, updateSending } from './store';
+import { toast, transfersStore, updateSaving, updateSending } from './store';
 import { fmtSize } from './utils';
 import type { SseEvent } from './types';
 
@@ -65,9 +65,6 @@ export function handleSseEvent(ev: SseEvent) {
       }
       break;
     }
-    case 'status':
-      setDaemon(!ev.err, ev.err ? 'tailscaled unreachable: ' + ev.err : 'connected to tailscaled');
-      break;
     case 'update':
       queryClient.invalidateQueries({ queryKey: ['update'] });
       if (ev.kind === 'available') toast('A new version is available — Settings → Updates to install');

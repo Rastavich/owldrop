@@ -58,17 +58,6 @@ export function dismissToast(id: number) {
   toastsStore.set((s) => s.filter((t) => t.id !== id));
 }
 
-// --- daemon status --------------------------------------------------------
-
-export const daemonStore = createStore<{ ok: boolean | null; msg: string }>({
-  ok: null,
-  msg: 'connecting…',
-});
-
-export function setDaemon(ok: boolean, msg: string) {
-  daemonStore.set({ ok, msg });
-}
-
 // --- risky-open confirmation ----------------------------------------------
 
 export const confirmStore = createStore<{

@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { getInbox } from './api';
 import { connectEvents } from './events';
-import { setDaemon } from './store';
 import DaemonPill from './components/DaemonPill';
 import ConnectBanner from './components/ConnectBanner';
 import ConfirmModal from './components/ConfirmModal';
@@ -13,16 +12,7 @@ import Toasts from './components/Toasts';
 const TAB_CLASS = 'tab';
 
 export default function App() {
-  const { data: inbox = [], isSuccess, error } = useQuery({ queryKey: ['inbox'], queryFn: getInbox });
-
-  // The initial inbox fetch proves the daemon is reachable (same as the
-  // original boot()); later SSE status events take over.
-  useEffect(() => {
-    if (isSuccess) setDaemon(true, 'connected to tailscaled');
-  }, [isSuccess]);
-  useEffect(() => {
-    if (error) setDaemon(false, 'tailscaled unreachable: ' + (error instanceof Error ? error.message : error));
-  }, [error]);
+  const { data: inbox = [] } = useQuery({ queryKey: ['inbox'], queryFn: getInbox });
 
   useEffect(() => connectEvents(), []);
   useEffect(() => {
