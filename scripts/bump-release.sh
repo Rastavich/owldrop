@@ -70,14 +70,20 @@ fi
 
 run "wails3 task common:update:build-assets (regenerate platform assets)" wails3 task common:update:build-assets
 
-# --- verify every reference moved ------------------------------------------
+# --- verify the to-be-committed diff carries no old version ----------------
+# Scope: the staged diff only. Grepping build/ wholesale matches random
+# bytes in binary assets (PNGs, stale AppImage libs), not real references.
 if (( ! DRY_RUN )); then
-  if grep -rn "$CUR" build/ web/package.json >/dev/null 2>&1; then
-    echo "error: \"$CUR\" still referenced in build/ or web/package.json — fix before committing" >&2
+  git add -A
+  if git diff --cached | grep -qE "^\+[^+].*$CUR"; then
+    echo "error: \"$CUR\" still appears in an added line of the release diff" >&2
+    git reset -q
+    git checkout -- .
+    echo "restored — working tree is back to its pre-run state." >&2
     exit 1
   fi
   grep -q "\"version\": \"$NEW\"" web/package.json || { echo "error: web/package.json not updated" >&2; exit 1; }
-  echo "ok: no \"$CUR\" left in build/ or web/package.json"
+  echo "ok: no \"$CUR\" in the release diff"
 fi
 
 # --- commit + tag + push ----------------------------------------------------
@@ -89,7 +95,6 @@ if (( DRY_RUN )); then
   exit 0
 fi
 
-git add -A
 git commit -m "$MSG"
 git tag "$NEW"
 git push origin HEAD
