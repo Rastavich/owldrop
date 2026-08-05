@@ -15,6 +15,7 @@ import {
   revokeDropLink,
   setFunnel,
   startCheckout,
+  testNtfy,
 } from '../api';
 import { toast } from '../store';
 import { copyText, fmtAge } from '../utils';
@@ -45,6 +46,8 @@ export default function Settings() {
   const [single, setSingle] = useState(true);
   const [funnelBusy, setFunnelBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [ntfyBusy, setNtfyBusy] = useState(false);
+  const [ntfyTopicEdit, setNtfyTopicEdit] = useState<string | null>(null);
 
   const patch = async (body: Partial<AppConfig>, okMsg?: string) => {
     try {
@@ -184,6 +187,57 @@ export default function Settings() {
         <input type="checkbox" checked={config?.notifyError !== false} onChange={(e) => patch({ notifyError: e.target.checked })} />
         Errors
       </label>
+
+      <h3>Phone notifications</h3>
+      <p className="sub2">
+        Get a push notification on your phone when a file is sent to it. Install the <b>ntfy</b> app (Android/iOS), tap{' '}
+        <b>+</b>, and subscribe to this topic:
+      </p>
+      <div className="row" style={{ gap: 8, display: 'flex', alignItems: 'center' }}>
+        <input
+          className="search"
+          type="text"
+          placeholder="pick a topic name, e.g. taildrop-mine-x9k2"
+          value={ntfyTopicEdit ?? config?.ntfyTopic ?? ''}
+          onChange={(e) => setNtfyTopicEdit(e.target.value)}
+          onBlur={() => {
+            if (ntfyTopicEdit !== null && ntfyTopicEdit !== (config?.ntfyTopic ?? '')) patch({ ntfyTopic: ntfyTopicEdit });
+            setNtfyTopicEdit(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          }}
+          spellCheck={false}
+          autoComplete="off"
+          style={{ flex: 1 }}
+        />
+        <button
+          className="btn ghost"
+          disabled={ntfyBusy || !config?.ntfyTopic}
+          onClick={async () => {
+            setNtfyBusy(true);
+            try {
+              await testNtfy();
+              toast('Test notification sent — check your phone');
+            } catch (e) {
+              toast(e instanceof Error ? e.message : String(e), undefined, 'err');
+            } finally {
+              setNtfyBusy(false);
+            }
+          }}
+        >
+          {ntfyBusy ? 'Sending…' : 'Send test'}
+        </button>
+      </div>
+      <p className="sub2">
+        Server: <code>{config?.ntfyServer || 'https://ntfy.sh'}</code> (public, no account). The Tailscale app can also
+        notify on its own — on the phone: Settings → Apps → Tailscale → Notifications.
+      </p>
+      {config?.ntfyTopic && (
+        <p className="sub2">
+          <button className="linkbtn" onClick={() => patch({ ntfyTopic: '' })}>turn off</button>
+        </p>
+      )}
 
       <h3>Save folder</h3>
       <p className="sub2">Incoming files are saved to <b>{config?.saveDir}</b></p>

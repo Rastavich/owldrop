@@ -72,6 +72,7 @@ export const setFunnel = (enabled: boolean) =>
   api<FunnelState>('/api/funnel', { method: 'POST', json: { enabled } });
 export const getTailscaleState = () => api<TailscaleState>('/api/tailscale');
 export const downloadTailscale = () => api('/api/tailscale/download', { method: 'POST' });
+export const testNtfy = () => api('/api/ntfy/test', { method: 'POST' });
 export const tailscaleUp = () => api('/api/tailscale/up', { method: 'POST', json: {} });
 export const getPremium = () => api<PremiumState>('/api/premium');
 export const getUpdateState = () => api<UpdateState>('/api/update');

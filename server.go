@@ -276,6 +276,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/tailscale", s.guard(s.handleTailscale))
 	mux.HandleFunc("/api/tailscale/up", s.guard(s.handleTailscaleUp))
 	mux.HandleFunc("/api/tailscale/download", s.guard(s.handleTailscaleDownload))
+	mux.HandleFunc("/api/ntfy/test", s.guard(s.handleNtfyTest))
 	mux.HandleFunc("/api/premium", s.guard(s.handlePremium))
 	mux.HandleFunc("/api/premium/refresh", s.guard(s.handlePremiumRefresh))
 	mux.HandleFunc("/api/premium/checkout", s.guard(s.handlePremiumCheckout))
@@ -686,6 +687,8 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			NotifySave    *bool  `json:"notifySave"`
 			NotifySend    *bool  `json:"notifySend"`
 			NotifyError   *bool  `json:"notifyError"`
+			NtfyTopic     *string `json:"ntfyTopic"`
+			NtfyServer    *string `json:"ntfyServer"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -727,6 +730,12 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if req.NotifyError != nil {
 			s.cfg.NotifyError = *req.NotifyError
 		}
+		if req.NtfyTopic != nil {
+			s.cfg.NtfyTopic = strings.TrimSpace(*req.NtfyTopic)
+		}
+		if req.NtfyServer != nil {
+			s.cfg.NtfyServer = strings.TrimRight(strings.TrimSpace(*req.NtfyServer), "/")
+		}
 		c := *s.cfg
 		s.cfgMu.Unlock()
 		if err := s.cfg.save(); err != nil {
@@ -765,6 +774,8 @@ func (s *server) configResponse(c config) map[string]any {
 	if s.relay != nil {
 		resp["relayUrl"] = s.relay.baseURL
 	}
+	resp["ntfyTopic"] = c.NtfyTopic
+	resp["ntfyServer"] = ntfyServer(&c)
 	return resp
 }
 
@@ -1151,6 +1162,23 @@ func (s *server) handleTailscaleDownload(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := openPath("https://tailscale.com/download"); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// handleNtfyTest sends a test notification so the user can confirm their
+// phone is subscribed before relying on it.
+func (s *server) handleNtfyTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.cfgMu.Lock()
+	c := *s.cfg
+	s.cfgMu.Unlock()
+	if err := sendNtfy(r.Context(), &c, "Taildrop test", "Phone notifications are working — files sent to this phone will ping here."); err != nil {
 		writeErr(w, err)
 		return
 	}

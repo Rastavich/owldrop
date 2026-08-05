@@ -114,6 +114,10 @@ type config struct {
 	// client). device_key is registered automatically on first run.
 	RelayURL  string `json:"relay_url"`
 	DeviceKey string `json:"device_key"`
+	// ntfy phone notifications: after a send to a phone, POST to this ntfy
+	// topic so the phone gets a real push notification. Empty = off.
+	NtfyTopic  string `json:"ntfy_topic"`
+	NtfyServer string `json:"ntfy_server"` // empty = https://ntfy.sh
 }
 
 func configPath() string {
@@ -139,11 +143,13 @@ func loadConfig() *config {
 		StripePriceID   string `json:"stripe_price_id"`
 		RelayURL        string `json:"relay_url"`
 		DeviceKey       string `json:"device_key"`
+		NtfyTopic       string `json:"ntfy_topic"`
+		NtfyServer      string `json:"ntfy_server"`
 	}
 	if b, err := os.ReadFile(configPath()); err == nil {
 		json.Unmarshal(b, &f)
 	}
-	c := &config{SaveDir: f.SaveDir, StripeSecretKey: f.StripeSecretKey, StripePriceID: f.StripePriceID, RelayURL: f.RelayURL, DeviceKey: f.DeviceKey, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
+	c := &config{SaveDir: f.SaveDir, StripeSecretKey: f.StripeSecretKey, StripePriceID: f.StripePriceID, RelayURL: f.RelayURL, DeviceKey: f.DeviceKey, NtfyTopic: f.NtfyTopic, NtfyServer: f.NtfyServer, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
 	if f.AutoSave != nil {
 		c.AutoSave = *f.AutoSave
 	}

@@ -57,6 +57,9 @@ func (s *server) sendOne(ctx context.Context, id string, peer tailcfg.StableNode
 			}
 			peerName, peerOS := peerDisplayInfo(peer)
 			s.history.recordSend(peerName, peerOS, name, size, err)
+			if err == nil {
+				s.ntfySendDone(peerName, peerOS, name, size)
+			}
 			return err
 		case <-ticker.C:
 			if n := cr.n.Load(); n != last {

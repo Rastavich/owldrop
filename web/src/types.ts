@@ -12,6 +12,8 @@ export interface AppConfig {
   lan: boolean;
   lanUrl?: string;
   relayUrl?: string; // set = relay mode: public drops via the seller's relay
+  ntfyTopic?: string; // set = push a phone notification via ntfy after sends
+  ntfyServer?: string; // empty = https://ntfy.sh
   notifyArrival: boolean;
   notifySave: boolean;
   notifySend: boolean;
