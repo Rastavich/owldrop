@@ -45,6 +45,7 @@ export interface HistoryEvent {
   size: number;
   path?: string;
   peer?: string;
+  peerOS?: string;
   source?: string;
 }
 

@@ -1,6 +1,17 @@
 // Pure helpers ported from the original single-file UI.
 import { toast } from './store';
 
+// Where a delivered file actually lands, by target OS. Mobile Tailscale apps
+// auto-save received files (system notification + app storage); desktop
+// Taildrop holds them in the inbox until the user saves — that's the "where
+// did my file go" answer people need after sending to a phone.
+export function receiveHint(os: string | undefined): string | null {
+  if (os === 'android') return 'on the phone: Tailscale app or the system notification — it lands in your Files';
+  if (os === 'ios') return 'on the iPhone: Tailscale app — it lands in Files';
+  if (!os) return null;
+  return 'it waits in their Taildrop inbox until they save it';
+}
+
 export function fmtSize(n: number): string {
   if (n < 0) return '?';
   if (n < 1024) return n + ' B';

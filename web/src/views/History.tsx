@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { clearHistory as clearHistoryApi, getHistory } from '../api';
 import { openPathWithWarning } from '../components/ConfirmModal';
 import { toast } from '../store';
-import { chipClass, chipLabel, fmtAge, fmtSize } from '../utils';
+import { chipClass, chipLabel, fmtAge, fmtSize, receiveHint } from '../utils';
 import type { HistoryEvent } from '../types';
 
 type HistoryFilter = 'all' | 'received' | 'sent';
@@ -147,15 +147,18 @@ function HistoryRow({ session }: { session: Session }) {
   const failed = session.events.find((e) => e.kind === 'send_failed') ?? null;
   const savedPath = saved?.path;
   const isSend = !!sent || !!failed;
-  const status = failed ? 'failed' : sent ? 'sent' : saved ? 'saved' : deleted ? 'deleted' : 'waiting';
+  const mobile = sent ? sent.peerOS === 'android' || sent.peerOS === 'ios' : false;
+  const status = failed ? 'failed' : sent ? (mobile ? 'delivered' : 'sent') : saved ? 'saved' : deleted ? 'deleted' : 'waiting';
   const sub: React.ReactNode[] = [];
   sub.push(
-    <span key="st" className={'status ' + status}>
+    <span key="st" className={'status ' + (mobile ? 'sent' : status)}>
       {status}
     </span>,
   );
   if (isSend) {
     sub.push(' to ' + (failed ? failed.peer : sent ? sent.peer : ''));
+    const hint = sent ? receiveHint(sent.peerOS) : null;
+    if (hint) sub.push(' · ' + hint);
   } else if (session.events.some((e) => e.source === 'link')) {
     sub.push(' via drop link');
   }

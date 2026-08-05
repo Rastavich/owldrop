@@ -7,8 +7,8 @@
 //     request (a patched client cannot bypass this)
 //   - queued delivery of uploads to the owning device via long-polling
 //
-// Deploy: fly.io (fly.toml) or any container host. Set STRIPE_SECRET_KEY,
-// STRIPE_PRICE_ID and BASE_URL via the host's secrets/env.
+// Deploy: Railway (railway.json) or any container host. Set STRIPE_SECRET_KEY,
+// STRIPE_PRICE_ID and BASE_URL via the host's variables/secrets.
 package main
 
 import (

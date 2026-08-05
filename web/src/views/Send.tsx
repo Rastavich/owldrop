@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getDevices } from '../api';
 import { sendFileToDevices } from '../transfers';
 import { toast, transfersStore, useStore } from '../store';
-import { chipClass, chipLabel, fmtSize, pct, stamp } from '../utils';
+import { chipClass, chipLabel, fmtSize, pct, receiveHint, stamp } from '../utils';
 import type { Device } from '../types';
 
 export default function Send() {
@@ -224,9 +224,14 @@ export default function Send() {
                     </div>
                   ) : (
                     st.done && (
-                      <div className="sub" style={{ color: 'var(--green)' }}>
-                        sent to {dev}
-                      </div>
+                      <>
+                        <div className="sub" style={{ color: 'var(--green)' }}>
+                          ✓ {byId.get(st.peer)?.os === 'android' || byId.get(st.peer)?.os === 'ios' ? 'Delivered' : 'Sent'} to {dev}
+                        </div>
+                        {receiveHint(byId.get(st.peer)?.os) && (
+                          <div className="sub2">{receiveHint(byId.get(st.peer)?.os)}</div>
+                        )}
+                      </>
                     )
                   )}
                 </div>

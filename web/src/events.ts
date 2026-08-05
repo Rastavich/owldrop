@@ -5,8 +5,8 @@
 import { IS_SHELL } from './api';
 import { queryClient } from './queryClient';
 import { toast, transfersStore, updateSaving, updateSending } from './store';
-import { fmtSize } from './utils';
-import type { SseEvent } from './types';
+import { fmtSize, receiveHint } from './utils';
+import type { Device, SseEvent } from './types';
 
 let knownNames = new Set<string>();
 
@@ -60,6 +60,15 @@ export function handleSseEvent(ev: SseEvent) {
         done: ev.done ?? cur.done,
         err: ev.err,
       });
+      // Completion toast: confirm the file landed, and for phones say where
+      // (people otherwise go hunting through folders).
+      if (ev.done && !ev.err && !cur.done) {
+        const devName = cur.peerName || 'device';
+        const os = queryClient.getQueryData<Device[]>(['devices'])?.find((d) => d.id === ev.peer)?.os;
+        const hint = receiveHint(os);
+        const mobile = os === 'android' || os === 'ios';
+        toast(`${mobile ? 'Delivered' : 'Sent'} to ${devName}` + (hint ? ` — ${hint}` : ''));
+      }
       if (location.hash.startsWith('#/history')) {
         queryClient.invalidateQueries({ queryKey: ['history'] });
       }

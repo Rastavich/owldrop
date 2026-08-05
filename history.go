@@ -22,7 +22,8 @@ type historyEvent struct {
 	Size   int64     `json:"size"`
 	Path   string    `json:"path,omitempty"`
 	Peer   string    `json:"peer,omitempty"`
-	Source string    `json:"source,omitempty"` // "" = taildrop, "link" = drop link
+	PeerOS string    `json:"peerOS,omitempty"`     // target device OS ("android", "ios", …)
+	Source string    `json:"source,omitempty"`     // "" = taildrop, "link" = drop link
 }
 
 // history is a small append-only log of everything that happened to files.
@@ -163,14 +164,14 @@ func (h *history) recordDeleted(name string) {
 	h.persist()
 }
 
-func (h *history) recordSend(peer, name string, size int64, err error) {
+func (h *history) recordSend(peer, peerOS, name string, size int64, err error) {
 	kind := "sent"
 	if err != nil {
 		kind = "send_failed"
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.events = append(h.events, historyEvent{ID: newID(), Ts: time.Now(), Kind: kind, Name: name, Size: size, Peer: peer})
+	h.events = append(h.events, historyEvent{ID: newID(), Ts: time.Now(), Kind: kind, Name: name, Size: size, Peer: peer, PeerOS: peerOS})
 	h.prune()
 	h.persist()
 }

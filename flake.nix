@@ -56,7 +56,7 @@
         # Distributed builds default to the seller's relay (the app is
         # key-less; premium is enforced server-side) and carry the release
         # version for the self-updater.
-        ldflags = [ "-s" "-w" "-X main.defaultRelayURL=https://taildrop-relay.fly.dev" "-X main.appVersion=${appVersion}" ];
+        ldflags = [ "-s" "-w" "-X main.defaultRelayURL=https://taildrop-relay.up.railway.app" "-X main.appVersion=${appVersion}" ];
       };
     in
     {

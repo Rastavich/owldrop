@@ -214,6 +214,35 @@ Self-host setup (needs a [Stripe account](https://dashboard.stripe.com/)):
 4. Use the billing portal (or Stripe) to cancel; the next poll cycle then
    pauses public links again.
 
+## Relay deployment (Railway)
+
+The relay (`relay/`) deploys on Railway as a single Dockerfile service:
+
+1. Create a Railway project, add a new service from this repo's GitHub
+   integration, and set the service **root directory** to `relay/` (or
+   deploy locally with `railway up` from `relay/`). Railway picks up the
+   Dockerfile automatically (`relay/railway.json` sets the build, the
+   `/healthz` healthcheck, and one replica).
+2. Attach a **volume** to the service with mount path `/data`. The relay
+   keeps registered devices, API keys, and queued uploads there — without
+   the volume every deploy starts empty. Keep the service at **1 replica**:
+   the store is a local filesystem, so multiple replicas would split queues.
+3. Set variables on the service:
+   - `BASE_URL` — the service's `*.up.railway.app` domain (or a custom
+     domain you've pointed at it)
+   - `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` — the Stripe secret must never
+     live in clients, only here
+   - `PORT` is injected by Railway; `DATA_DIR=/data` comes from the
+     Dockerfile.
+4. Healthchecks hit `/healthz`; the service restarts on failure.
+
+Release builds point at the relay via `-X main.defaultRelayURL=…` in
+`flake.nix` and `build/*/Taskfile.yml` — currently the placeholder
+`https://taildrop-relay.up.railway.app`. Replace it with the exact domain
+Railway assigns (and update `BASE_URL` to match) before shipping the next
+release. Installed apps override this with `relay_url` in their config or
+the `TAILDROP_RELAY_URL` env var.
+
 ## License
 
 MIT — do whatever you like with it.
