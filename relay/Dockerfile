@@ -10,6 +10,5 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=build /out/relay /usr/local/bin/relay
 ENV PORT=8080 DATA_DIR=/data
-VOLUME /data
 EXPOSE 8080
 ENTRYPOINT ["relay"]
