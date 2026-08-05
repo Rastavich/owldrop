@@ -168,6 +168,15 @@ func tsDeleteFile(ctx context.Context, name string) error {
 	return tsClient.DeleteWaitingFile(ctx, name)
 }
 
+// isInfraPeer reports whether name belongs to Tailscale infrastructure
+// rather than a user device — e.g. the Funnel ingress node, which the
+// control plane injects into the netmap (as "funnel-ingress-node") while
+// Funnel is enabled. Such peers can never receive Taildrop and are hidden
+// from the send picker.
+func isInfraPeer(name string) bool {
+	return strings.Contains(name, "funnel-ingress")
+}
+
 // device is one machine on the tailnet, as shown in the Send tab.
 type device struct {
 	ID       tailcfg.StableNodeID `json:"id"`
@@ -232,6 +241,12 @@ func tsDevices(ctx context.Context) ([]device, error) {
 
 	out := make([]device, 0, len(byID))
 	for _, d := range byID {
+		// The Funnel ingress node (funnel-ingress-node) is ts.net
+		// infrastructure, not a user device: it can never receive files
+		// and would only clutter the send picker.
+		if isInfraPeer(d.Name) {
+			continue
+		}
 		out = append(out, d)
 	}
 	slices.SortFunc(out, func(a, b device) int {

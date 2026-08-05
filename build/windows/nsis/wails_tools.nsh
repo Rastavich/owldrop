@@ -14,7 +14,7 @@
     !define INFO_PRODUCTNAME "Taildrop"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "0.5.4"
+    !define INFO_PRODUCTVERSION "0.5.5"
 !endif
 !ifndef INFO_COPYRIGHT
     !define INFO_COPYRIGHT "(c) 2026, tailscale-drop"

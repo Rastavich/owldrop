@@ -57,3 +57,21 @@ func TestTailscaledHintPlatform(t *testing.T) {
 		}
 	}
 }
+
+func TestIsInfraPeer(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"funnel-ingress-node", true},                      // control-plane injected while Funnel is on
+		{"funnel-ingress-node.tailnet.ts.net", true},       // fully-qualified form
+		{"laptop", false},
+		{"raspberry-pi", false},
+		{"funnel", false}, // a real user device named "funnel" stays
+	}
+	for _, c := range cases {
+		if got := isInfraPeer(c.name); got != c.want {
+			t.Errorf("isInfraPeer(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

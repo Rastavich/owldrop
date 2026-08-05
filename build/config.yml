@@ -10,7 +10,7 @@ info:
   description: "Tailscale Taildrop desktop app"
   copyright: "(c) 2026, tailscale-drop"
   comments: "See files sent to you via Taildrop, save or delete them with one click, and send files back."
-  version: "0.5.4"
+  version: "0.5.5"
 
 # Dev mode configuration
 dev_mode:
