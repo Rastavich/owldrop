@@ -99,7 +99,11 @@ server for LAN use) is available as `wails3 task build:server`
 - **GitHub Releases**: tag a commit `vX.Y.Z` (or `X.Y.Z`) and CI builds and
   publishes deb/rpm (Linux), dmg (macOS) and NSIS installer (Windows)
   automatically, and ships the raw binary to the public install repo.
-  `.github/workflows/release.yml`.
+  `.github/workflows/release.yml`. `scripts/bump-release.sh` does the whole
+  release step for you: bumps the version in `build/config.yml`, the
+  `build/*/Taskfile.yml` ldflags and `web/package.json`, regenerates the
+  platform assets, commits, tags and pushes (run with `-n` to preview;
+  bare `X.Y.Z` tags match the repo's existing ones).
 
 ## Notes & limitations
 
