@@ -56,7 +56,7 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .popover-list{display:flex;flex-direction:column;gap:2px;max-height:280px;overflow-y:auto}
 .popover-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13px}
 .popover-item:hover{background:var(--panel2)}
-.popover-item input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+.popover-item input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer;flex:none}
 .popover-item .pv-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .popover-item.disabled{opacity:.45;cursor:default}
 .popover-item.disabled:hover{background:transparent}
