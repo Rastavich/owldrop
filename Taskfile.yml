@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  APP_NAME: "tailscale-drop"
+  APP_NAME: "owldrop"
   BIN_DIR: "bin"
   # Target OS for build/package/run. Defaults to the host OS, and is overridden
   # by `wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The

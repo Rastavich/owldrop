@@ -1,5 +1,5 @@
 {
-  description = "tailscale-drop dev shell + NixOS package";
+  description = "owldrop dev shell + NixOS package";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -22,19 +22,19 @@
       # The UI is a Vite project (web/); its build output is embedded into
       # the Go binary via go:embed web/dist.
       frontend = pkgs.buildNpmPackage {
-        pname = "tailscale-drop-web";
+        pname = "owldrop-web";
         version = appVersion;
         src = ./web;
         npmDepsHash = "sha256-dHT8x8rzyRIX8n/WQ+S/fKnnVXLjFXyHSE4ZOQ+CM9I=";
       };
       sidecar = pkgs.buildGoModule {
-        pname = "tailscale-drop";
+        pname = "owldrop";
         version = appVersion;
-        src = pkgs.runCommand "tailscale-drop-src" { } ''
+        src = pkgs.runCommand "owldrop-src" { } ''
           cp -r ${self} $out
           chmod -R u+w $out
           rm -rf $out/web/dist
-          cp -r ${frontend}/lib/node_modules/tailscale-drop-web/dist $out/web/dist
+          cp -r ${frontend}/lib/node_modules/owldrop-web/dist $out/web/dist
         '';
         # `go mod vendor` chokes on a wails embed pattern (WebView2Loader.dll
         # files aren't in the module zip; they're opt-in via build tags).
@@ -42,9 +42,6 @@
         # embed resolution at fetch time.
         proxyVendor = true;
         vendorHash = "sha256-yEry1C6gzYo9weLBEucMEw5cf1h+HVPgNgj7I0c4BuQ=";
-        # relay/ is a separate Go module (own go.mod) nested in the repo;
-        # newer nixpkgs auto-discovers package-main dirs, so pin the build to
-        # the app module root.
         subPackages = [ "." ];
         # drops_test.go talks to a live tailscaled daemon; not available in
         # the build sandbox (they run fine on a machine with tailscaled).
@@ -53,10 +50,8 @@
         buildInputs = guiLibs;
         env.CGO_ENABLED = "1";
         buildTags = [ "production" ];
-        # Distributed builds default to the seller's relay (the app is
-        # key-less; premium is enforced server-side) and carry the release
-        # version for the self-updater.
-        ldflags = [ "-s" "-w" "-X main.defaultRelayURL=https://relay-production-62a6.up.railway.app" "-X main.appVersion=${appVersion}" ];
+        # Carry the release version for the self-updater.
+        ldflags = [ "-s" "-w" "-X main.appVersion=${appVersion}" ];
       };
     in
     {
@@ -69,22 +64,22 @@
       # and their transitive deps) plus GIO TLS modules and GTK settings
       # schemas at runtime — the NixOS equivalent of the old electron wrapper.
       pkgs.buildFHSEnv {
-        name = "tailscale-drop";
+        name = "owldrop";
         # noto-fonts is deliberate: WebKitGTK/Pango lays DejaVu Sans text at the
         # top of the line box, so the UI's font stack leads with Noto Sans and
         # the env must always provide it (not depend on host fonts).
         targetPkgs = ps: with ps; [ gtk4 webkitgtk_6_0 glib-networking gsettings-desktop-schemas dconf fontconfig dejavu_fonts noto-fonts ];
         # The FHS env is a bwrap sandbox: point fontconfig at the store config
         # so the webview picks up the bundled fonts instead of tofu-boxing.
-        runScript = pkgs.writeShellScript "tailscale-drop-run" ''
+        runScript = pkgs.writeShellScript "owldrop-run" ''
           export FONTCONFIG_FILE="${pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; }}"
-          exec ${sidecar}/bin/tailscale-drop "$@"
+          exec ${sidecar}/bin/owldrop "$@"
         '';
       };
 
       # The raw nix-built binary (RPATHs point into the nix store, so it runs
       # in the FHS wrapper above). CI publishes this to the public
-      # taildrop-install repo — a container-built binary would need the
+      # owldrop-install repo — a container-built binary would need the
       # Debian X11 stack the wrapper doesn't provide.
       packages.x86_64-linux.sidecar = sidecar;
     };

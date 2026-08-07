@@ -63,8 +63,8 @@ func TestIsInfraPeer(t *testing.T) {
 		name string
 		want bool
 	}{
-		{"funnel-ingress-node", true},                      // control-plane injected while Funnel is on
-		{"funnel-ingress-node.tailnet.ts.net", true},       // fully-qualified form
+		{"funnel-ingress-node", true},                // control-plane injected while Funnel is on
+		{"funnel-ingress-node.tailnet.ts.net", true}, // fully-qualified form
 		{"laptop", false},
 		{"raspberry-pi", false},
 		{"funnel", false}, // a real user device named "funnel" stays

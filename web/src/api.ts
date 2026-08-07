@@ -10,7 +10,6 @@ import type {
   HistoryEvent,
   HistoryStats,
   PageConfig,
-  PremiumState,
   TailscaleState,
   UpdateState,
   WaitingFile,
@@ -28,7 +27,7 @@ interface ApiOpts {
 }
 
 export async function api<T>(path: string, opts: ApiOpts = {}): Promise<T> {
-  const headers: Record<string, string> = { 'X-Taildrop-Token': CONFIG.token };
+  const headers: Record<string, string> = { 'X-Owldrop-Token': CONFIG.token };
   if (opts.json !== undefined) headers['Content-Type'] = 'application/json';
   const res = await fetch(path, {
     method: opts.method || 'GET',
@@ -74,10 +73,6 @@ export const getTailscaleState = () => api<TailscaleState>('/api/tailscale');
 export const downloadTailscale = () => api('/api/tailscale/download', { method: 'POST' });
 export const testNtfy = () => api('/api/ntfy/test', { method: 'POST' });
 export const tailscaleUp = () => api('/api/tailscale/up', { method: 'POST', json: {} });
-export const getPremium = () => api<PremiumState>('/api/premium');
 export const getUpdateState = () => api<UpdateState>('/api/update');
 export const checkUpdate = () => api<UpdateState>('/api/update/check', { method: 'POST', json: {} });
 export const installUpdate = () => api('/api/update/install', { method: 'POST', json: {} });
-export const refreshPremium = () => api<PremiumState>('/api/premium/refresh', { method: 'POST', json: {} });
-export const startCheckout = () => api('/api/premium/checkout', { method: 'POST', json: {} });
-export const openPortal = () => api('/api/premium/portal', { method: 'POST', json: {} });

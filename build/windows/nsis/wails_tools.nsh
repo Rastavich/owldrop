@@ -5,19 +5,19 @@
 !include "FileFunc.nsh"
 
 !ifndef INFO_PROJECTNAME
-    !define INFO_PROJECTNAME "tailscale-drop"
+    !define INFO_PROJECTNAME "owldrop"
 !endif
 !ifndef INFO_COMPANYNAME
-    !define INFO_COMPANYNAME "Tailscale Drop"
+    !define INFO_COMPANYNAME "Owldrop"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "Taildrop"
+    !define INFO_PRODUCTNAME "Owldrop"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "0.5.7"
 !endif
 !ifndef INFO_COPYRIGHT
-    !define INFO_COPYRIGHT "(c) 2026, tailscale-drop"
+    !define INFO_COPYRIGHT "(c) 2026, Owldrop"
 !endif
 !ifndef PRODUCT_EXECUTABLE
     !define PRODUCT_EXECUTABLE "${INFO_PROJECTNAME}.exe"

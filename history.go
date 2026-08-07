@@ -22,8 +22,8 @@ type historyEvent struct {
 	Size   int64     `json:"size"`
 	Path   string    `json:"path,omitempty"`
 	Peer   string    `json:"peer,omitempty"`
-	PeerOS string    `json:"peerOS,omitempty"`     // target device OS ("android", "ios", …)
-	Source string    `json:"source,omitempty"`     // "" = taildrop, "link" = drop link
+	PeerOS string    `json:"peerOS,omitempty"` // target device OS ("android", "ios", …)
+	Source string    `json:"source,omitempty"` // "" = taildrop, "link" = drop link
 }
 
 // history is a small append-only log of everything that happened to files.

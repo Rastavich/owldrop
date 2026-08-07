@@ -1,9 +1,9 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
-	"archive/zip"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -74,7 +74,7 @@ func TestDropUploadAndSave(t *testing.T) {
 	body := strings.NewReader(`{"name":"notes.txt","source":"link","dir":""}`)
 	req, _ := http.NewRequest("POST", base+"/api/save", body)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Taildrop-Token", s.token)
+	req.Header.Set("X-Owldrop-Token", s.token)
 	r2, _ := http.DefaultClient.Do(req)
 	if r2.StatusCode != 200 {
 		t.Fatalf("save status = %d", r2.StatusCode)
@@ -151,7 +151,7 @@ func TestDropLinkListAndRevokeAPI(t *testing.T) {
 	token := createTestDropLink(t, s, "Carol", time.Hour, 0)
 
 	req, _ := http.NewRequest("GET", base+"/api/droplinks", nil)
-	req.Header.Set("X-Taildrop-Token", s.token)
+	req.Header.Set("X-Owldrop-Token", s.token)
 	res, _ := http.DefaultClient.Do(req)
 	var got struct {
 		Links []struct {
@@ -169,7 +169,7 @@ func TestDropLinkListAndRevokeAPI(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", base+"/api/droplinks/"+token+"/revoke", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Taildrop-Token", s.token)
+	req.Header.Set("X-Owldrop-Token", s.token)
 	r2, _ := http.DefaultClient.Do(req)
 	if r2.StatusCode != 200 {
 		t.Fatalf("revoke = %d", r2.StatusCode)
@@ -240,8 +240,8 @@ func TestDropFolderZip(t *testing.T) {
 	token := createTestDropLink(t, s, "Folder Person", time.Hour, 0)
 
 	res := uploadFilesToDrop(t, base, token, map[string]string{
-		"Photos/one.jpg":  "jpeg1",
-		"Photos/two.jpg":  "jpeg2",
+		"Photos/one.jpg":   "jpeg1",
+		"Photos/two.jpg":   "jpeg2",
 		"Photos/sub/x.png": "png",
 	})
 	if res.StatusCode != 200 {

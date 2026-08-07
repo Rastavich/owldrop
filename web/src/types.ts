@@ -1,5 +1,5 @@
-// Shared types for the Taildrop API and SSE event stream. Field names match
-// the Go server's JSON (server.go, taildrop.go, history.go, drops.go).
+// Shared types for the Owldrop API and SSE event stream. Field names match
+// the Go server's JSON (server.go, localapi.go, history.go, drops.go).
 
 export interface PageConfig {
   token: string;
@@ -11,7 +11,6 @@ export interface AppConfig {
   autoSave: boolean;
   lan: boolean;
   lanUrl?: string;
-  relayUrl?: string; // set = relay mode: public drops via the seller's relay
   ntfyTopic?: string; // set = push a phone notification via ntfy after sends
   ntfyServer?: string; // empty = https://ntfy.sh
   notifyArrival: boolean;
@@ -83,14 +82,6 @@ export interface TailscaleState {
   installed: boolean; // false = no Tailscale client found on this machine
   backendState: string;
   hint?: string;
-}
-
-export interface PremiumState {
-  configured: boolean;
-  active: boolean;
-  status: 'active' | 'trialing' | 'inactive' | 'unconfigured';
-  priceLabel?: string;
-  periodEnd?: number; // unix seconds
 }
 
 export interface BrowseResult {

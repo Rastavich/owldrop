@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=Taildrop
-Comment=Tailscale Taildrop desktop app
+Name=Owldrop
+Comment=Owldrop — desktop app for Tailscale file sharing
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/tailscale-drop %u
+Exec=/usr/local/bin/owldrop %u
 Terminal=false
 Type=Application
-Icon=tailscale-drop
+Icon=owldrop
 Categories=Utility;
-StartupWMClass=tailscale-drop
+StartupWMClass=owldrop
 
  

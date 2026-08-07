@@ -60,7 +60,7 @@ tasks:
   build:server:
     summary: "Builds a headless server binary (-tags server: no window/tray/notifications)"
     desc: |
-      Produces bin/tailscale-drop-server: the HTTP server + embedded UI only,
+      Produces bin/owldrop-server: the HTTP server + embedded UI only,
       for LAN-only use without a desktop shell.
     deps:
       - task: build:frontend

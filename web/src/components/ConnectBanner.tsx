@@ -37,7 +37,7 @@ export default function ConnectBanner() {
       <div className="connect-banner">
         <span className="dot" />
         <div className="col">
-          <p>Taildrop needs Tailscale to reach your devices — it isn't installed yet.</p>
+          <p>Owldrop needs Tailscale to reach your devices — it isn't installed yet.</p>
           <p className="sub2">Install it, sign in, and this window connects on its own.</p>
         </div>
         <button className="btn" disabled={download.isPending} onClick={() => download.mutate()}>

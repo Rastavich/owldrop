@@ -1,5 +1,5 @@
 {
-  "name": "tailscale-drop-web",
+  "name": "owldrop-web",
   "private": true,
   "version": "0.5.7",
   "type": "module",

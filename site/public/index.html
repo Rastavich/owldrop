@@ -3,135 +3,256 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Taildrop — a native desktop app for Tailscale's Taildrop. See files sent to you, save or delete with one click, send files back, auto-save, and public drop links.">
+
+<!-- Primary SEO -->
+<title>Owldrop — Desktop app for Tailscale file sharing</title>
+<meta name="description" content="Owldrop is a native desktop app for Tailscale's Taildrop. See files the instant they arrive, save or delete with one click, send files back by drag-and-drop, auto-save to a folder, and receive files from anyone with public drop links. Free for Windows, macOS and Linux.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://owldrop.app/">
+<meta name="theme-color" content="#090c13">
 <meta name="color-scheme" content="dark">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Owldrop">
+<meta property="og:url" content="https://owldrop.app/">
+<meta property="og:title" content="Owldrop — Desktop app for Tailscale file sharing">
+<meta property="og:description" content="Files sent over your Tailnet appear the instant they arrive. Save or delete with one click, reply with a drag-and-drop, and let anyone drop files into your inbox with public drop links.">
+<meta property="og:image" content="https://owldrop.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Owldrop — a desktop inbox for Tailscale file sharing">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Owldrop — Desktop app for Tailscale file sharing">
+<meta name="twitter:description" content="Files sent over your Tailnet appear the instant they arrive. Save or delete with one click, reply with a drag-and-drop, and let anyone drop files into your inbox.">
+<meta name="twitter:image" content="https://owldrop.app/og.png">
+<meta name="twitter:image:alt" content="Owldrop — a desktop inbox for Tailscale file sharing">
+
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/appicon.png" type="image/png">
-<title>Taildrop · a desktop app for Tailscale file sharing</title>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="stylesheet" href="/styles.css">
+
+<!-- Structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Owldrop",
+  "url": "https://owldrop.app/",
+  "downloadUrl": "https://owldrop.app/#downloads",
+  "softwareVersion": "0.5.7",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Windows, macOS, Linux",
+  "description": "A native desktop app for Tailscale's Taildrop: an inbox for incoming files with one-click save/delete, drag-and-drop sending, auto-save, full local history, and public drop links.",
+  "license": "https://opensource.org/license/mit",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "sameAs": ["https://github.com/Rastavich/owldrop-install"]
+}
+</script>
 </head>
 <body>
 
+<div class="backdrop" aria-hidden="true"></div>
+
 <header>
-  <div class="brand">
-    <img src="/appicon.png" alt="" class="logo">
+  <a class="brand" href="/" aria-label="Owldrop home">
+    <img src="/appicon.png" alt="" class="logo" width="38" height="38">
     <div>
-      <h1>Taildrop</h1>
+      <h1>Owldrop</h1>
       <p class="tag">a desktop app for Tailscale file sharing</p>
     </div>
-  </div>
+  </a>
   <div class="head-right">
-    <span class="pill" id="version-pill">v0.5.6</span>
+    <nav class="nav" aria-label="Sections">
+      <a href="#features">Features</a>
+      <a href="#support">Support</a>
+      <a href="#downloads">Download</a>
+    </nav>
+    <span class="pill" id="version-pill">v0.5.7</span>
   </div>
 </header>
 
 <main>
 
   <section class="hero">
-    <h2>See files sent to you, save or delete them with one click, and send files back.</h2>
-    <p class="lede">
-      <strong>Taildrop</strong> is a native desktop app for
-      <a href="https://tailscale.com/kb/1082/taildrop">Tailscale's Taildrop</a>: your
-      incoming files appear the instant they arrive, go to a folder automatically if you
-      want, and replying is a single drag-and-drop. No more
-      <code>tailscale file get .</code> on the command line.
-    </p>
-    <div class="cta-row">
-      <a class="btn primary" id="cta" href="#downloads">Download</a>
-      <a class="btn ghost" href="#downloads">All platforms</a>
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="dot"></span> For your Tailnet</p>
+      <h2>Tailscale file sharing,<br><span class="grad">with a real desktop UI.</span></h2>
+      <p class="lede">
+        <strong>Owldrop</strong> is a native desktop app for
+        <a href="https://tailscale.com/kb/1082/taildrop">Tailscale's Taildrop</a>: incoming files
+        appear the instant they arrive, save or delete takes one click, and replying is a single
+        drag-and-drop. No more <code>tailscale file get .</code> on the command line.
+      </p>
+      <div class="cta-row">
+        <a class="btn primary" id="cta" href="#downloads">Download <span class="arr">→</span></a>
+        <a class="btn ghost" href="#features">See what it does</a>
+      </div>
+      <p class="hint">Requires a running <a href="https://tailscale.com/download">Tailscale</a> install — the app talks to your local <code>tailscaled</code>.</p>
     </div>
-    <p class="hint">Requires a running <a href="https://tailscale.com/download">Tailscale</a> install. The app talks to your local <code>tailscaled</code>.</p>
+
+    <!-- Decorative mock of the app's inbox -->
+    <div class="mock" aria-hidden="true">
+      <div class="mock-bar">
+        <span class="tl"></span><span class="tl"></span><span class="tl"></span>
+        <span class="mock-title">Owldrop — Inbox</span>
+        <span class="mock-badge">CONNECTED</span>
+      </div>
+      <div class="mock-body">
+        <div class="mock-row fresh">
+          <div class="mock-ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></div>
+          <div class="mock-meta">
+            <div class="mock-name">holiday-photos.zip</div>
+            <div class="mock-sub"><span class="now">just arrived</span> · 184 MB · from pixelbook</div>
+          </div>
+          <div class="mock-act"><span class="mock-btn go">Save</span><span class="mock-btn">Delete</span></div>
+        </div>
+        <div class="mock-row">
+          <div class="mock-ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+          <div class="mock-meta">
+            <div class="mock-name">invoice-march.pdf</div>
+            <div class="mock-sub">saved to ~/Drops · 2 hours ago · from nas</div>
+          </div>
+          <div class="mock-act"><span class="mock-btn">Open</span></div>
+        </div>
+        <div class="mock-row">
+          <div class="mock-ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+          <div class="mock-meta">
+            <div class="mock-name">build-logs.txt</div>
+            <div class="mock-sub">sent to phone · yesterday</div>
+          </div>
+          <div class="mock-act"><span class="mock-btn">Resend</span></div>
+        </div>
+        <div class="mock-drop">Drop files here to <strong>send to a device</strong></div>
+      </div>
+    </div>
   </section>
 
   <section class="features" id="features">
-    <h3>What you get</h3>
+    <div class="sec-head reveal">
+      <p class="kicker">Features</p>
+      <h3>What you get</h3>
+      <p class="sub">Everything the <code>tailscale file</code> CLI does, plus the things it can't — notifications, history, and links anyone can send to.</p>
+    </div>
     <div class="grid">
-      <article class="card"><div class="icon">◍</div><h4>Instant inbox</h4>
-        <p>Files sent to you appear the moment they arrive, with size, progress and one-click <strong>Save</strong>, <strong>Save to…</strong> or <strong>Delete</strong>.</p></article>
-      <article class="card"><div class="icon">⇪</div><h4>Send in one move</h4>
-        <p>Pick a device, a file, or drag &amp; drop on the window. Send to one device or several at once. Paste an image or text and Ctrl+V to send it.</p></article>
-      <article class="card"><div class="icon">⏷</div><h4>Auto-save</h4>
-        <p>One checkbox and every incoming file lands in your folder the moment it arrives — like <code>tailscale file get --loop</code>, with a notification.</p></article>
-      <article class="card"><div class="icon">◫</div><h4>Full history</h4>
-        <p>Everything is logged locally: arrivals, saves (with the path), deletes and sends. Search, filter, re-open a saved file, export as JSON.</p></article>
-      <article class="card"><div class="icon">⌘</div><h4>Native &amp; quiet</h4>
-        <p>Tray quick-send, OS notifications even when hidden, a Ctrl+Shift+T global shortcut, and close-to-tray instead of surprise quits.</p></article>
-      <article class="card"><div class="icon">↗</div><h4>Drop links</h4>
-        <p>Create a short-lived link anyone can open in a browser — <strong>no Tailscale account needed</strong> — to send a file straight into your inbox.</p></article>
+      <article class="card reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
+        <h4>Instant inbox</h4>
+        <p>Files sent to you appear the moment they arrive, with size, progress and one-click <strong>Save</strong>, <strong>Save to…</strong> or <strong>Delete</strong>.</p>
+      </article>
+      <article class="card reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+        <h4>Send in one move</h4>
+        <p>Pick a device, a file, or drag &amp; drop on the window. Send to one device or several at once. Paste an image or text and Ctrl+V to send it.</p>
+      </article>
+      <article class="card reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+        <h4>Auto-save</h4>
+        <p>One checkbox and every incoming file lands in your folder the moment it arrives — like <code>tailscale file get --loop</code>, with a notification.</p>
+      </article>
+      <article class="card reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <h4>Full history</h4>
+        <p>Everything is logged locally: arrivals, saves (with the path), deletes and sends. Search, filter, re-open a saved file, export as JSON.</p>
+      </article>
+      <article class="card reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></div>
+        <h4>Native &amp; quiet</h4>
+        <p>Tray quick-send, OS notifications even when hidden, a Ctrl+Shift+T global shortcut, and close-to-tray instead of surprise quits.</p>
+      </article>
+      <article class="card reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+        <h4>Drop links</h4>
+        <p>Create a short-lived link anyone can open in a browser — <strong>no Tailscale account needed</strong> — to send a file straight into your inbox.</p>
+      </article>
     </div>
   </section>
 
-  <section class="premium" id="premium">
-    <div class="premium-inner">
-      <div>
-        <span class="pila">Premium</span>
-        <h3>Public drop links — $5/mo</h3>
-        <p>
-          Drop links are private by default. Flip on <strong>Public access (Funnel)</strong> and the app runs
-          <code>tailscale funnel</code> itself, exposing <strong>only</strong> the public
-          <code>https://&lt;you&gt;.ts.net/drop/…</code> pages to <em>anyone on the internet</em> — the app and its
-          session token are never reachable.
-        </p>
+  <section class="support" id="support">
+    <div class="support-frame reveal">
+      <div class="support-inner">
+        <div>
+          <span class="support-pill">Free &amp; open source</span>
+          <h3>Public drops are free</h3>
+          <p>
+            Public access costs nothing and runs on your own machine: flip on
+            <strong>Public access (Funnel)</strong> in the app and it runs
+            <code>tailscale funnel</code> itself, exposing <strong>only</strong> the public
+            <code>https://&lt;you&gt;.ts.net/drop/…</code> pages to <em>anyone on the internet</em> —
+            the app and its session token are never reachable, and files go straight from the
+            sender to you with no third-party server in between.
+          </p>
+        </div>
+        <div class="support-side">
+          <p>MIT licensed, free forever. If Owldrop saves you time, a coffee keeps the owl fed.</p>
+          <a class="btn primary" href="https://ko-fi.com/owldrop" target="_blank" rel="noopener">Buy me a coffee</a>
+        </div>
       </div>
-      <ul>
-        <li>Anyone can drop a file into your inbox — no Tailscale account, no setup</li>
-        <li>Uploads stay quarantined through the same save / risky-open handling as everything else</li>
-        <li>Subscribed and managed in <strong>Settings → Premium</strong> (Stripe, cancel any time)</li>
-        <li>Enforced server-side on distributed builds — a patched client can't get free public drops</li>
-      </ul>
     </div>
   </section>
 
   <section class="downloads" id="downloads">
-    <h3>Download &amp; install</h3>
-    <p class="sub">Pick your platform. Releases are signed against SHA-256 digests in the update manifest.</p>
+    <div class="sec-head reveal">
+      <p class="kicker">Download</p>
+      <h3>Download &amp; install</h3>
+      <p class="sub">Pick your platform. Releases are signed against SHA-256 digests in the update manifest.</p>
+    </div>
 
     <div class="dl-grid">
 
-      <article class="dl-card" data-os="linux">
+      <article class="dl-card reveal" data-os="linux">
+        <span class="dl-badge">Your platform</span>
         <div class="dl-head">
           <span class="dl-os">Linux</span>
           <span class="dl-tag">NixOS · x86_64</span>
         </div>
-        <p class="dl-desc">Install with one command — the binary is wrapped against WebKitGTK 6.0 so it just runs, and updates with <code>nix profile upgrade taildrop-install</code>.</p>
-        <div class="cmd" data-copy="nix profile install github:Rastavich/taildrop-install"><code>nix profile install github:Rastavich/taildrop-install</code><button class="copy" aria-label="Copy command">copy</button></div>
+        <p class="dl-desc">Install with one command — the binary is wrapped against WebKitGTK 6.0 so it just runs, and updates with <code>nix profile upgrade owldrop-install</code>.</p>
+        <div class="cmd" data-copy="nix profile install github:Rastavich/owldrop-install"><code>nix profile install github:Rastavich/owldrop-install</code><button class="copy" aria-label="Copy install command">copy</button></div>
       </article>
 
-      <article class="dl-card" data-os="linux">
+      <article class="dl-card reveal" data-os="linux">
+        <span class="dl-badge">Your platform</span>
         <div class="dl-head">
           <span class="dl-os">Linux</span>
           <span class="dl-tag">Debian / Ubuntu / Fedora / RHEL</span>
         </div>
         <p class="dl-desc"><code>.deb</code> for Debian/Ubuntu and <code>.rpm</code> for Fedora/RHEL (require a WebKitGTK 6.0 system).</p>
         <div class="dl-actions">
-          <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-linux-amd64.deb" download>Download .deb</a>
-          <a class="btn ghost" href="https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-linux-x86_64.rpm" download>Download .rpm</a>
+          <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-linux-amd64.deb" download>Download .deb</a>
+          <a class="btn ghost" href="https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-linux-x86_64.rpm" download>Download .rpm</a>
         </div>
       </article>
 
-      <article class="dl-card" data-os="mac">
+      <article class="dl-card reveal" data-os="mac">
+        <span class="dl-badge">Your platform</span>
         <div class="dl-head">
           <span class="dl-os">macOS</span>
           <span class="dl-tag">.zip · amd64</span>
         </div>
         <p class="dl-desc">Download the app bundle, unzip, and drag it to <code>/Applications</code>. Runs on Apple Silicon via Rosetta 2.</p>
-        <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-darwin-amd64.zip" download>Download for macOS</a>
+        <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-darwin-amd64.zip" download>Download for macOS</a>
         <p class="hint">Ad-hoc signed — macOS may show a Gatekeeper warning; right-click → Open once.</p>
       </article>
 
-      <article class="dl-card" data-os="windows">
+      <article class="dl-card reveal" data-os="windows">
+        <span class="dl-badge">Your platform</span>
         <div class="dl-head">
           <span class="dl-os">Windows</span>
           <span class="dl-tag">.exe · amd64</span>
         </div>
         <p class="dl-desc">A single portable executable — download, run, done. It self-updates from the project's update channel, so you don't need to come back for new versions.</p>
-        <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-windows-amd64.exe" download>Download for Windows</a>
+        <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-windows-amd64.exe" download>Download for Windows</a>
       </article>
 
     </div>
 
-    <p class="footnote">
+    <p class="footnote reveal">
       Everything above is served from the public install repository —
-      <a href="https://github.com/Rastavich/taildrop-install" target="_blank" rel="noopener">github.com/Rastavich/taildrop-install</a> —
+      <a href="https://github.com/Rastavich/owldrop-install" target="_blank" rel="noopener">github.com/Rastavich/owldrop-install</a> —
       which CI republishes on every release. Source is also there if you want to build it yourself.
     </p>
   </section>
@@ -139,11 +260,17 @@
 </main>
 
 <footer>
-  <p>
-    MIT licensed · independent project · not affiliated with or endorsed by
-    <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale Inc.</a>
-    "Taildrop" is a feature of Tailscale.
-  </p>
+  <div class="foot-inner">
+    <p>
+      MIT licensed · independent project · not affiliated with or endorsed by
+      <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale Inc.</a>
+      "Tailscale" and "Taildrop" (the feature this app builds on) are trademarks of Tailscale Inc.
+    </p>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="https://github.com/Rastavich/owldrop-install" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://tailscale.com/download" target="_blank" rel="noopener">Get Tailscale</a>
+    </nav>
+  </div>
 </footer>
 
 <script>
@@ -152,7 +279,7 @@
   var ua = navigator.userAgent;
   var os = /Mac/i.test(ua) ? 'mac' : /Windows/i.test(ua) ? 'windows' : 'linux';
 
-  // Highlight the matching download card.
+  // Highlight the matching download card(s) with a "Your platform" badge.
   var cards = document.querySelectorAll('.dl-card');
   Array.prototype.forEach.call(cards, function (c) {
     if (c.getAttribute('data-os') === os) c.classList.add('active');
@@ -161,13 +288,13 @@
   // Hero CTA: direct download on mac/win, jump to the install command on linux.
   var cta = document.getElementById('cta');
   if (os === 'mac') {
-    cta.textContent = 'Download for macOS';
+    cta.innerHTML = 'Download for macOS <span class="arr">→</span>';
     cta.href = document.querySelector('[data-os="mac"] .btn.primary').getAttribute('href');
   } else if (os === 'windows') {
-    cta.textContent = 'Download for Windows';
+    cta.innerHTML = 'Download for Windows <span class="arr">→</span>';
     cta.href = document.querySelector('[data-os="windows"] .btn.primary').getAttribute('href');
   } else {
-    cta.textContent = 'Get the install command';
+    cta.innerHTML = 'Get the install command <span class="arr">→</span>';
     cta.href = '#downloads';
   }
 
@@ -199,6 +326,20 @@
       }
     });
   });
+
+  // Reveal-on-scroll (no-op when reduced motion is preferred or IO missing).
+  var revealEls = document.querySelectorAll('.reveal');
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced || !('IntersectionObserver' in window)) {
+    Array.prototype.forEach.call(revealEls, function (el) { el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -32px 0px' });
+    Array.prototype.forEach.call(revealEls, function (el) { io.observe(el); });
+  }
 })();
 </script>
 </body>

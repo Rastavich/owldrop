@@ -1,4 +1,4 @@
-// tailscale-drop is a small local server for Tailscale's Taildrop.
+// Owldrop is a small local server for Tailscale's Taildrop.
 //
 // It talks to the local tailscaled daemon through its LocalAPI (the same
 // interface the `tailscale` CLI uses) and serves a UI on localhost: the
@@ -57,23 +57,6 @@ func main() {
 
 	srv := newServer(cfg)
 
-	// Relay mode: register this device on first run so billing and public
-	// drops work without any Stripe keys on the client.
-	if srv.relay != nil && cfg.DeviceKey == "" {
-		regCtx, regCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		key, err := srv.relay.register(regCtx)
-		regCancel()
-		if err != nil {
-			log.Printf("relay registration: %v", err)
-		} else {
-			cfg.DeviceKey = key
-			srv.relay.setKey(key)
-			if err := cfg.save(); err != nil {
-				log.Printf("saving config: %v", err)
-			}
-		}
-	}
-
 	httpSrv := &http.Server{
 		Handler:           srv.routes(),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -104,16 +87,6 @@ type config struct {
 	NotifySave    bool   `json:"notify_save"`
 	NotifySend    bool   `json:"notify_send"`
 	NotifyError   bool   `json:"notify_error"`
-	// Stripe keys for the Premium (public drop links) subscription feature.
-	// Env vars TAILDROP_STRIPE_SECRET_KEY / TAILDROP_STRIPE_PRICE_ID override
-	// these at startup (handy for the systemd service via EnvironmentFile).
-	StripeSecretKey string `json:"stripe_secret_key"`
-	StripePriceID   string `json:"stripe_price_id"`
-	// Relay mode: set relay_url to route public drops and billing through
-	// the seller's relay (server-enforced Premium, no Stripe keys in the
-	// client). device_key is registered automatically on first run.
-	RelayURL  string `json:"relay_url"`
-	DeviceKey string `json:"device_key"`
 	// ntfy phone notifications: after a send to a phone, POST to this ntfy
 	// topic so the phone gets a real push notification. Empty = off.
 	NtfyTopic  string `json:"ntfy_topic"`
@@ -125,31 +98,47 @@ func configPath() string {
 	if err != nil {
 		dir = "."
 	}
-	return filepath.Join(dir, "tailscale-drop", "config.json")
+	return filepath.Join(dir, "owldrop", "config.json")
+}
+
+// migrateConfigDir renames the pre-rebrand config dir to the new one,
+// carrying config.json and history.jsonl across. Best-effort.
+func migrateConfigDir() {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return
+	}
+	oldDir, newDir := filepath.Join(dir, "tailscale-drop"), filepath.Join(dir, "owldrop")
+	if _, err := os.Stat(newDir); err == nil {
+		return // already migrated (or a fresh install)
+	}
+	if _, err := os.Stat(oldDir); err != nil {
+		return
+	}
+	if err := os.Rename(oldDir, newDir); err == nil {
+		log.Printf("migrated config dir %s → %s", oldDir, newDir)
+	}
 }
 
 func loadConfig() *config {
+	migrateConfigDir()
 	// Notify prefs default ON; pointers distinguish "unset" from "false" so
 	// configs written before they existed keep the defaults.
 	var f struct {
-		SaveDir         string `json:"save_dir"`
-		AutoSave        *bool  `json:"auto_save"`
-		LAN             *bool  `json:"lan"`
-		NotifyArrival   *bool  `json:"notify_arrival"`
-		NotifySave      *bool  `json:"notify_save"`
-		NotifySend      *bool  `json:"notify_send"`
-		NotifyError     *bool  `json:"notify_error"`
-		StripeSecretKey string `json:"stripe_secret_key"`
-		StripePriceID   string `json:"stripe_price_id"`
-		RelayURL        string `json:"relay_url"`
-		DeviceKey       string `json:"device_key"`
-		NtfyTopic       string `json:"ntfy_topic"`
-		NtfyServer      string `json:"ntfy_server"`
+		SaveDir       string `json:"save_dir"`
+		AutoSave      *bool  `json:"auto_save"`
+		LAN           *bool  `json:"lan"`
+		NotifyArrival *bool  `json:"notify_arrival"`
+		NotifySave    *bool  `json:"notify_save"`
+		NotifySend    *bool  `json:"notify_send"`
+		NotifyError   *bool  `json:"notify_error"`
+		NtfyTopic     string `json:"ntfy_topic"`
+		NtfyServer    string `json:"ntfy_server"`
 	}
 	if b, err := os.ReadFile(configPath()); err == nil {
 		json.Unmarshal(b, &f)
 	}
-	c := &config{SaveDir: f.SaveDir, StripeSecretKey: f.StripeSecretKey, StripePriceID: f.StripePriceID, RelayURL: f.RelayURL, DeviceKey: f.DeviceKey, NtfyTopic: f.NtfyTopic, NtfyServer: f.NtfyServer, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
+	c := &config{SaveDir: f.SaveDir, NtfyTopic: f.NtfyTopic, NtfyServer: f.NtfyServer, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
 	if f.AutoSave != nil {
 		c.AutoSave = *f.AutoSave
 	}
@@ -170,15 +159,6 @@ func loadConfig() *config {
 	}
 	if c.SaveDir == "" {
 		c.SaveDir = defaultDownloadsDir()
-	}
-	if v := os.Getenv(premiumSecretEnvKey); v != "" {
-		c.StripeSecretKey = v
-	}
-	if v := os.Getenv(premiumPriceEnvKey); v != "" {
-		c.StripePriceID = v
-	}
-	if v := os.Getenv("TAILDROP_RELAY_URL"); v != "" {
-		c.RelayURL = v
 	}
 	return c
 }

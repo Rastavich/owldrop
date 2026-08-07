@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react';
 function devConfig(): Plugin {
   let cfg = JSON.stringify({ token: '', saveDir: '' });
   return {
-    name: 'taildrop-dev-config',
+    name: 'owldrop-dev-config',
     apply: 'serve',
     configureServer(server) {
       server.httpServer?.once('listening', async () => {
@@ -22,7 +22,7 @@ function devConfig(): Plugin {
       });
     },
     transformIndexHtml(html) {
-      return html.replace('__TAILDROP_CONFIG__', cfg);
+      return html.replace('__OWLDROP_CONFIG__', cfg);
     },
   };
 }

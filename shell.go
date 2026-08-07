@@ -1,4 +1,4 @@
-// tailscale-drop desktop shell.
+// Owldrop desktop shell.
 //
 // A Wails v3 app wrapping the sidecar HTTP server (main.go): it opens a
 // native window pointing at the local UI, adds a system tray with quick-send,
@@ -42,7 +42,6 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	defer serverCancel()
 
 	go srv.watchInbox(serverCtx)
-	go srv.relayLoop(serverCtx)
 
 	ns := notifications.New()
 
@@ -52,13 +51,13 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	// AppImage, ...), wails notifies that instance — which shows and focuses
 	// its window — and exits this process before we ever touch the port.
 	app := application.New(application.Options{
-		Name:        "Taildrop",
-		Description: "Tailscale Taildrop desktop app",
+		Name:        "Owldrop",
+		Description: "Owldrop — desktop app for Tailscale file sharing",
 		Services: []application.Service{
 			application.NewService(ns),
 		},
 		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID: "dev.taildrop",
+			UniqueID: "app.owldrop",
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
 				if win != nil {
 					win.Show()
@@ -73,17 +72,17 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	})
 
 	// Now bind. With the single-instance lock held, a busy port means some
-	// other program owns it, not a second tailscale-drop.
+	// other program owns it, not a second owldrop.
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		if errors.Is(err, syscall.EADDRINUSE) {
-			return fmt.Errorf("port %s is already in use by another program (not a tailscale-drop instance) — stop it or pass --port", addr)
+			return fmt.Errorf("port %s is already in use by another program (not an owldrop instance) — stop it or pass --port", addr)
 		}
 		return fmt.Errorf("can't listen on %s: %w", addr, err)
 	}
 	portNum := ln.Addr().(*net.TCPAddr).Port
 	srv.setListenerPort(portNum)
-	fmt.Printf("tailscale-drop UI: http://127.0.0.1:%d/\n", portNum)
+	fmt.Printf("owldrop UI: http://127.0.0.1:%d/\n", portNum)
 	fmt.Printf("inbox saved to: %s\n", srv.saveDir())
 	if srv.lan {
 		for _, u := range srv.lanURLs() {
@@ -106,7 +105,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	srv.initUpdater(app)
 
 	win = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "Taildrop",
+		Title:            "Owldrop",
 		Width:            980,
 		Height:           720,
 		MinWidth:         720,
@@ -114,8 +113,8 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 		BackgroundColour: application.NewRGB(11, 14, 20),
 		// ?shell=1 tells the UI we are the desktop shell: native notifications
 		// come from Go, so the page skips its browser-notification path.
-		URL:              fmt.Sprintf("http://127.0.0.1:%d/?shell=1", srv.port),
-		EnableFileDrop:   true,
+		URL:            fmt.Sprintf("http://127.0.0.1:%d/?shell=1", srv.port),
+		EnableFileDrop: true,
 	})
 
 	// Close-to-tray: the window hides; quit comes from the tray menu.
@@ -125,7 +124,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	})
 
 	tray := app.SystemTray.New()
-	tray.SetTooltip("Taildrop")
+	tray.SetTooltip("Owldrop")
 	if runtime.GOOS == "darwin" {
 		tray.SetTemplateIcon(trayIcon)
 	} else {
@@ -186,7 +185,7 @@ type shell struct {
 // (called at startup and on a 15s refresh).
 func (sh *shell) rebuildTrayMenu() {
 	menu := sh.app.NewMenu()
-	menu.Add("Show Taildrop").OnClick(func(*application.Context) {
+	menu.Add("Show Owldrop").OnClick(func(*application.Context) {
 		sh.win.Show()
 		sh.win.Focus()
 	})
@@ -241,29 +240,29 @@ func (sh *shell) quickSend(dev device) {
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		sh.notify("Taildrop", "send failed: "+err.Error())
+		sh.notify("Owldrop", "send failed: "+err.Error())
 		return
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil {
-		sh.notify("Taildrop", "send failed: "+err.Error())
+		sh.notify("Owldrop", "send failed: "+err.Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	name := filepath.Base(path)
 	if err := sh.srv.sendOne(ctx, fmt.Sprintf("tray-%d", time.Now().UnixNano()), dev.ID, name, st.Size(), f, nil); err != nil {
-		sh.notify("Taildrop: send failed", fmt.Sprintf("%s → %s: %v", name, dev.Name, err))
+		sh.notify("Owldrop: send failed", fmt.Sprintf("%s → %s: %v", name, dev.Name, err))
 		return
 	}
-	sh.notify("Taildrop: sent", fmt.Sprintf("%s → %s", name, dev.Name))
+	sh.notify("Owldrop: sent", fmt.Sprintf("%s → %s", name, dev.Name))
 }
 
 // notify raises a native OS notification (silent, like the Electron shell).
 func (sh *shell) notify(title, body string) {
 	if err := sh.notif.SendNotification(notifications.NotificationOptions{
-		ID:    fmt.Sprintf("taildrop-%d", time.Now().UnixNano()),
+		ID:    fmt.Sprintf("owldrop-%d", time.Now().UnixNano()),
 		Title: title,
 		Body:  body,
 		Sound: &notifications.NotificationSound{Silent: true},
@@ -326,7 +325,7 @@ func (sh *shell) handleHubEvent(b []byte, known map[string]bool) {
 		}
 		if arrival {
 			for _, f := range fresh {
-				sh.notify("Taildrop: new file", fmt.Sprintf("%s (%s)", f.Name, fmtSize(f.Size)))
+				sh.notify("Owldrop: new file", fmt.Sprintf("%s (%s)", f.Name, fmtSize(f.Size)))
 			}
 		}
 	case "save":
@@ -336,9 +335,9 @@ func (sh *shell) handleHubEvent(b []byte, known map[string]bool) {
 		}
 		if ev.Done && save {
 			if ev.Err != "" {
-				sh.notify("Taildrop: save failed", ev.Name+": "+ev.Err)
+				sh.notify("Owldrop: save failed", ev.Name+": "+ev.Err)
 			} else {
-				sh.notify("Taildrop: saved", ev.Name+" → "+ev.Path)
+				sh.notify("Owldrop: saved", ev.Name+" → "+ev.Path)
 			}
 		}
 	case "send":
@@ -348,9 +347,9 @@ func (sh *shell) handleHubEvent(b []byte, known map[string]bool) {
 		}
 		if ev.Done && send {
 			if ev.Err != "" {
-				sh.notify("Taildrop: send failed", ev.Name+": "+ev.Err)
+				sh.notify("Owldrop: send failed", ev.Name+": "+ev.Err)
 			} else {
-				sh.notify("Taildrop: sent", ev.Name)
+				sh.notify("Owldrop: sent", ev.Name)
 			}
 		}
 	case "status":
@@ -359,7 +358,7 @@ func (sh *shell) handleHubEvent(b []byte, known map[string]bool) {
 			return
 		}
 		if ev.Err != "" && errors {
-			sh.notify("Taildrop", "tailscaled unreachable: "+ev.Err)
+			sh.notify("Owldrop", "tailscaled unreachable: "+ev.Err)
 		}
 	}
 }

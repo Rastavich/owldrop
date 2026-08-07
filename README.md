@@ -1,4 +1,4 @@
-# tailscale-drop
+# Owldrop
 
 A native desktop app for [Tailscale's Taildrop](https://tailscale.com/kb/1082/taildrop):
 see files sent to you, save or delete them with one click, send files back to
@@ -9,7 +9,7 @@ No more `tailscale file get .` on the command line.
 
 One Go binary, two halves:
 
-- **Server** (`main.go` + the `server.go`/`taildrop.go`/`ops.go`/`history.go`
+- **Server** (`main.go` + the `server.go`/`localapi.go`/`ops.go`/`history.go`
   files) — talks to the **local** `tailscaled` daemon over its LocalAPI (the
   same interface the `tailscale` CLI uses) and serves the UI on
   `127.0.0.1:8976`. Received files stay in the daemon's inbox until you
@@ -55,8 +55,9 @@ hostname where nothing else is reachable.)
   device → native file dialog
 - **Safety** — opening executable/script files asks for confirmation first
 - **Global shortcut** — Ctrl+Shift+T brings the window to the front
-- **Premium (public access)** — public drop links via Tailscale Funnel are a
-  Stripe subscription feature ($5/mo); subscribe/manage from Settings
+- **Public drop links** — flip on Tailscale Funnel in Settings and anyone on
+  the internet can drop a file into your inbox at your public `*.ts.net`
+  URL — free, served from your own machine (only `/drop/*` is exposed)
 - **History export** — one click dumps the full log as JSON
 
 ## Run
@@ -73,13 +74,13 @@ frontend build:
 
 ```sh
 cd web && npm ci && npm run build   # → web/dist (embedded into the binary)
-cd .. && go build -o tailscale-drop . && ./tailscale-drop
+cd .. && go build -o owldrop . && ./owldrop
 ```
 
 Or use the wails taskfile, which builds the frontend automatically:
 `wails3 task linux:build` (run: `wails3 task run`). For hot reload during
 development: `wails3 dev` rebuilds everything; for UI work specifically,
-run the app (`./tailscale-drop`) and `cd web && npm run dev` — the Vite dev
+run the app (`./owldrop`) and `cd web && npm run dev` — the Vite dev
 server picks up the session config from the running app and proxies its API
 calls to it. A headless server-only build (no window/tray — just the HTTP
 server for LAN use) is available as `wails3 task build:server`
@@ -87,7 +88,7 @@ server for LAN use) is available as `wails3 task build:server`
 
 ## Install / package
 
-- **End users (NixOS)**: `nix profile install github:Rastavich/taildrop-install`
+- **End users (NixOS)**: `nix profile install github:Rastavich/owldrop-install`
   — a public binary-only repo (the source stays private). CI pushes the
   built binary there on every release.
 - Developers: `nix profile install .#default` (or `nix run .#default`)
@@ -127,11 +128,10 @@ server for LAN use) is available as `wails3 task build:server`
 ```
 main.go        server: config, HTTP server, OS helpers
 shell.go       Wails desktop shell: window, tray, notifications, shortcut
-taildrop.go    daemon interactions: inbox, save, delete, devices, send
+localapi.go    daemon interactions: inbox, save, delete, devices, send
 ops.go         save/send operations with progress events
 history.go     local event log (arrivals, saves, deletes, sends)
 server.go      event hub, API, security guards, inbox watcher + auto-save
-stripe.go      Premium: Stripe checkout/portal, subscription polling, paywall
 web/         Vite + React + TanStack frontend (built to web/dist, embedded)
 build/         wails3 taskfiles + packaging assets (AppImage/deb/rpm/NSIS/dmg)
 tools/genicon  regenerates the icon PNG
@@ -147,8 +147,8 @@ main_test.go   unit tests (conflict naming, validation)
 ./install.sh
 ```
 
-Builds the app and installs it into `~/.local/share/tailscale-drop`, then
-runs it as a systemd user service (`tailscale-drop.service`), so it starts
+Builds the app and installs it into `~/.local/share/owldrop`, then
+runs it as a systemd user service (`owldrop.service`), so it starts
 with your desktop session and restarts on failure. The window's close button
 hides to the tray; quit from the tray menu. `./install.sh --run` launches in
 the foreground instead.
@@ -171,83 +171,18 @@ be revoked instantly.
   session token) is never exposed. (`./scripts/funnel.sh` still exists for
   manual control.)
 
-## Premium (public access, via Stripe)
+## Public access is free
 
-Public access — the Funnel toggle and the public `/drop/*` pages — is a
-subscription feature. There are two modes:
+Public drop links are a free feature — no subscription, no accounts, no
+server in between. The Funnel toggle runs `tailscale funnel` on your own
+machine, and uploads go straight to you over Tailscale's infrastructure:
+your files never transit a third-party server, and there is nothing to
+billing-gate. (`./scripts/funnel.sh` still exists for manual control.)
 
-- **Self-host mode** (this repo's default for your own install): the app
-  talks to Stripe directly (no SDK, no webhooks — it polls the
-  subscriptions API lazily and caches for 10 minutes). Gating is
-  **fail-closed**: no verifiable subscription → public links show a
-  "paused" page. This mode is only as strong as the client; fine for your
-  own machine.
-- **Relay mode** (distributed builds, `relay/`): the app is key-less and
-  talks to the seller's relay (`relay_url` in config or
-  `TAILDROP_RELAY_URL`). The relay holds the Stripe secret, creates
-  Checkout sessions, and **enforces Premium server-side on every public
-  request** — a patched client cannot get free public drops. Uploads are
-  queued on the relay and delivered to the app over long-polling.
+## Support
 
-Self-host setup (needs a [Stripe account](https://dashboard.stripe.com/)):
-
-1. Create a recurring **price** in Stripe (e.g. a $5/month price) and copy
-   its ID (`price_…`).
-2. Give the app your keys — either in the app config file
-   (`~/.config/tailscale-drop/config.json`):
-
-   ```json
-   { "stripe_secret_key": "sk_live_…", "stripe_price_id": "price_…" }
-   ```
-
-   or as env vars (handy for the systemd service — `install.sh` copies a
-   unit that reads `~/.config/tailscale-drop/env`):
-
-   ```sh
-   # ~/.config/tailscale-drop/env
-   TAILDROP_STRIPE_SECRET_KEY=sk_test_…
-   TAILDROP_STRIPE_PRICE_ID=price_…
-   ```
-
-   Test mode (`sk_test_…`) is fine while you're trying it out; the Stripe
-   CLI can also generate test-mode checkout events locally.
-3. Restart the app. Settings → **Premium** shows the state: subscribe
-   (opens Stripe Checkout), manage/cancel (billing portal). Once active,
-   the Funnel toggle unlocks and public links go live. Local and tailnet
-   drop links are never affected — only the public hostname is gated.
-4. Use the billing portal (or Stripe) to cancel; the next poll cycle then
-   pauses public links again.
-
-## Relay deployment (Railway)
-
-The relay (`relay/`) deploys on Railway as a single Dockerfile service:
-
-1. Create a Railway project, add a new service from this repo's GitHub
-   integration, and set the service **root directory** to `relay/` (or
-   deploy locally with `railway up` from `relay/`). Railway picks up the
-   Dockerfile automatically (`relay/railway.json` sets the build, the
-   `/healthz` healthcheck, and one replica).
-2. Attach a **volume** to the service with mount path `/data`. The relay
-   keeps registered devices, API keys, and queued uploads there — without
-   the volume every deploy starts empty. The Dockerfile deliberately
-   declares no `VOLUME` (Railway's builder rejects it): the Railway volume
-   is what persists `/data`. Keep the service at **1 replica**:
-   the store is a local filesystem, so multiple replicas would split queues.
-3. Set variables on the service:
-   - `BASE_URL` — the service's domain, currently
-     `https://relay-production-62a6.up.railway.app` (or a custom domain
-     you've pointed at it)
-   - `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` — the Stripe secret must never
-     live in clients, only here
-   - `PORT` is injected by Railway; `DATA_DIR=/data` comes from the
-     Dockerfile.
-4. Healthchecks hit `/healthz`; the service restarts on failure.
-
-Release builds point at the relay via `-X main.defaultRelayURL=…` in
-`flake.nix` and `build/*/Taskfile.yml` — currently
-`https://relay-production-62a6.up.railway.app` (keep in sync with
-`BASE_URL`). Installed apps override this with `relay_url` in their config
-or the `TAILDROP_RELAY_URL` env var.
+Owldrop is MIT-licensed and free. If it saves you time, a coffee keeps the
+owl fed: [ko-fi.com/owldrop](https://ko-fi.com/owldrop).
 
 ## License
 

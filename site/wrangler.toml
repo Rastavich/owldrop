@@ -1,13 +1,15 @@
-# Taildrop landing page — static site served by Cloudflare Workers (Static Assets).
+# Owldrop landing page — static site served by Cloudflare Workers (Static Assets).
 #
 # Deploy from this directory:
-#   npx wrangler deploy
+#   ./scripts/deploy.sh
+# (The script bakes the latest release tag into index.html before deploying,
+# so the version pill never drifts from the app repo's git tags.)
 #
 # The site is assets-only (no worker code). Runtime paths are implicit: all
-# download links point at the public taildrop-install repo — no server logic
+# download links point at the public owldrop-install repo — no server logic
 # here, nothing to cache-invalidate on release.
 
-name = "taildrop-site"
+name = "owldrop-site"
 compatibility_date = "2025-01-01"
 
 [assets]

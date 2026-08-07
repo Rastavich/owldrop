@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=owldrop
+Exec=owldrop
+Icon=owldrop
+Categories=Utility;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false

@@ -25,7 +25,7 @@ export function handleSseEvent(ev: SseEvent) {
         Notification.permission === 'granted'
       ) {
         for (const f of fresh) {
-          new Notification(f.name, { body: fmtSize(f.size) + ' — click to open Taildrop' });
+          new Notification(f.name, { body: fmtSize(f.size) + ' — click to open Owldrop' });
         }
       }
       if (location.hash.startsWith('#/history')) {

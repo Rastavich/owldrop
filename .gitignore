@@ -1,4 +1,4 @@
-/tailscale-drop
+/owldrop
 /bin
 .env
 /result
@@ -7,11 +7,10 @@
 web/node_modules
 web/dist
 build/linux/appimage/build
-build/linux/appimage/tailscale-drop
-build/linux/appimage/tailscale-drop.png
+build/linux/appimage/owldrop
+build/linux/appimage/owldrop.png
 build/darwin/icons.icns
 build/darwin/Assets.car
 build/windows/icon.ico
-build/linux/appimage/tailscale-drop.desktop
+build/linux/appimage/owldrop.desktop
 build/ios
-relay/taildrop-relay

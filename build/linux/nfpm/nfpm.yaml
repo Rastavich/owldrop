@@ -3,26 +3,26 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "tailscale-drop"
+name: "owldrop"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.5.7"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "Tailscale Taildrop desktop app"
-vendor: "Tailscale Drop"
-homepage: "https://wails.io"
+description: "Owldrop — desktop app for Tailscale file sharing"
+vendor: "Owldrop"
+homepage: "https://owldrop.app"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/tailscale-drop"
-    dst: "/usr/local/bin/tailscale-drop"
+  - src: "./bin/owldrop"
+    dst: "/usr/local/bin/owldrop"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/tailscale-drop.png"
-  - src: "./build/linux/tailscale-drop.desktop"
-    dst: "/usr/share/applications/tailscale-drop.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/owldrop.png"
+  - src: "./build/linux/owldrop.desktop"
+    dst: "/usr/share/applications/owldrop.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:

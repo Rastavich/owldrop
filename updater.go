@@ -1,7 +1,7 @@
 // Self-update support via the Wails v3 updater.
 //
 // The feed is a Wails Update Manifest (schemaVersion 1) hosted on the public
-// taildrop-install repo; the updater picks the artifact matching the running
+// owldrop-install repo; the updater picks the artifact matching the running
 // platform, verifies the sha256 digest from the manifest, downloads it, and
 // swaps the running binary (Windows exe, macOS .app bundle). NixOS users
 // keep using `nix profile upgrade` instead — no Linux artifact is published.
@@ -28,7 +28,7 @@ import (
 var appVersion = "dev"
 
 // defaultUpdateFeed is the manifest URL on the public install repo.
-const defaultUpdateFeed = "https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/stable.json"
+const defaultUpdateFeed = "https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/stable.json"
 
 var semverish = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+`)
 
@@ -55,7 +55,7 @@ func (s *server) initUpdater(app *application.App) {
 		return
 	}
 	feed := defaultUpdateFeed
-	if v := os.Getenv("TAILDROP_UPDATE_URL"); v != "" {
+	if v := os.Getenv("OWLDROP_UPDATE_URL"); v != "" {
 		feed = v
 	}
 	p, err := endpoint.New(endpoint.Config{URL: feed})

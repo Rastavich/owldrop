@@ -77,12 +77,6 @@ func (s *server) handleFunnel(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		// Turning on public access requires an active Premium subscription;
-		// the serve-time paywall on /drop/* is the backstop if it lapses.
-		if req.Enabled && s.premiumBlocks() {
-			writeJSONStatus(w, http.StatusPaymentRequired, map[string]any{"error": "public access is a Premium feature — subscribe in Settings first"})
-			return
-		}
 		if err := s.setFunnel(req.Enabled); err != nil {
 			writeErr(w, err)
 			return

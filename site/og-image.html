@@ -1,0 +1,93 @@
+<!doctype html>
+<!-- OG image source for owldrop.app — regenerate with:
+     screenshot this file at a 1200x630 viewport → site/public/og.png -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(760px 520px at 8% -10%, rgba(109, 123, 255, .28), transparent 62%),
+      radial-gradient(700px 520px at 96% 110%, rgba(166, 108, 255, .20), transparent 60%),
+      #090c13;
+    color: #edf0f8;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 72px 84px;
+    position: relative;
+  }
+  body::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(148, 163, 216, .06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 216, .06) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 70% at 30% 20%, #000 30%, transparent 75%);
+  }
+  .row { display: flex; align-items: center; gap: 26px; margin-bottom: 34px; position: relative; }
+  .row img { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 10px 34px rgba(109, 123, 255, .45); }
+  .row .name { font-size: 44px; font-weight: 800; letter-spacing: -.5px; }
+  .row .pill {
+    margin-left: 6px;
+    padding: 8px 18px;
+    border: 1px solid #2f3a58;
+    border-radius: 999px;
+    background: rgba(109, 123, 255, .13);
+    color: #b9c1ff;
+    font-size: 19px;
+    font-weight: 650;
+  }
+  h1 {
+    position: relative;
+    font-size: 74px;
+    line-height: 1.08;
+    font-weight: 800;
+    letter-spacing: -2px;
+    max-width: 980px;
+  }
+  h1 .grad {
+    background: linear-gradient(92deg, #6d7bff 0%, #a66cff 60%, #d38bff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub { position: relative; margin-top: 26px; color: #97a0b6; font-size: 27px; max-width: 900px; }
+  .foot {
+    position: absolute;
+    left: 84px; right: 84px; bottom: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .chips { display: flex; gap: 12px; }
+  .chip {
+    padding: 9px 20px;
+    border: 1px solid #232b40;
+    border-radius: 999px;
+    background: #101524;
+    color: #cdd5ea;
+    font-size: 19px;
+    font-weight: 600;
+  }
+  .url { color: #6d7bff; font-size: 22px; font-weight: 700; letter-spacing: .3px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <img src="public/favicon.svg" alt="">
+    <span class="name">Owldrop</span>
+    <span class="pill">for Tailscale</span>
+  </div>
+  <h1>Tailscale file sharing,<br><span class="grad">with a real desktop UI.</span></h1>
+  <p class="sub">Incoming files appear the instant they arrive — save or delete in one click, reply with a drag-and-drop.</p>
+  <div class="foot">
+    <div class="chips">
+      <span class="chip">Windows</span><span class="chip">macOS</span><span class="chip">Linux</span>
+    </div>
+    <span class="url">owldrop.app</span>
+  </div>
+</body>
+</html>

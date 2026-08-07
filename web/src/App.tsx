@@ -16,7 +16,7 @@ export default function App() {
 
   useEffect(() => connectEvents(), []);
   useEffect(() => {
-    document.title = inbox.length ? `(${inbox.length}) Taildrop` : 'Taildrop';
+    document.title = inbox.length ? `(${inbox.length}) Owldrop` : 'Owldrop';
   }, [inbox.length]);
 
   return (
@@ -44,7 +44,7 @@ export default function App() {
             />
           </svg>
           <div>
-            <h1>Taildrop</h1>
+            <h1>Owldrop</h1>
             <p className="tag">files across your tailnet</p>
           </div>
         </div>

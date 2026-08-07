@@ -4,12 +4,12 @@
 version: '3'
 
 info:
-  companyName: "Tailscale Drop"
-  productName: "Taildrop"
-  productIdentifier: "dev.taildrop"
-  description: "Tailscale Taildrop desktop app"
-  copyright: "(c) 2026, tailscale-drop"
-  comments: "See files sent to you via Taildrop, save or delete them with one click, and send files back."
+  companyName: "Owldrop"
+  productName: "Owldrop"
+  productIdentifier: "app.owldrop"
+  description: "Owldrop — desktop app for Tailscale file sharing"
+  copyright: "(c) 2026, Owldrop"
+  comments: "See files sent to you via Tailscale's Taildrop, save or delete them with one click, and send files back."
   version: "0.5.7"
 
 # Dev mode configuration

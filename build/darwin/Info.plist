@@ -3,17 +3,17 @@
 <plist version="1.0">
 	<dict>
 		<key>CFBundleExecutable</key>
-		<string>tailscale-drop</string>
+		<string>owldrop</string>
 		<key>CFBundleGetInfoString</key>
-		<string>See files sent to you via Taildrop, save or delete them with one click, and send files back.</string>
+		<string>See files sent to you via Tailscale's Taildrop, save or delete them with one click, and send files back.</string>
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
 		<key>CFBundleIconName</key>
 		<string>appicon</string>
 		<key>CFBundleIdentifier</key>
-		<string>dev.taildrop</string>
+		<string>app.owldrop</string>
 		<key>CFBundleName</key>
-		<string>Taildrop</string>
+		<string>Owldrop</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -25,6 +25,6 @@
 		<key>NSHighResolutionCapable</key>
 		<string>true</string>
 		<key>NSHumanReadableCopyright</key>
-		<string>(c) 2026, tailscale-drop</string>
+		<string>(c) 2026, Owldrop</string>
 	</dict>
 </plist>

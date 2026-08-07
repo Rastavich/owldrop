@@ -1,4 +1,4 @@
-module tailscale-drop
+module owldrop
 
 go 1.26.5
 

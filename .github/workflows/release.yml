@@ -81,8 +81,8 @@ jobs:
             echo "no .app bundle found in bin/"; exit 1
           fi
           cd "$(dirname "$APP")"
-          zip -rq "$GITHUB_WORKSPACE/bin/tailscale-drop-darwin-amd64.zip" "$(basename "$APP")"
-          ls -la "$GITHUB_WORKSPACE/bin/tailscale-drop-darwin-amd64.zip"
+          zip -rq "$GITHUB_WORKSPACE/bin/owldrop-darwin-amd64.zip" "$(basename "$APP")"
+          ls -la "$GITHUB_WORKSPACE/bin/owldrop-darwin-amd64.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -144,11 +144,11 @@ jobs:
           # The nix binary goes to /tmp, NOT bin/: the docker steps above
           # leave bin/ root-owned on the runner.
           nix build .#sidecar -o /tmp/sidecar
-          cp /tmp/sidecar/bin/tailscale-drop /tmp/tailscale-drop-nix
+          cp /tmp/sidecar/bin/owldrop /tmp/owldrop-nix
       - uses: actions/upload-artifact@v4
         with:
           name: linux-nix
-          path: /tmp/tailscale-drop-nix
+          path: /tmp/owldrop-nix
           if-no-files-found: error
 
   # NOTE: no AppImage in the release. WebKitGTK hardcodes its helper-process
@@ -206,7 +206,7 @@ jobs:
           APP=$(find /Volumes -maxdepth 2 -name '*.app' | head -1)
           BIN=$(find "$APP" -path '*/MacOS/*' -type f | head -1)
           echo "launching $BIN"
-          "$BIN" > /tmp/tsd-smoke.log 2>&1 &
+          "$BIN" > /tmp/owd-smoke.log 2>&1 &
           PID=$!
           OK=0
           for i in $(seq 1 30); do
@@ -219,17 +219,17 @@ jobs:
           done
           kill $PID 2>/dev/null || true
           if [ "$OK" -ne 1 ]; then
-            echo 'FAILED — app log:'; cat /tmp/tsd-smoke.log || true
+            echo 'FAILED — app log:'; cat /tmp/owd-smoke.log || true
             exit 1
           fi
 
-  # Publishes to the public taildrop-install repo (source stays private):
+  # Publishes to the public owldrop-install repo (source stays private):
   # the nix-built linux binary (for `nix profile install`), the .deb/.rpm
   # packages (for the website's Linux download section), plus the Wails
   # update manifest and per-platform update artifacts (Windows exe, macOS
   # .app zip) consumed by the app's built-in self-updater.
   # The INSTALL_REPO_SSH_KEY secret is a private key whose public half is a
-  # write-enabled deploy key on Rastavich/taildrop-install (one repo only).
+  # write-enabled deploy key on Rastavich/owldrop-install (one repo only).
   publish-updates:
     # preflight is required: its `version` output names the release.
     needs: [preflight, windows, macos, linux]
@@ -244,26 +244,26 @@ jobs:
           V="${{ needs.preflight.outputs.version }}"
           EXE=$(ls dl/windows/*.exe | grep -v installer | head -1)
           ZIP=$(ls dl/macos/*.zip | head -1)
-          NIX=dl/linux-nix/tailscale-drop-nix
+          NIX=dl/linux-nix/owldrop-nix
           DEB=$(ls dl/linux/*.deb | head -1)
           RPM=$(ls dl/linux/*.rpm | head -1)
           [ -n "$EXE" ] && [ -n "$ZIP" ] && [ -f "$NIX" ] && [ -n "$DEB" ] && [ -n "$RPM" ] || { echo "missing artifacts"; exit 1; }
           exe_digest=$(sha256sum "$EXE" | cut -d' ' -f1 | xxd -r -p | base64)
           zip_digest=$(sha256sum "$ZIP" | cut -d' ' -f1 | xxd -r -p | base64)
           mkdir -p stage/updates
-          cp "$EXE" stage/updates/tailscale-drop-windows-amd64.exe
-          cp "$ZIP" stage/updates/tailscale-drop-darwin-amd64.zip
+          cp "$EXE" stage/updates/owldrop-windows-amd64.exe
+          cp "$ZIP" stage/updates/owldrop-darwin-amd64.zip
           # .deb/.rpm are published as static mirrors for the website's
           # download section (not in stable.json — the in-app updater is
           # Windows/macOS only).
-          cp "$DEB" stage/updates/tailscale-drop-linux-amd64.deb
-          cp "$RPM" stage/updates/tailscale-drop-linux-x86_64.rpm
-          cp "$NIX" stage/tailscale-drop
-          chmod +x stage/tailscale-drop
+          cp "$DEB" stage/updates/owldrop-linux-amd64.deb
+          cp "$RPM" stage/updates/owldrop-linux-x86_64.rpm
+          cp "$NIX" stage/owldrop
+          chmod +x stage/owldrop
           cat > stage/updates/stable.json <<EOF
-          {"schemaVersion":1,"version":"$V","channel":"stable","name":"Taildrop $V","publishedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","artifacts":[
-          {"url":"https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-windows-amd64.exe","filename":"tailscale-drop-windows-amd64.exe","filetype":"exe","platform":"windows","arch":"amd64","size":$(stat -c%s "$EXE"),"digestAlgo":"sha256","digest":"$exe_digest"},
-          {"url":"https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-darwin-amd64.zip","filename":"tailscale-drop-darwin-amd64.zip","filetype":"zip","platform":"darwin","arch":"amd64","size":$(stat -c%s "$ZIP"),"digestAlgo":"sha256","digest":"$zip_digest"}
+          {"schemaVersion":1,"version":"$V","channel":"stable","name":"Owldrop $V","publishedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","artifacts":[
+          {"url":"https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-windows-amd64.exe","filename":"owldrop-windows-amd64.exe","filetype":"exe","platform":"windows","arch":"amd64","size":$(stat -c%s "$EXE"),"digestAlgo":"sha256","digest":"$exe_digest"},
+          {"url":"https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-darwin-amd64.zip","filename":"owldrop-darwin-amd64.zip","filetype":"zip","platform":"darwin","arch":"amd64","size":$(stat -c%s "$ZIP"),"digestAlgo":"sha256","digest":"$zip_digest"}
           ]}
           EOF
           jq . stage/updates/stable.json > /dev/null
@@ -273,20 +273,20 @@ jobs:
           INSTALL_REPO_SSH_KEY: ${{ secrets.INSTALL_REPO_SSH_KEY }}
         run: |
           if [ -z "$INSTALL_REPO_SSH_KEY" ]; then
-            echo "::warning::INSTALL_REPO_SSH_KEY not set — skipping publish to taildrop-install"
+            echo "::warning::INSTALL_REPO_SSH_KEY not set — skipping publish to owldrop-install"
             exit 0
           fi
           mkdir -p ~/.ssh
           echo "$INSTALL_REPO_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519"
-          rm -rf /tmp/taildrop-install
-          git clone git@github.com:Rastavich/taildrop-install.git /tmp/taildrop-install
-          cd /tmp/taildrop-install
-          rm -rf updates tailscale-drop
+          rm -rf /tmp/owldrop-install
+          git clone git@github.com:Rastavich/owldrop-install.git /tmp/owldrop-install
+          cd /tmp/owldrop-install
+          rm -rf updates tailscale-drop owldrop
           cp -r "$GITHUB_WORKSPACE/stage/." .
           git config user.name "release-bot"
-          git config user.email "release@taildrop.local"
+          git config user.email "release@owldrop.local"
           git add -A
           if git diff --cached --quiet; then
             echo "nothing changed — nothing to publish"
@@ -331,7 +331,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* --title "Taildrop $TAG" --generate-notes
+            gh release create "$TAG" dist/* --title "Owldrop $TAG" --generate-notes
           fi
           # Defensive: a draft release is invisible to users — never ship one.
           gh release edit "$TAG" --draft=false

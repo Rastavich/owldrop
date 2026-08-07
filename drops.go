@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -8,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"archive/zip"
 	"mime/multipart"
 	"net/http"
 	"os"
