@@ -96,6 +96,7 @@ func (h *history) recordArrivals(files []waitingFile) {
 		e := historyEvent{ID: newID(), Ts: now, Kind: "arrived", Name: f.Name, Size: f.Size, Source: f.Source}
 		h.events = append(h.events, e)
 		h.active[f.Name] = e.ID
+		tele.event("file_received")
 		changed = true
 	}
 	for name, id := range h.active {
@@ -147,6 +148,7 @@ func (h *history) recordSaved(name, path string) {
 	}
 	h.events = append(h.events, historyEvent{ID: id, Ts: time.Now(), Kind: "saved", Name: name, Path: path})
 	delete(h.active, name)
+	tele.event("file_saved")
 	h.prune()
 	h.persist()
 }
@@ -160,6 +162,7 @@ func (h *history) recordDeleted(name string) {
 	}
 	h.events = append(h.events, historyEvent{ID: id, Ts: time.Now(), Kind: "deleted", Name: name})
 	delete(h.active, name)
+	tele.event("file_deleted")
 	h.prune()
 	h.persist()
 }
@@ -172,6 +175,11 @@ func (h *history) recordSend(peer, peerOS, name string, size int64, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.events = append(h.events, historyEvent{ID: newID(), Ts: time.Now(), Kind: kind, Name: name, Size: size, Peer: peer, PeerOS: peerOS})
+	if err == nil {
+		tele.event("file_sent")
+	} else {
+		tele.event("send_failed")
+	}
 	h.prune()
 	h.persist()
 }

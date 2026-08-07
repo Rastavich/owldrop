@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -135,6 +137,12 @@ type server struct {
 	autosaveMu   sync.Mutex
 	autosaving   map[string]bool      // inbox files currently being auto-saved
 	autosaveFail map[string]time.Time // failed auto-saves, for backoff
+
+	// HTTP listener ownership: the shell hands the listener to serveHTTP,
+	// and LAN-mode toggles rebind it without restarting the process.
+	listenerMu sync.Mutex
+	httpSrv    *http.Server
+	listener   net.Listener
 }
 
 func newServer(cfg *config) *server {
@@ -220,6 +228,54 @@ func (s *server) setListenerPort(p int) {
 	s.port = p
 }
 
+// serveHTTP serves httpSrv on ln and records both so a LAN-mode toggle can
+// rebind in place. Returns once ln is closed (rebind or shutdown).
+func (s *server) serveHTTP(httpSrv *http.Server, ln net.Listener) error {
+	s.listenerMu.Lock()
+	s.httpSrv = httpSrv
+	s.listener = ln
+	s.listenerMu.Unlock()
+	s.setListenerPort(ln.Addr().(*net.TCPAddr).Port)
+	return httpSrv.Serve(ln)
+}
+
+// rebindHTTP moves the HTTP listener to a new address (LAN mode on/off)
+// without restarting the process — the Wails shell has no respawn, so the
+// old os.Exit approach simply killed the app. If the new bind fails the old
+// address is restored so the app keeps serving.
+func (s *server) rebindHTTP(addr string) {
+	s.listenerMu.Lock()
+	defer s.listenerMu.Unlock()
+	httpSrv, old := s.httpSrv, s.listener
+	if httpSrv == nil || old == nil {
+		return
+	}
+	oldAddr := old.Addr().String()
+	old.Close()
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Printf("rebind to %s failed (%v) — restoring %s", addr, err, oldAddr)
+		if restored, rerr := net.Listen("tcp", oldAddr); rerr == nil {
+			s.listener = restored
+			s.setListenerPort(restored.Addr().(*net.TCPAddr).Port)
+			go httpSrv.Serve(restored)
+		}
+		return
+	}
+	s.listener = ln
+	s.setListenerPort(ln.Addr().(*net.TCPAddr).Port)
+	go httpSrv.Serve(ln)
+	log.Printf("listener moved to %s", addr)
+}
+
+// hostForLAN returns the bind host for the current LAN mode.
+func hostForLAN(lan bool) string {
+	if lan {
+		return "0.0.0.0"
+	}
+	return "127.0.0.1"
+}
+
 // lanURLs returns the URLs other tailnet devices can use to open the UI.
 
 func (s *server) saveDir() string {
@@ -259,6 +315,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/tailscale/up", s.guard(s.handleTailscaleUp))
 	mux.HandleFunc("/api/tailscale/download", s.guard(s.handleTailscaleDownload))
 	mux.HandleFunc("/api/ntfy/test", s.guard(s.handleNtfyTest))
+	mux.HandleFunc("/api/open-external", s.guard(s.handleOpenExternal))
 	mux.HandleFunc("/api/update", s.guard(s.handleUpdate))
 	mux.HandleFunc("/api/update/check", s.guard(s.handleUpdateCheck))
 	mux.HandleFunc("/api/update/install", s.guard(s.handleUpdateInstall))
@@ -585,6 +642,7 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			NotifySave    *bool   `json:"notifySave"`
 			NotifySend    *bool   `json:"notifySend"`
 			NotifyError   *bool   `json:"notifyError"`
+			Telemetry     *bool   `json:"telemetry"`
 			NtfyTopic     *string `json:"ntfyTopic"`
 			NtfyServer    *string `json:"ntfyServer"`
 		}
@@ -628,6 +686,12 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if req.NotifyError != nil {
 			s.cfg.NotifyError = *req.NotifyError
 		}
+		if req.Telemetry != nil {
+			s.cfg.Telemetry = *req.Telemetry
+			tele.mu.Lock()
+			tele.enabled = *req.Telemetry
+			tele.mu.Unlock()
+		}
 		if req.NtfyTopic != nil {
 			s.cfg.NtfyTopic = strings.TrimSpace(*req.NtfyTopic)
 		}
@@ -642,11 +706,12 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, s.configResponse(c))
 		if restart {
-			// The response is on the wire; now exit so the shell restarts us
-			// bound to the new interface.
+			// Response is on the wire; rebind the listener to the new
+			// interface in place. No process restart: the Wails shell has
+			// no respawn (the old Electron-era os.Exit killed the app).
 			go func() {
 				time.Sleep(300 * time.Millisecond)
-				os.Exit(0)
+				s.rebindHTTP(net.JoinHostPort(hostForLAN(s.lan), strconv.Itoa(s.port)))
 			}()
 		}
 	default:
@@ -663,6 +728,7 @@ func (s *server) configResponse(c config) map[string]any {
 		"notifySave":    c.NotifySave,
 		"notifySend":    c.NotifySend,
 		"notifyError":   c.NotifyError,
+		"telemetry":     c.Telemetry,
 	}
 	if c.LAN {
 		if urls := s.lanURLs(); len(urls) > 0 {
@@ -993,6 +1059,54 @@ func (s *server) handleTailscaleDownload(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := openPath("https://tailscale.com/download"); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// allowedExternalHosts are the only hosts the UI may hand to the system
+// browser. The webview cannot open links by itself, so the page asks the
+// server instead — same "nothing user-controlled reaches openPath" rule as
+// handleTailscaleDownload, with a strict allowlist instead of a fixed URL.
+var allowedExternalHosts = map[string]bool{
+	"ko-fi.com":     true,
+	"github.com":    true,
+	"tailscale.com": true,
+	"owldrop.app":   true,
+}
+
+// validateExternalURL returns url if it's https and its host is on the
+// allowlist; the caller never passes anything else to openPath.
+func validateExternalURL(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || !allowedExternalHosts[strings.ToLower(u.Hostname())] {
+		return "", errors.New("bad url")
+	}
+	return raw, nil
+}
+
+// handleOpenExternal opens an allowlisted URL in the system browser
+// (Settings → Support links and anything else the page needs to escape the
+// webview for).
+func (s *server) handleOpenExternal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	u, err := validateExternalURL(req.URL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := openPath(u); err != nil {
 		writeErr(w, err)
 		return
 	}

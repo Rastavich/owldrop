@@ -25,7 +25,7 @@
         pname = "owldrop-web";
         version = appVersion;
         src = ./web;
-        npmDepsHash = "sha256-dHT8x8rzyRIX8n/WQ+S/fKnnVXLjFXyHSE4ZOQ+CM9I=";
+        npmDepsHash = "sha256-mxiX/ed54bAp3s34OFULwJT09WK7TF7/ybHPqKtBbVo=";
       };
       sidecar = pkgs.buildGoModule {
         pname = "owldrop";
@@ -60,21 +60,42 @@
       };
 
       packages.x86_64-linux.default =
-      # FHS wrapper so the CGO binary finds its dynamic libs (GTK, WebKitGTK,
-      # and their transitive deps) plus GIO TLS modules and GTK settings
-      # schemas at runtime — the NixOS equivalent of the old electron wrapper.
-      pkgs.buildFHSEnv {
-        name = "owldrop";
-        # noto-fonts is deliberate: WebKitGTK/Pango lays DejaVu Sans text at the
-        # top of the line box, so the UI's font stack leads with Noto Sans and
-        # the env must always provide it (not depend on host fonts).
-        targetPkgs = ps: with ps; [ gtk4 webkitgtk_6_0 glib-networking gsettings-desktop-schemas dconf fontconfig dejavu_fonts noto-fonts ];
-        # The FHS env is a bwrap sandbox: point fontconfig at the store config
-        # so the webview picks up the bundled fonts instead of tofu-boxing.
-        runScript = pkgs.writeShellScript "owldrop-run" ''
-          export FONTCONFIG_FILE="${pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; }}"
-          exec ${sidecar}/bin/owldrop "$@"
+      # Start-menu integration merged around the FHS wrapper: the desktop
+      # entry + icon make `nix profile install .#default` show Owldrop in
+      # the application menu, and `nix profile upgrade owldrop` keeps it
+      # current.
+      let
+        fhs = pkgs.buildFHSEnv {
+          name = "owldrop";
+          # noto-fonts is deliberate: WebKitGTK/Pango lays DejaVu Sans text at the
+          # top of the line box, so the UI's font stack leads with Noto Sans and
+          # the env must always provide it (not depend on host fonts).
+          targetPkgs = ps: with ps; [ gtk4 webkitgtk_6_0 glib-networking gsettings-desktop-schemas dconf fontconfig dejavu_fonts noto-fonts ];
+          # The FHS env is a bwrap sandbox: point fontconfig at the store config
+          # so the webview picks up the bundled fonts instead of tofu-boxing.
+          runScript = pkgs.writeShellScript "owldrop-run" ''
+            export FONTCONFIG_FILE="${pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; }}"
+            exec ${sidecar}/bin/owldrop "$@"
+          '';
+        };
+        desktopItem = pkgs.makeDesktopItem {
+          name = "owldrop";
+          desktopName = "Owldrop";
+          comment = "Desktop app for Tailscale file sharing";
+          exec = "owldrop";
+          icon = "owldrop";
+          terminal = false;
+          categories = [ "Utility" ];
+          startupWMClass = "owldrop";
+        };
+        iconDir = pkgs.runCommand "owldrop-icon" { } ''
+          mkdir -p $out/share/icons/hicolor/512x512/apps
+          cp ${./icon.png} $out/share/icons/hicolor/512x512/apps/owldrop.png
         '';
+      in
+      pkgs.symlinkJoin {
+        name = "owldrop";
+        paths = [ fhs desktopItem iconDir ];
       };
 
       # The raw nix-built binary (RPATHs point into the nix store, so it runs

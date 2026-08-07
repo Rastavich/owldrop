@@ -1,17 +1,28 @@
-# Owldrop landing page — static site served by Cloudflare Workers (Static Assets).
+# Owldrop landing page — static site + telemetry worker on Cloudflare.
 #
 # Deploy from this directory:
-#   ./scripts/deploy.sh
-# (The script bakes the latest release tag into index.html before deploying,
-# so the version pill never drifts from the app repo's git tags.)
+#   npx wrangler d1 create owldrop-analytics   # once; paste the id below
+#   npx wrangler secret put STATS_TOKEN        # once; e.g. openssl rand -hex 16
+#   npx wrangler d1 migrations apply owldrop-analytics
+#   npx wrangler deploy
 #
-# The site is assets-only (no worker code). Runtime paths are implicit: all
-# download links point at the public owldrop-install repo — no server logic
-# here, nothing to cache-invalidate on release.
+# Runtime: the worker serves ./public for everything it doesn't handle,
+# ingests anonymous app telemetry at /api/t (D1), counts downloads via
+# /dl?platform=... redirects, and renders /stats?token=... .
 
 name = "owldrop-site"
+main = "src/worker.ts"
 compatibility_date = "2025-01-01"
+
+# owldrop.app is registered on Cloudflare; wrangler attaches the worker to
+# it as a custom domain (CNAME handled automatically).
+routes = [{ pattern = "owldrop.app", custom_domain = true }]
 
 [assets]
 directory = "./public"
-# Landing page only has one route; keep the default 404 for unknown paths.
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "owldrop-analytics"
+database_id = "b90fa1c6-ab8f-4704-8c02-ac4b0bddc1a8"

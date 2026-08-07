@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { clearHistory as clearHistoryApi, getHistory } from '../api';
 import { openPathWithWarning } from '../components/ConfirmModal';
 import { toast } from '../store';
@@ -41,6 +41,10 @@ export default function History() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<HistoryFilter>('all');
   const [armed, setArmed] = useState(false);
+  const [page, setPage] = useState(1);
+
+  // Any filter/search change restarts from page 1.
+  useEffect(() => setPage(1), [search, filter]);
 
   const sessions = useMemo(() => historySessions(events), [events]);
   const visible = useMemo(() => {
@@ -52,6 +56,12 @@ export default function History() {
       return true;
     });
   }, [sessions, search, filter]);
+
+  // Paginate the filtered list (10 sessions per page).
+  const PAGE_SIZE = 10;
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageItems = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const clear = async () => {
     if (!armed) {
@@ -131,9 +141,22 @@ export default function History() {
         </div>
       ) : (
         <div className="list">
-          {visible.map((s) => (
+          {pageItems.map((s) => (
             <HistoryRow key={s.id} session={s} />
           ))}
+        </div>
+      )}
+      {pageCount > 1 && (
+        <div className="pager">
+          <button className="btn ghost mini" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>
+            ← Prev
+          </button>
+          <span className="pager-info">
+            Page {safePage} of {pageCount} · {visible.length} entries
+          </span>
+          <button className="btn ghost mini" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>
+            Next →
+          </button>
         </div>
       )}
     </section>

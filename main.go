@@ -39,6 +39,8 @@ func main() {
 	flag.Parse()
 
 	cfg := loadConfig()
+	tele.init(cfg.InstallID, cfg.Telemetry)
+	tele.event("heartbeat")
 	if *saveDir != "" {
 		cfg.SaveDir = *saveDir
 		if err := cfg.save(); err != nil {
@@ -87,6 +89,10 @@ type config struct {
 	NotifySave    bool   `json:"notify_save"`
 	NotifySend    bool   `json:"notify_send"`
 	NotifyError   bool   `json:"notify_error"`
+	// Anonymous usage stats (Settings toggle). install_id is the anonymous
+	// install identifier used for daily-active-user counting.
+	Telemetry bool   `json:"telemetry"`
+	InstallID string `json:"install_id"`
 	// ntfy phone notifications: after a send to a phone, POST to this ntfy
 	// topic so the phone gets a real push notification. Empty = off.
 	NtfyTopic  string `json:"ntfy_topic"`
@@ -132,13 +138,27 @@ func loadConfig() *config {
 		NotifySave    *bool  `json:"notify_save"`
 		NotifySend    *bool  `json:"notify_send"`
 		NotifyError   *bool  `json:"notify_error"`
+		Telemetry     *bool  `json:"telemetry"`
+		InstallID     string `json:"install_id"`
 		NtfyTopic     string `json:"ntfy_topic"`
 		NtfyServer    string `json:"ntfy_server"`
 	}
 	if b, err := os.ReadFile(configPath()); err == nil {
 		json.Unmarshal(b, &f)
 	}
-	c := &config{SaveDir: f.SaveDir, NtfyTopic: f.NtfyTopic, NtfyServer: f.NtfyServer, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true}
+	c := &config{SaveDir: f.SaveDir, InstallID: f.InstallID, NtfyTopic: f.NtfyTopic, NtfyServer: f.NtfyServer, NotifyArrival: true, NotifySave: true, NotifySend: true, NotifyError: true, Telemetry: true}
+	if f.Telemetry != nil {
+		c.Telemetry = *f.Telemetry
+	}
+	// First run: mint the anonymous install id and persist it.
+	if c.InstallID == "" {
+		c.InstallID = newInstallID()
+		if c.InstallID != "" {
+			if err := c.save(); err != nil {
+				log.Printf("saving install id: %v", err)
+			}
+		}
+	}
 	if f.AutoSave != nil {
 		c.AutoSave = *f.AutoSave
 	}

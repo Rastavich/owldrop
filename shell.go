@@ -98,7 +98,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 		httpSrv.Shutdown(shutCtx)
 	}()
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- httpSrv.Serve(ln) }()
+	go func() { serveErr <- srv.serveHTTP(httpSrv, ln) }()
 
 	// Self-update wiring (release builds only): checks the public feed and
 	// surfaces updater events over SSE so the UI can toast.
@@ -111,6 +111,10 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 		MinWidth:         720,
 		MinHeight:        480,
 		BackgroundColour: application.NewRGB(11, 14, 20),
+		// Window/taskbar icon. Without this the plain `go build` used by
+		// the nix package never bakes an icon in (wails3 build does it via
+		// its asset pipeline); the embedded tray PNG serves both.
+		Linux: application.LinuxWindow{Icon: trayIcon},
 		// ?shell=1 tells the UI we are the desktop shell: native notifications
 		// come from Go, so the page skips its browser-notification path.
 		URL:            fmt.Sprintf("http://127.0.0.1:%d/?shell=1", srv.port),

@@ -1,7 +1,7 @@
 import { Link, Outlet } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { getInbox } from './api';
+import { getDropLinks, getInbox } from './api';
 import { connectEvents } from './events';
 import DaemonPill from './components/DaemonPill';
 import ConnectBanner from './components/ConnectBanner';
@@ -13,6 +13,8 @@ const TAB_CLASS = 'tab';
 
 export default function App() {
   const { data: inbox = [] } = useQuery({ queryKey: ['inbox'], queryFn: getInbox });
+  const { data: links = [] } = useQuery({ queryKey: ['droplinks'], queryFn: getDropLinks });
+  const activeLinks = links.filter((l) => !l.expired && !l.revoked && (l.maxUses === 0 || l.uses < l.maxUses)).length;
 
   useEffect(() => connectEvents(), []);
   useEffect(() => {
@@ -60,6 +62,9 @@ export default function App() {
         </Link>
         <Link to="/history" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
           History
+        </Link>
+        <Link to="/drops" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
+          Drop links {activeLinks > 0 && <span className="badge">{activeLinks}</span>}
         </Link>
         <Link to="/settings" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
           Settings

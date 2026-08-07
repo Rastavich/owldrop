@@ -3,6 +3,7 @@
 import { createHashHistory } from '@tanstack/history';
 import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import App from './App';
+import Drops from './views/Drops';
 import History from './views/History';
 import Inbox from './views/Inbox';
 import Send from './views/Send';
@@ -13,9 +14,10 @@ const rootRoute = createRootRoute({ component: App });
 const inboxRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: Inbox });
 const sendRoute = createRoute({ getParentRoute: () => rootRoute, path: '/send', component: Send });
 const historyRoute = createRoute({ getParentRoute: () => rootRoute, path: '/history', component: History });
+const dropsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/drops', component: Drops });
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/settings', component: Settings });
 
-const routeTree = rootRoute.addChildren([inboxRoute, sendRoute, historyRoute, settingsRoute]);
+const routeTree = rootRoute.addChildren([inboxRoute, sendRoute, historyRoute, dropsRoute, settingsRoute]);
 
 export const router = createRouter({ routeTree, history: createHashHistory() });
 

@@ -17,6 +17,9 @@ button:disabled{cursor:default;opacity:.5}
    text top-aligned. Flex centering makes the label position exact in every
    engine regardless of font metrics. */
 .btn,.chip-btn,.dl-copy,.toast-act,.btn.mini,.btn.x,.linkbtn{display:inline-flex;align-items:center;justify-content:center}
+/* Text button: link-styled action in paragraphs (e.g. "turn off" a topic). */
+.linkbtn{background:none;border:none;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit;padding:0}
+.linkbtn:hover{color:var(--text)}
 
 header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 28px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#101522 0%,var(--bg) 100%)}
 .brand{display:flex;align-items:center;gap:12px}
@@ -120,28 +123,38 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .drop-zone .t{font-weight:600;color:var(--text)}
 .drop-zone .sub{font-size:12.5px;margin-top:4px}
 .drop-zone .link{color:var(--accent);cursor:pointer;text-decoration:underline}
-.drop-zone .linkbtn{background:none;border:none;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit;padding:0}
 .drop-zone.over{border-color:var(--accent);background:var(--accent-soft)}
-.settings h3{font-size:13.5px;margin:20px 0 8px;color:var(--text)}
-.settings h3:first-child{margin-top:0}
-.settings-hrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:20px 0 8px}
+/* Settings: sections as cards in a responsive two-column grid. */
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:start}
+.set-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:15px 17px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.set-card.wide{grid-column:1/-1}
+.pane h3{font-size:11.5px;margin:0;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+.settings-hrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .settings-hrow h3{margin:0}
-.settings .check{margin:6px 0}
-.dropform{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+.pane .check{margin:2px 0}
+.updrow{display:flex;gap:8px}
+.dropform{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0}
 .dropform .search{flex:1}
-.drop-links{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.funnelrow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:8px 0}
+.drop-links{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.funnelrow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:4px 0}
 .funnel-info{flex:1}
 .funnel-info .sub2{margin-top:4px}
-.droplink{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;flex-wrap:wrap}
-.droplink .dl-url{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--muted);flex:1;min-width:140px;word-break:break-all}
-.droplink .dl-meta{color:var(--muted)}
+.droplink{display:flex;flex-direction:column;gap:8px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px}
+.dl-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dl-name{font-weight:600;color:var(--text);min-width:0;word-break:break-all}
+.dl-meta{color:var(--muted);flex:1;text-align:right}
+.dl-urls{display:flex;flex-direction:column;gap:4px}
+.dl-url-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:4px 6px 4px 10px;min-width:0}
+.dl-url-label{flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.dl-url{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--muted);word-break:break-all}
 .droplink.dead{opacity:.55}
 .dl-copy{border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:7px;padding:3px 9px;font-size:12px;cursor:pointer}
 .dl-copy:hover{border-color:var(--accent)}
-.settings .sub2{color:var(--muted);font-size:13px;margin:2px 0;line-height:1.6}
-.settings code{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12px}
+.pane .sub2{color:var(--muted);font-size:13px;margin:2px 0;line-height:1.6}
+.pane code{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12px}
 .confirm-text{white-space:pre-wrap;word-break:break-all;color:var(--text);font-size:13.5px;margin:0}
+.pager{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:14px}
+.pager-info{font-size:12px;color:var(--muted);white-space:nowrap}
 
 .toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:360px}
 .toast{display:flex;align-items:center;gap:10px;background:#1a2133;border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.45);animation:in .18s ease;word-break:break-word}

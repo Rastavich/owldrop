@@ -17,6 +17,7 @@ export interface AppConfig {
   notifySave: boolean;
   notifySend: boolean;
   notifyError: boolean;
+  telemetry: boolean; // anonymous usage stats (opt-out)
 }
 
 export interface Device {

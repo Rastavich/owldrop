@@ -184,6 +184,22 @@ billing-gate. (`./scripts/funnel.sh` still exists for manual control.)
 Owldrop is MIT-licensed and free. If it saves you time, a coffee keeps the
 owl fed: [ko-fi.com/owldrop](https://ko-fi.com/owldrop).
 
+## Telemetry
+
+Owldrop reports a minimal anonymous usage stream (app version, OS, event
+name, timestamp, and a random per-install id) to the site's `/api/t`
+endpoint, which powers the public usage numbers: daily active users, files
+received/sent, drop links created, downloads. No file names, sizes, content,
+or sender/recipient information ever leaves the machine.
+
+- Events: heartbeat (app start), file_received, file_saved, file_deleted,
+  file_sent, send_failed, drop_link_created.
+- Opt out anytime in **Settings → Privacy** (writes `telemetry: false` to
+  the config). Off means nothing leaves the machine.
+- The site worker stores events in Cloudflare D1; the stats dashboard lives
+  at `https://owldrop.app/stats?token=…` (STATS_TOKEN secret) and download
+  counts come from the site's `/dl` redirect links.
+
 ## License
 
 MIT — do whatever you like with it.

@@ -27,6 +27,14 @@ export function fmtSize(n: number): string {
 
 export function fmtAge(t: string): string {
   const s = (Date.now() - new Date(t).getTime()) / 1000;
+  if (s < 0) {
+    // Future timestamp (e.g. a drop link's expiry): "in 5m".
+    const f = -s;
+    if (f < 60) return 'in ' + Math.round(f) + 's';
+    if (f < 3600) return 'in ' + Math.round(f / 60) + 'm';
+    if (f < 86400) return 'in ' + Math.round(f / 3600) + 'h';
+    return 'in ' + Math.round(f / 86400) + 'd';
+  }
   if (s < 10) return 'just now';
   if (s < 60) return Math.round(s) + 's ago';
   if (s < 3600) return Math.round(s / 60) + 'm ago';

@@ -14,3 +14,4 @@ build/darwin/Assets.car
 build/windows/icon.ico
 build/linux/appimage/owldrop.desktop
 build/ios
+.dev.vars

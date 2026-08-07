@@ -149,6 +149,7 @@ func (m *dropManager) create(name string, ttl time.Duration, maxUses int) *dropL
 	m.mu.Lock()
 	m.links[l.Token] = l
 	m.mu.Unlock()
+	tele.event("drop_link_created")
 	m.persist()
 	return l
 }
