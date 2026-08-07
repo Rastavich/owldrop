@@ -6,13 +6,13 @@
 name: "owldrop"
 arch: ${GOARCH}
 platform: "linux"
-version: "0.5.7"
+version: "0.5.8"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
 description: "Owldrop — desktop app for Tailscale file sharing"
 vendor: "Owldrop"
-homepage: "https://owldrop.app"
+homepage: "https://wails.io"
 license: "MIT"
 release: "1"
 

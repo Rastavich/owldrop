@@ -5,7 +5,7 @@
 		<key>CFBundleExecutable</key>
 		<string>owldrop</string>
 		<key>CFBundleGetInfoString</key>
-		<string>See files sent to you via Tailscale's Taildrop, save or delete them with one click, and send files back.</string>
+		<string>See files sent to you via Tailscale&#39;s Taildrop, save or delete them with one click, and send files back.</string>
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
 		<key>CFBundleIconName</key>
@@ -17,9 +17,9 @@
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
-		<string>0.5.7</string>
+		<string>0.5.8</string>
 		<key>CFBundleVersion</key>
-		<string>0.5.7</string>
+		<string>0.5.8</string>
 		<key>LSMinimumSystemVersion</key>
 		<string>12.0.0</string>
 		<key>NSAppTransportSecurity</key>
