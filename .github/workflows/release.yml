@@ -224,7 +224,8 @@ jobs:
           fi
 
   # Publishes to the public taildrop-install repo (source stays private):
-  # the nix-built linux binary (for `nix profile install`) plus the Wails
+  # the nix-built linux binary (for `nix profile install`), the .deb/.rpm
+  # packages (for the website's Linux download section), plus the Wails
   # update manifest and per-platform update artifacts (Windows exe, macOS
   # .app zip) consumed by the app's built-in self-updater.
   # The INSTALL_REPO_SSH_KEY secret is a private key whose public half is a
@@ -244,12 +245,19 @@ jobs:
           EXE=$(ls dl/windows/*.exe | grep -v installer | head -1)
           ZIP=$(ls dl/macos/*.zip | head -1)
           NIX=dl/linux-nix/tailscale-drop-nix
-          [ -n "$EXE" ] && [ -n "$ZIP" ] && [ -f "$NIX" ] || { echo "missing artifacts"; exit 1; }
+          DEB=$(ls dl/linux/*.deb | head -1)
+          RPM=$(ls dl/linux/*.rpm | head -1)
+          [ -n "$EXE" ] && [ -n "$ZIP" ] && [ -f "$NIX" ] && [ -n "$DEB" ] && [ -n "$RPM" ] || { echo "missing artifacts"; exit 1; }
           exe_digest=$(sha256sum "$EXE" | cut -d' ' -f1 | xxd -r -p | base64)
           zip_digest=$(sha256sum "$ZIP" | cut -d' ' -f1 | xxd -r -p | base64)
           mkdir -p stage/updates
           cp "$EXE" stage/updates/tailscale-drop-windows-amd64.exe
           cp "$ZIP" stage/updates/tailscale-drop-darwin-amd64.zip
+          # .deb/.rpm are published as static mirrors for the website's
+          # download section (not in stable.json — the in-app updater is
+          # Windows/macOS only).
+          cp "$DEB" stage/updates/tailscale-drop-linux-amd64.deb
+          cp "$RPM" stage/updates/tailscale-drop-linux-x86_64.rpm
           cp "$NIX" stage/tailscale-drop
           chmod +x stage/tailscale-drop
           cat > stage/updates/stable.json <<EOF

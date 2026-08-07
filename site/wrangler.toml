@@ -1,0 +1,15 @@
+# Taildrop landing page — static site served by Cloudflare Workers (Static Assets).
+#
+# Deploy from this directory:
+#   npx wrangler deploy
+#
+# The site is assets-only (no worker code). Runtime paths are implicit: all
+# download links point at the public taildrop-install repo — no server logic
+# here, nothing to cache-invalidate on release.
+
+name = "taildrop-site"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./public"
+# Landing page only has one route; keep the default 404 for unknown paths.

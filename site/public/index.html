@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Taildrop — a native desktop app for Tailscale's Taildrop. See files sent to you, save or delete with one click, send files back, auto-save, and public drop links.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="/appicon.png" type="image/png">
+<title>Taildrop · a desktop app for Tailscale file sharing</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img src="/appicon.png" alt="" class="logo">
+    <div>
+      <h1>Taildrop</h1>
+      <p class="tag">a desktop app for Tailscale file sharing</p>
+    </div>
+  </div>
+  <div class="head-right">
+    <span class="pill" id="version-pill">v0.5.6</span>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <h2>See files sent to you, save or delete them with one click, and send files back.</h2>
+    <p class="lede">
+      <strong>Taildrop</strong> is a native desktop app for
+      <a href="https://tailscale.com/kb/1082/taildrop">Tailscale's Taildrop</a>: your
+      incoming files appear the instant they arrive, go to a folder automatically if you
+      want, and replying is a single drag-and-drop. No more
+      <code>tailscale file get .</code> on the command line.
+    </p>
+    <div class="cta-row">
+      <a class="btn primary" id="cta" href="#downloads">Download</a>
+      <a class="btn ghost" href="#downloads">All platforms</a>
+    </div>
+    <p class="hint">Requires a running <a href="https://tailscale.com/download">Tailscale</a> install. The app talks to your local <code>tailscaled</code>.</p>
+  </section>
+
+  <section class="features" id="features">
+    <h3>What you get</h3>
+    <div class="grid">
+      <article class="card"><div class="icon">◍</div><h4>Instant inbox</h4>
+        <p>Files sent to you appear the moment they arrive, with size, progress and one-click <strong>Save</strong>, <strong>Save to…</strong> or <strong>Delete</strong>.</p></article>
+      <article class="card"><div class="icon">⇪</div><h4>Send in one move</h4>
+        <p>Pick a device, a file, or drag &amp; drop on the window. Send to one device or several at once. Paste an image or text and Ctrl+V to send it.</p></article>
+      <article class="card"><div class="icon">⏷</div><h4>Auto-save</h4>
+        <p>One checkbox and every incoming file lands in your folder the moment it arrives — like <code>tailscale file get --loop</code>, with a notification.</p></article>
+      <article class="card"><div class="icon">◫</div><h4>Full history</h4>
+        <p>Everything is logged locally: arrivals, saves (with the path), deletes and sends. Search, filter, re-open a saved file, export as JSON.</p></article>
+      <article class="card"><div class="icon">⌘</div><h4>Native &amp; quiet</h4>
+        <p>Tray quick-send, OS notifications even when hidden, a Ctrl+Shift+T global shortcut, and close-to-tray instead of surprise quits.</p></article>
+      <article class="card"><div class="icon">↗</div><h4>Drop links</h4>
+        <p>Create a short-lived link anyone can open in a browser — <strong>no Tailscale account needed</strong> — to send a file straight into your inbox.</p></article>
+    </div>
+  </section>
+
+  <section class="premium" id="premium">
+    <div class="premium-inner">
+      <div>
+        <span class="pila">Premium</span>
+        <h3>Public drop links — $5/mo</h3>
+        <p>
+          Drop links are private by default. Flip on <strong>Public access (Funnel)</strong> and the app runs
+          <code>tailscale funnel</code> itself, exposing <strong>only</strong> the public
+          <code>https://&lt;you&gt;.ts.net/drop/…</code> pages to <em>anyone on the internet</em> — the app and its
+          session token are never reachable.
+        </p>
+      </div>
+      <ul>
+        <li>Anyone can drop a file into your inbox — no Tailscale account, no setup</li>
+        <li>Uploads stay quarantined through the same save / risky-open handling as everything else</li>
+        <li>Subscribed and managed in <strong>Settings → Premium</strong> (Stripe, cancel any time)</li>
+        <li>Enforced server-side on distributed builds — a patched client can't get free public drops</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="downloads" id="downloads">
+    <h3>Download &amp; install</h3>
+    <p class="sub">Pick your platform. Releases are signed against SHA-256 digests in the update manifest.</p>
+
+    <div class="dl-grid">
+
+      <article class="dl-card" data-os="linux">
+        <div class="dl-head">
+          <span class="dl-os">Linux</span>
+          <span class="dl-tag">NixOS · x86_64</span>
+        </div>
+        <p class="dl-desc">Install with one command — the binary is wrapped against WebKitGTK 6.0 so it just runs, and updates with <code>nix profile upgrade taildrop-install</code>.</p>
+        <div class="cmd" data-copy="nix profile install github:Rastavich/taildrop-install"><code>nix profile install github:Rastavich/taildrop-install</code><button class="copy" aria-label="Copy command">copy</button></div>
+      </article>
+
+      <article class="dl-card" data-os="linux">
+        <div class="dl-head">
+          <span class="dl-os">Linux</span>
+          <span class="dl-tag">Debian / Ubuntu / Fedora / RHEL</span>
+        </div>
+        <p class="dl-desc"><code>.deb</code> for Debian/Ubuntu and <code>.rpm</code> for Fedora/RHEL (require a WebKitGTK 6.0 system).</p>
+        <div class="dl-actions">
+          <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-linux-amd64.deb" download>Download .deb</a>
+          <a class="btn ghost" href="https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-linux-x86_64.rpm" download>Download .rpm</a>
+        </div>
+      </article>
+
+      <article class="dl-card" data-os="mac">
+        <div class="dl-head">
+          <span class="dl-os">macOS</span>
+          <span class="dl-tag">.zip · amd64</span>
+        </div>
+        <p class="dl-desc">Download the app bundle, unzip, and drag it to <code>/Applications</code>. Runs on Apple Silicon via Rosetta 2.</p>
+        <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-darwin-amd64.zip" download>Download for macOS</a>
+        <p class="hint">Ad-hoc signed — macOS may show a Gatekeeper warning; right-click → Open once.</p>
+      </article>
+
+      <article class="dl-card" data-os="windows">
+        <div class="dl-head">
+          <span class="dl-os">Windows</span>
+          <span class="dl-tag">.exe · amd64</span>
+        </div>
+        <p class="dl-desc">A single portable executable — download, run, done. It self-updates from the project's update channel, so you don't need to come back for new versions.</p>
+        <a class="btn primary" href="https://raw.githubusercontent.com/Rastavich/taildrop-install/main/updates/tailscale-drop-windows-amd64.exe" download>Download for Windows</a>
+      </article>
+
+    </div>
+
+    <p class="footnote">
+      Everything above is served from the public install repository —
+      <a href="https://github.com/Rastavich/taildrop-install" target="_blank" rel="noopener">github.com/Rastavich/taildrop-install</a> —
+      which CI republishes on every release. Source is also there if you want to build it yourself.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  <p>
+    MIT licensed · independent project · not affiliated with or endorsed by
+    <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale Inc.</a>
+    "Taildrop" is a feature of Tailscale.
+  </p>
+</footer>
+
+<script>
+(function () {
+  // Which OS is the visitor on (best effort, used to point the hero CTA).
+  var ua = navigator.userAgent;
+  var os = /Mac/i.test(ua) ? 'mac' : /Windows/i.test(ua) ? 'windows' : 'linux';
+
+  // Highlight the matching download card.
+  var cards = document.querySelectorAll('.dl-card');
+  Array.prototype.forEach.call(cards, function (c) {
+    if (c.getAttribute('data-os') === os) c.classList.add('active');
+  });
+
+  // Hero CTA: direct download on mac/win, jump to the install command on linux.
+  var cta = document.getElementById('cta');
+  if (os === 'mac') {
+    cta.textContent = 'Download for macOS';
+    cta.href = document.querySelector('[data-os="mac"] .btn.primary').getAttribute('href');
+  } else if (os === 'windows') {
+    cta.textContent = 'Download for Windows';
+    cta.href = document.querySelector('[data-os="windows"] .btn.primary').getAttribute('href');
+  } else {
+    cta.textContent = 'Get the install command';
+    cta.href = '#downloads';
+  }
+
+  // Copy-to-clipboard for the nix command (async Clipboard API with a
+  // legacy execCommand fallback for non-secure contexts).
+  function flash(b) {
+    var prev = b.textContent;
+    b.textContent = 'copied ✓';
+    setTimeout(function () { b.textContent = prev; }, 1500);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-copy]'), function (box) {
+    var text = box.getAttribute('data-copy');
+    box.querySelector('.copy').addEventListener('click', function onCopy() {
+      var b = box.querySelector('.copy');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { flash(b); }, function () { legacyCopy(text); flash(b); });
+      } else {
+        legacyCopy(text); flash(b);
+      }
+      function legacyCopy(t) {
+        var ta = document.createElement('textarea');
+        ta.value = t;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
