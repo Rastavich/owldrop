@@ -131,12 +131,17 @@ export async function copyText(text: string, silent = false): Promise<boolean> {
   return ok;
 }
 
-const RISKY_EXT = ['exe', 'msi', 'bat', 'cmd', 'sh', 'appimage', 'deb', 'rpm', 'run', 'ps1', 'dll', 'scr', 'jar', 'bin', 'elf', 'com', 'cpl', 'gadget', 'ins', 'iso', 'js', 'jse', 'lnk', 'msc', 'msp', 'reg', 'vbs', 'vbe', 'wsf', 'wsh', 'py', 'php', 'pl', 'rb'];
+const RISKY_EXT = ['exe', 'msi', 'bat', 'cmd', 'sh', 'appimage', 'deb', 'rpm', 'run', 'ps1', 'dll', 'scr', 'jar', 'bin', 'elf', 'com', 'cpl', 'gadget', 'ins', 'iso', 'js', 'jse', 'lnk', 'msc', 'msp', 'reg', 'vbs', 'vbe', 'wsf', 'wsh', 'py', 'php', 'pl', 'rb', 'hta', 'pif', 'scf', 'chm', 'url', 'command', 'workflow', 'scpt', 'applescript', 'desktop', 'app', 'apk'];
 
 export function riskyPath(p: string): boolean {
-  const i = p.lastIndexOf('.');
-  if (i <= 0 || i === p.length - 1) return false;
-  return RISKY_EXT.includes(p.slice(i + 1).toLowerCase());
+  // Normalize the basename the way the OS will open it: Windows strips
+  // trailing dots and spaces ("evil.exe." → "evil.exe"), so do the same
+  // before extracting the extension.
+  let base = p.slice(p.lastIndexOf('/') + 1);
+  base = base.replace(/[.\s]+$/, '');
+  const i = base.lastIndexOf('.');
+  if (i <= 0 || i === base.length - 1) return false;
+  return RISKY_EXT.includes(base.slice(i + 1).toLowerCase());
 }
 
 export function pct(w: number, s: number): number {

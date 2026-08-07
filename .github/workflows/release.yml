@@ -20,12 +20,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: v
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           V="$(sed -n 's/^[[:space:]]*version: "\([^"]*\)"/\1/p' build/config.yml)"
           echo "version=$V" >> "$GITHUB_OUTPUT"
           # Accept both v0.4.0 and 0.4.0 tags; anything else is a mismatch.
-          if [[ "${{ github.ref_type }}" == "tag" && "v$V" != "${{ github.ref_name }}" && "$V" != "${{ github.ref_name }}" ]]; then
-            echo "::error::build/config.yml version $V does not match tag ${{ github.ref_name }}. Re-tag or bump the version."
+          # REF_* come from env (not inline interpolation) so a crafted tag
+          # name can't inject shell.
+          if [[ "$REF_TYPE" == "tag" && "v$V" != "$REF_NAME" && "$V" != "$REF_NAME" ]]; then
+            echo "::error::build/config.yml version $V does not match tag $REF_NAME. Re-tag or bump the version."
             exit 1
           fi
 

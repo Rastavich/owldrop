@@ -49,11 +49,12 @@ type linkFile struct {
 }
 
 type dropManager struct {
-	mu    sync.Mutex
-	path  string // config file (droplinks.json)
-	dir   string // quarantine dir (drops/)
-	links map[string]*dropLink
-	files map[string]*linkFile // inbox basename → uploaded file
+	mu       sync.Mutex
+	path     string // config file (droplinks.json)
+	dir      string // quarantine dir (drops/)
+	links    map[string]*dropLink
+	files    map[string]*linkFile // inbox basename → uploaded file
+	uploadMu sync.Map // per-token *sync.Mutex: serializes uploads to one link (kills TOCTOU on maxUses/TTL + the concurrent map race)
 }
 
 func newDropManager(cfgDir string) *dropManager {
@@ -65,6 +66,13 @@ func newDropManager(cfgDir string) *dropManager {
 	}
 	m.load()
 	return m
+}
+
+// uploadLock returns the per-token mutex used to serialize uploads to a
+// single link (see handleDropUpload).
+func (m *dropManager) uploadLock(token string) *sync.Mutex {
+	actual, _ := m.uploadMu.LoadOrStore(token, &sync.Mutex{})
+	return actual.(*sync.Mutex)
 }
 
 func (m *dropManager) load() {
@@ -290,22 +298,32 @@ func (s *server) handleDropPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	io.WriteString(w, html)
 }
-
 func (s *server) handleDropUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	token := dropTokenFromPath(r.URL.Path)
+	// Serialize uploads to this link: closes the TOCTOU between usable() and
+	// useOnce() (maxUses/TTL bypass via concurrent uploads) and the
+	// concurrent map access in storeFolderZip.
+	mu := s.drops.uploadLock(token)
+	mu.Lock()
+	defer mu.Unlock()
 	if ok, msg := s.drops.usable(token); !ok {
 		writeJSONStatus(w, http.StatusGone, map[string]any{"error": msg})
 		return
 	}
+	// Consume the use up front: a single-use link can't be raced past 1
+	// upload, and a failed upload consumes the slot (safer default than
+	// letting an attacker retry into a bypass).
+	s.drops.useOnce(token)
 	r.Body = http.MaxBytesReader(w, r.Body, maxDropUploadSize)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "upload too large or malformed"})
 		return
 	}
+	defer r.MultipartForm.RemoveAll() // never leak the 4 GiB temp spool
 	parts := r.MultipartForm.File["file"]
 	if len(parts) == 0 {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "no file part named \"file\""})
@@ -368,13 +386,8 @@ func (s *server) handleDropUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.drops.useOnce(token)
+
 	files := make([]waitingFile, 0, len(lfs))
-	for _, lf := range lfs {
-		files = append(files, waitingFile{
-			Name: lf.Name, Size: lf.Size, Arrived: lf.Arrived, Source: "link", Sender: lf.Sender,
-		})
-	}
 	s.history.recordArrivals(files)
 	s.broadcastInboxNow()
 	names := make([]string, 0, len(lfs))
@@ -404,7 +417,9 @@ func (s *server) storeFolderZip(token string, parts []*multipart.FileHeader, pat
 		return nil, err
 	}
 	finalName := uniqueName(zipName, func(n string) bool {
+		s.drops.mu.Lock()
 		_, exists := s.drops.files[n]
+		s.drops.mu.Unlock()
 		return exists || inboxHas(n)
 	})
 	out, err := os.OpenFile(filepath.Join(dir, finalName), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)

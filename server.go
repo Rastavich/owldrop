@@ -1131,6 +1131,10 @@ func (s *server) handleNtfyTest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleTailscaleUp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	st, err := tsClient.Status(ctx)

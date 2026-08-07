@@ -34,7 +34,7 @@ func main() {
 	var (
 		port    = flag.Int("port", 8976, "port for the UI (0 = pick a free port)")
 		saveDir = flag.String("save-dir", "", "default folder for received files (defaults to your Downloads folder)")
-		lan     = flag.Bool("lan", false, "bind to all interfaces so other tailnet devices can open the UI (token-protected)")
+		lan     = flag.Bool("lan", false, "bind to all interfaces so other tailnet devices can open the UI (any tailnet device can then control the app — only enable on a trusted tailnet)")
 	)
 	flag.Parse()
 

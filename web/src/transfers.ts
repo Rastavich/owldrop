@@ -1,9 +1,9 @@
 // Save/delete/send operations shared by the views. Progress lives in the
 // transfers store; the SSE stream keeps it moving.
 import { deleteInboxFile, openPath, saveInboxFile, sendFile as sendFileApi } from './api';
+import { openPathWithWarning } from './components/ConfirmModal';
 import { queryClient } from './queryClient';
 import { putSaving, putSending, removeSaving, removeSending, toast, transfersStore, updateSaving, updateSending } from './store';
-import { uuid } from './utils';
 import type { WaitingFile } from './types';
 
 export async function saveFile(name: string, size: number, dir: string, source = '') {
@@ -20,7 +20,7 @@ export async function saveFile(name: string, size: number, dir: string, source =
       {
         label: 'Open',
         fn: () => {
-          openPath(res.path).catch(() => {});
+          openPathWithWarning(res.path);
         },
       },
       {

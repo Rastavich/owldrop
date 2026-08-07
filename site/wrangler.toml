@@ -26,3 +26,5 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "owldrop-analytics"
 database_id = "b90fa1c6-ab8f-4704-8c02-ac4b0bddc1a8"
+# Dev sessions talk to the real production DB (schema/behavior parity).
+remote = true

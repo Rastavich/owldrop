@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,7 +56,9 @@ func (s *server) initUpdater(app *application.App) {
 		return
 	}
 	feed := defaultUpdateFeed
-	if v := os.Getenv("OWLDROP_UPDATE_URL"); v != "" {
+	// Only allow an https override: an http:// feed would let a local
+	// network attacker serve a malicious manifest.
+	if v := os.Getenv("OWLDROP_UPDATE_URL"); v != "" && strings.HasPrefix(v, "https://") {
 		feed = v
 	}
 	p, err := endpoint.New(endpoint.Config{URL: feed})
@@ -152,6 +155,10 @@ func (s *server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if s.update == nil {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "updates not available in this build"})
 		return
@@ -166,6 +173,10 @@ func (s *server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleUpdateInstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if s.update == nil {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "updates not available in this build"})
 		return
