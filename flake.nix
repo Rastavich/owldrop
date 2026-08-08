@@ -41,7 +41,7 @@
         # proxyVendor downloads the module cache instead — same result, no
         # embed resolution at fetch time.
         proxyVendor = true;
-        vendorHash = "sha256-yEry1C6gzYo9weLBEucMEw5cf1h+HVPgNgj7I0c4BuQ=";
+        vendorHash = "sha256-9SAKzK2cAAzlftelAmDNwQyzipB/9WxGX7RlZPNoVqg=";
         subPackages = [ "." ];
         # drops_test.go talks to a live tailscaled daemon; not available in
         # the build sandbox (they run fine on a machine with tailscaled).
