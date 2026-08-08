@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -111,4 +112,22 @@ func (s *server) broadcastInboxNow() {
 	if files, err := s.combinedInbox(ctx); err == nil {
 		s.hub.broadcast(inboxEvent{Type: "inbox", Files: files})
 	}
+}
+
+// fmtSize renders a byte count the way the UI does (KiB/MiB/GiB/TiB).
+func fmtSize(n int64) string {
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	units := []string{"KiB", "MiB", "GiB", "TiB"}
+	v := float64(n)
+	i := -1
+	for v >= 1024 && i < len(units)-1 {
+		v /= 1024
+		i++
+	}
+	if v >= 100 {
+		return fmt.Sprintf("%.0f %s", v, units[i])
+	}
+	return fmt.Sprintf("%.1f %s", v, units[i])
 }

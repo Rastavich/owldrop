@@ -1,0 +1,55 @@
+//go:build server
+
+// Headless entry point for `-tags server` builds (Docker, NAS boxes like
+// Unraid). No Wails app, window, tray, notifications, or self-updater —
+// just the HTTP server and the daemon inbox watcher. Updating a container
+// means pulling a new image, so the binary-swap updater stays off here.
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"syscall"
+	"time"
+)
+
+func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string) error {
+	serverCtx, serverCancel := context.WithCancel(ctx)
+	defer serverCancel()
+
+	go srv.watchInbox(serverCtx)
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		if errors.Is(err, syscall.EADDRINUSE) {
+			return fmt.Errorf("port %s is already in use — stop the other process or pass --port", addr)
+		}
+		return fmt.Errorf("can't listen on %s: %w", addr, err)
+	}
+	portNum := ln.Addr().(*net.TCPAddr).Port
+	srv.setListenerPort(portNum)
+	fmt.Printf("owldrop UI: http://127.0.0.1:%d/\n", portNum)
+	fmt.Printf("inbox saved to: %s\n", srv.saveDir())
+	if srv.lan {
+		for _, u := range srv.lanURLs() {
+			fmt.Printf("LAN UI: %s\n", u)
+		}
+		fmt.Println("note: anyone on your tailnet who knows the URL can control the app")
+	}
+
+	go func() {
+		<-serverCtx.Done()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		httpSrv.Shutdown(shutCtx)
+	}()
+
+	err = srv.serveHTTP(httpSrv, ln)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil // graceful SIGINT/SIGTERM shutdown
+	}
+	return err
+}
