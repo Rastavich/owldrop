@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,21 +11,25 @@ import (
 
 // fakeServeStore is an in-memory serveConfigStore for tests.
 type fakeServeStore struct {
-	cfg *serveConfigWire
-	err error
+	cfg  *serveConfigWire
+	etag string
+	err  error
 }
 
-func (f *fakeServeStore) getServeConfig(context.Context) (*serveConfigWire, error) {
+func (f *fakeServeStore) getServeConfig(context.Context) (*serveConfigWire, string, error) {
 	if f.err != nil {
-		return nil, f.err
+		return nil, "", f.err
 	}
 	cp := *f.cfg
-	return &cp, nil
+	return &cp, f.etag, nil
 }
 
-func (f *fakeServeStore) putServeConfig(_ context.Context, cfg *serveConfigWire) error {
+func (f *fakeServeStore) putServeConfig(_ context.Context, cfg *serveConfigWire, etag string) error {
 	if f.err != nil {
 		return f.err
+	}
+	if etag != f.etag {
+		return errors.New("etag mismatch (concurrent change)")
 	}
 	cp := *cfg
 	f.cfg = &cp

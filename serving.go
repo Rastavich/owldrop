@@ -55,10 +55,12 @@ type httpHandlerWire struct {
 }
 
 // serveConfigStore is the daemon's serve-config endpoint; the raw client
-// implements it, tests inject fakes.
+// implements it, tests inject fakes. The etag is the daemon's optimistic
+// concurrency token: writes must carry it (If-Match), or the daemon rejects
+// them (405/412).
 type serveConfigStore interface {
-	getServeConfig(ctx context.Context) (*serveConfigWire, error)
-	putServeConfig(ctx context.Context, cfg *serveConfigWire) error
+	getServeConfig(ctx context.Context) (cfg *serveConfigWire, etag string, err error)
+	putServeConfig(ctx context.Context, cfg *serveConfigWire, etag string) error
 }
 
 // rawServeClient dials the daemon socket directly (OWLDROP_TS_SOCKET
@@ -75,10 +77,15 @@ func newRawServeClient() *rawServeClient {
 	return &rawServeClient{sock: sock}
 }
 
-func (c *rawServeClient) do(ctx context.Context, method, path string, body io.Reader) (int, []byte, error) {
+func (c *rawServeClient) do(ctx context.Context, method, path string, body io.Reader, hdr http.Header) (int, http.Header, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, "http://local-tailscaled.sock"+path, body)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
+	}
+	for k, vs := range hdr {
+		for _, v := range vs {
+			req.Header.Add(k, v)
+		}
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -89,34 +96,39 @@ func (c *rawServeClient) do(ctx context.Context, method, path string, body io.Re
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	defer res.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
-	return res.StatusCode, b, nil
+	return res.StatusCode, res.Header, b, nil
 }
 
-func (c *rawServeClient) getServeConfig(ctx context.Context) (*serveConfigWire, error) {
-	code, b, err := c.do(ctx, http.MethodGet, "/localapi/v0/serve-config", nil)
+func (c *rawServeClient) getServeConfig(ctx context.Context) (*serveConfigWire, string, error) {
+	code, hdr, b, err := c.do(ctx, http.MethodGet, "/localapi/v0/serve-config", nil, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if code != http.StatusOK {
-		return nil, fmt.Errorf("serve-config: HTTP %d", code)
+		return nil, "", fmt.Errorf("serve-config: HTTP %d", code)
 	}
+	etag := hdr.Get("ETag")
 	if len(bytes.TrimSpace(b)) == 0 {
-		return &serveConfigWire{}, nil
+		return &serveConfigWire{}, etag, nil
 	}
 	var cfg serveConfigWire
 	if err := json.Unmarshal(b, &cfg); err != nil {
-		return nil, fmt.Errorf("serve-config parse: %w", err)
+		return nil, "", fmt.Errorf("serve-config parse: %w", err)
 	}
-	return &cfg, nil
+	return &cfg, etag, nil
 }
 
-func (c *rawServeClient) putServeConfig(ctx context.Context, cfg *serveConfigWire) error {
+func (c *rawServeClient) putServeConfig(ctx context.Context, cfg *serveConfigWire, etag string) error {
 	b, _ := json.Marshal(cfg)
-	code, body, err := c.do(ctx, http.MethodPut, "/localapi/v0/serve-config", bytes.NewReader(b))
+	hdr := http.Header{}
+	if etag != "" {
+		hdr.Set("If-Match", etag)
+	}
+	code, _, body, err := c.do(ctx, http.MethodPost, "/localapi/v0/serve-config", bytes.NewReader(b), hdr)
 	if err != nil {
 		return err
 	}
@@ -132,6 +144,7 @@ type servingManager struct {
 	store serveConfigStore
 	mu    sync.Mutex
 	cache *serveConfigWire
+	etag  string
 	fetch time.Time
 }
 
@@ -148,11 +161,12 @@ func (m *servingManager) get(ctx context.Context) *serveConfigWire {
 	if m.cache != nil && time.Since(m.fetch) < 5*time.Second {
 		return m.cache
 	}
-	cfg, err := m.store.getServeConfig(ctx)
+	cfg, etag, err := m.store.getServeConfig(ctx)
 	if err != nil {
 		return m.cache // stale cache or nil on first failure
 	}
 	m.cache = cfg
+	m.etag = etag
 	m.fetch = time.Now()
 	return cfg
 }
@@ -163,9 +177,35 @@ func (m *servingManager) invalidate() {
 	m.cache = nil
 }
 
+// set writes the config with the daemon's current etag (If-Match), so a
+// concurrent change by another tool fails loudly instead of silently
+// clobbering. The etag comes from the live fetch, never the cache.
 func (m *servingManager) set(ctx context.Context, cfg *serveConfigWire) error {
+	m.mu.Lock()
+	etag, err := m.liveEtagLocked(ctx)
+	m.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if err := m.store.putServeConfig(ctx, cfg, etag); err != nil {
+		m.invalidate()
+		return err
+	}
 	m.invalidate()
-	return m.store.putServeConfig(ctx, cfg)
+	return nil
+}
+
+// liveEtagLocked unconditionally refetches the daemon config and returns
+// its etag, refreshing the cache in the process.
+func (m *servingManager) liveEtagLocked(ctx context.Context) (string, error) {
+	cfg, etag, err := m.store.getServeConfig(ctx)
+	if err != nil {
+		return "", err
+	}
+	m.cache = cfg
+	m.etag = etag
+	m.fetch = time.Now()
+	return etag, nil
 }
 
 // hostPort is the serve/funnel config key for this machine's HTTPS listener.
