@@ -211,6 +211,17 @@ main { max-width: var(--maxw); margin: 0 auto; padding: 26px 28px 70px; }
   box-shadow: var(--shadow-pop), 0 0 0 1px rgba(109, 123, 255, .06), 0 0 80px rgba(109, 123, 255, .12);
   overflow: hidden;
 }
+
+/* demo video — full width below the hero */
+.demo {
+  margin: 10px auto 54px;
+  max-width: 920px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-pop), 0 0 0 1px rgba(109, 123, 255, .06), 0 0 90px rgba(109, 123, 255, .10);
+}
+.demo video { display: block; width: 100%; height: auto; }
 .mock-bar {
   display: flex;
   align-items: center;
