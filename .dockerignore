@@ -1,0 +1,13 @@
+.git
+.github
+bin
+node_modules
+web/node_modules
+web/dist
+site/.wrangler
+.task
+result
+*.exe
+owldrop
+tailscale-drop
+-.o

@@ -228,6 +228,40 @@ jobs:
             exit 1
           fi
 
+  # Builds and pushes the headless NAS/Docker image to ghcr (root Dockerfile:
+  # static -tags server binary on alpine). Independent of the OS builds — the
+  # container compiles its own binary and frontend from source.
+  docker:
+    needs: preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Login to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve lowercase image name (ghcr rejects uppercase)
+        id: img
+        run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          build-args: VERSION=${{ needs.preflight.outputs.version }}
+          tags: |
+            ${{ steps.img.outputs.name }}:latest
+            ${{ steps.img.outputs.name }}:${{ needs.preflight.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # Publishes to the public owldrop-install repo (source stays private):
   # the nix-built linux binary (for `nix profile install`), the .deb/.rpm
   # packages (for the website's Linux download section), plus the Wails

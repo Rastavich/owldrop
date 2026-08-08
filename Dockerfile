@@ -11,6 +11,14 @@
 #
 # The binary is fully static (CGO_ENABLED=0, -tags server): no GTK, no
 # libc dependencies at runtime.
+# web/dist is gitignored — build the frontend in its own stage so CI works.
+FROM node:alpine AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
 FROM golang:alpine AS builder
 ARG VERSION=dev
 RUN apk add --no-cache git
@@ -18,6 +26,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+COPY --from=web /web/dist ./web/dist
 RUN sed -i '/^replace/d' go.mod || true
 RUN CGO_ENABLED=0 go build -tags server,production -trimpath -buildvcs=false \
     -ldflags "-s -w -X main.appVersion=${VERSION}" -o /owldrop .

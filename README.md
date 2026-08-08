@@ -60,6 +60,39 @@ hostname where nothing else is reachable.)
   URL — free, served from your own machine (only `/drop/*` is exposed)
 - **History export** — one click dumps the full log as JSON
 
+## Docker / NAS (Unraid, Synology, …)
+
+Run owldrop in a container on a machine that already runs Tailscale. The
+container borrows the host's Tailscale — it doesn't need its own account.
+
+1. Get the image:
+
+   ```sh
+   docker pull ghcr.io/rastavich/owldrop:latest
+   ```
+
+2. Run it (one command — adjust the two paths for your box):
+
+   ```sh
+   docker run -d --name owldrop --restart unless-stopped \
+     -p 8976:8976 \
+     -v /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock \
+     -v owldrop-config:/data \
+     -v /mnt/user/downloads:/data/downloads \
+     ghcr.io/rastavich/owldrop:latest --lan --save-dir /data/downloads
+   ```
+
+   - `/var/run/tailscale/tailscaled.sock` — leave as-is on Linux; this is how
+     the container talks to your Tailscale.
+   - `/mnt/user/downloads` — the folder where saved files land. Point it at
+     any share/folder you want files to arrive in (on Unraid, e.g.
+     `/mnt/user/media`).
+
+3. Open it from any device on your tailnet: `http://<nas-tailnet-ip>:8976/`
+
+That's it. To let every device on your tailnet *send* files through it, keep
+the `--lan` flag as above; drop links work the same way as the desktop app.
+
 ## Run
 
 NixOS (or anywhere with the nix dev shell):
