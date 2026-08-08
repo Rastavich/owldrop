@@ -209,6 +209,7 @@ func (s *server) funnelHost(host string) bool {
 }
 
 // lanURLs returns the URLs other tailnet devices can use to open the UI.
+// The MagicDNS hostname comes first: readable and stable across IP changes.
 func (s *server) lanURLs() []string {
 	if !s.lan || s.port == 0 {
 		return nil
@@ -219,11 +220,31 @@ func (s *server) lanURLs() []string {
 	if err != nil || st.Self == nil {
 		return nil
 	}
+	return lanURLsForSelf(st.Self, s.port)
+}
+
+// lanURLsForSelf builds the LAN URLs from the daemon's self status.
+func lanURLsForSelf(self *ipnstate.PeerStatus, port int) []string {
 	var urls []string
-	for _, ip := range st.Self.TailscaleIPs {
-		urls = append(urls, fmt.Sprintf("http://%s:%d/", ip, s.port))
+	if dns := strings.TrimSuffix(self.DNSName, "."); dns != "" {
+		urls = append(urls, fmt.Sprintf("http://%s:%d/", dns, port))
+	}
+	for _, ip := range self.TailscaleIPs {
+		urls = append(urls, fmt.Sprintf("http://%s:%d/", ip, port))
 	}
 	return urls
+}
+
+// peerIsLoopback reports whether the request came from this machine. Funnel
+// traffic is proxied by the local tailscaled, so its peer is loopback; a
+// tailnet peer connecting over LAN arrives from a non-loopback address.
+func peerIsLoopback(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (s *server) setListenerPort(p int) {
@@ -432,9 +453,12 @@ func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		// Through the Funnel hostname only the public drop pages exist; the
-		// full app (which embeds the session token) must never be public.
-		if s.funnelHost(r.Host) && !strings.HasPrefix(r.URL.Path, "/drop/") {
+		// The MagicDNS hostname is shared with Tailscale Funnel (public), so
+		// only the drop pages are served there for Funnel traffic — which
+		// the local tailscaled proxies from loopback. A real tailnet peer
+		// connecting over LAN is a non-loopback address and gets the full
+		// app, exactly as it would via its tailnet IP.
+		if s.funnelHost(r.Host) && peerIsLoopback(r) && !strings.HasPrefix(r.URL.Path, "/drop/") {
 			http.NotFound(w, r)
 			return
 		}
@@ -737,6 +761,7 @@ func (s *server) configResponse(c config) map[string]any {
 	if c.LAN {
 		if urls := s.lanURLs(); len(urls) > 0 {
 			resp["lanUrl"] = urls[0]
+			resp["lanUrls"] = urls
 		}
 	}
 	resp["ntfyTopic"] = c.NtfyTopic

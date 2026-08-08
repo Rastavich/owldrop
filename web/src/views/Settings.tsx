@@ -144,7 +144,17 @@ export default function Settings() {
         <input type="checkbox" checked={!!config?.lan} onChange={(e) => patch({ lan: e.target.checked }, 'Applying LAN mode — reload the page if it disconnects')} />
         Allow other devices on my tailnet to open this app
       </label>
-      {config?.lan && config.lanUrl && <p className="sub2">{config.lanUrl}</p>}
+      {config?.lan && config.lanUrl && (
+        <p className="sub2">
+          {config.lanUrl}
+          {config.lanUrls && config.lanUrls.length > 1 && (
+            <span className="muted">
+              <br />
+              also via {config.lanUrls.slice(1).join(' · ')}
+            </span>
+          )}
+        </p>
+      )}
       <p className="sub2">Opening this app from another device is as powerful as being at this machine — only enable it if you trust your tailnet.</p>
 
       </div>

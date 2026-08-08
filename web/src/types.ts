@@ -11,6 +11,7 @@ export interface AppConfig {
   autoSave: boolean;
   lan: boolean;
   lanUrl?: string;
+  lanUrls?: string[];
   ntfyTopic?: string; // set = push a phone notification via ntfy after sends
   ntfyServer?: string; // empty = https://ntfy.sh
   notifyArrival: boolean;
