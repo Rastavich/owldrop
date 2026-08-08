@@ -41,7 +41,15 @@ MAKEAPPX=$(ls -1 "$PF86/Windows Kits/10/bin"/*/x64/makeappx.exe 2>/dev/null | so
 if [ -n "$MAKEAPPX" ]; then
   STAGE_WIN=$(cygpath -w "$STAGE")
   OUT_WIN=$(cygpath -w "$ROOT/bin/owldrop-$VERSION-x64.msix")
-  "$MAKEAPPX" pack /d "$STAGE_WIN" /p "$OUT_WIN" /nv
+  # Git-bash (MSYS) rewrites leading-slash arguments into Windows paths when
+  # invoking native exes ("/d" becomes "D:/"), which makeappx rejects. Pin
+  # conversion off for this call; harmless on real POSIX shells.
+  export MSYS_NO_PATHCONV=1
+  export MSYS2_ARG_CONV_EXCL='*'
+  # No /nv: full semantic validation is the point — it checks files the
+  # manifest references (assets, executable) before packing. /o avoids the
+  # overwrite prompt on re-runs.
+  "$MAKEAPPX" pack /d "$STAGE_WIN" /p "$OUT_WIN" /o
   echo "packed with makeappx: bin/owldrop-$VERSION-x64.msix"
 else
   go run ./tools/msixpack -stage "$STAGE" -out "bin/owldrop-$VERSION-x64.msix"
