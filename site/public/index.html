@@ -43,7 +43,7 @@
   "name": "Owldrop",
   "url": "https://owldrop.app/",
   "downloadUrl": "https://owldrop.app/#downloads",
-  "softwareVersion": "0.5.8",
+  "softwareVersion": "0.6.2",
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Windows, macOS, Linux",
   "description": "A native desktop app for Tailscale's Taildrop: an inbox for incoming files with one-click save/delete, drag-and-drop sending, auto-save, full local history, and public drop links.",
@@ -72,7 +72,7 @@
       <a href="#support">Support</a>
       <a href="#downloads">Download</a>
     </nav>
-    <span class="pill" id="version-pill">v0.5.8</span>
+    <span class="pill" id="version-pill">v0.6.2</span>
   </div>
 </header>
 
@@ -280,6 +280,18 @@
 
 <script>
 (function () {
+  // Version pill: read the public update manifest (same feed the app's
+  // self-updater consumes, refreshed by CI on every release) so the site
+  // never shows a stale version. Falls back to the value baked at deploy.
+  fetch('https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/stable.json')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (m) {
+      if (m && m.version) {
+        document.getElementById('version-pill').textContent = 'v' + m.version;
+      }
+    })
+    .catch(function () { /* keep the baked-in version */ });
+
   // Which OS is the visitor on (best effort, used to point the hero CTA).
   var ua = navigator.userAgent;
   var os = /Mac/i.test(ua) ? 'mac' : /Windows/i.test(ua) ? 'windows' : 'linux';
