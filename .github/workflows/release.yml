@@ -251,6 +251,10 @@ jobs:
         run: echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
       - name: Build and push
         uses: docker/build-push-action@v6
+        env:
+          # Stop buildx uploading a .dockerbuild artifact into the run: the
+          # catch-all artifact downloads in release/publish-updates fail on it.
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
         with:
           context: .
           file: Dockerfile
@@ -259,8 +263,6 @@ jobs:
           tags: |
             ${{ steps.img.outputs.name }}:latest
             ${{ steps.img.outputs.name }}:${{ needs.preflight.outputs.version }}
-          # NOTE: no type=gha cache — its cache artifact breaks the catch-all
-          # artifact downloads in the release/publish-updates jobs.
 
   # Publishes to the public owldrop-install repo (source stays private):
   # the nix-built linux binary (for `nix profile install`), the .deb/.rpm
@@ -276,6 +278,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: "{linux,linux-nix,windows,macos}"
           path: dl
       - name: Build update manifest and stage files
         run: |
@@ -349,6 +352,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          pattern: "{linux,linux-nix,windows,macos}"
           path: dist
           merge-multiple: true
       - name: Checksums
