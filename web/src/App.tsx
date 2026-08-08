@@ -25,25 +25,26 @@ export default function App() {
     <>
       <header>
         <div className="brand">
-          <svg className="logo" viewBox="0 0 40 40" fill="none">
+          {/* The owl-eyes mark (same family as the tray/window/app icon). */}
+          <svg className="logo" viewBox="0 0 512 512">
             <defs>
-              <linearGradient id="g" x1="0" y1="0" x2="40" y2="40">
-                <stop stopColor="#5f6cff" />
-                <stop offset="1" stopColor="#8b5cf6" />
+              <linearGradient id="owlbg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor="#6d7bff" />
+                <stop offset="1" stopColor="#9a5cff" />
               </linearGradient>
             </defs>
-            <path
-              d="M12 30a8 8 0 1 1 1.2-15.9A10 10 0 0 1 32.5 16 7.5 7.5 0 0 1 31 30.5H12z"
-              fill="url(#g)"
-              opacity=".92"
-            />
-            <path
-              d="M20 24.5v-9m0 0-3.4 3.4M20 15.5l3.4 3.4"
-              stroke="#fff"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <rect width="512" height="512" rx="112" fill="url(#owlbg)" />
+            <g transform="translate(0,18)">
+              <path d="M148 116 L214 178 L128 190 Z" fill="#efeaff" />
+              <path d="M364 116 L298 178 L384 190 Z" fill="#efeaff" />
+              <circle cx="192" cy="240" r="88" fill="#efeaff" />
+              <circle cx="320" cy="240" r="88" fill="#efeaff" />
+              <circle cx="192" cy="240" r="36" fill="#1a1440" />
+              <circle cx="320" cy="240" r="36" fill="#1a1440" />
+              <circle cx="205" cy="227" r="12" fill="#fff" />
+              <circle cx="333" cy="227" r="12" fill="#fff" />
+              <path d="M234 302 L278 302 L256 346 Z" fill="#ffb224" />
+            </g>
           </svg>
           <div>
             <h1>Owldrop</h1>
