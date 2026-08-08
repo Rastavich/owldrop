@@ -280,7 +280,7 @@ billing-gate. (`./scripts/funnel.sh` still exists for manual control.)
 ## Support
 
 Owldrop is MIT-licensed and free. If it saves you time, a coffee keeps the
-owl fed: [ko-fi.com/owldrop](https://ko-fi.com/owldrop).
+owl fed: [ko-fi.com/X8X51XKA5G](https://ko-fi.com/X8X51XKA5G).
 
 ## Telemetry
 

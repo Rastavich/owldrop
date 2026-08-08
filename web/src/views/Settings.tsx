@@ -248,10 +248,10 @@ export default function Settings() {
       <p className="sub2">
         Owldrop is free — public drop links included. If it saves you time,{' '}
         <a
-          href="https://ko-fi.com/owldrop"
+          href="https://ko-fi.com/X8X51XKA5G"
           onClick={(e) => {
             e.preventDefault(); // the webview can't navigate; the server opens the system browser
-            openExternal('https://ko-fi.com/owldrop').catch((err) => toast('Could not open link: ' + (err instanceof Error ? err.message : err), undefined, 'err'));
+            openExternal('https://ko-fi.com/X8X51XKA5G').catch((err) => toast('Could not open link: ' + (err instanceof Error ? err.message : err), undefined, 'err'));
           }}
         >
           buy me a coffee
