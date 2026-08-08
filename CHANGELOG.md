@@ -8,7 +8,18 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
-## [Unreleased]
+## [0.6.4] - 2026-08-08
+
+### Fixed
+
+- Release pipeline: the changelog is no longer required for the publish step,
+  so a missing file can never block a release (no user-facing changes).
+
+## [0.6.3] - 2026-08-08
+
+### Added
+
+- Privacy policy and legal pages on the public site.
 
 ### Fixed
 
