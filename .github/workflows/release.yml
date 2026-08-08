@@ -321,6 +321,9 @@ jobs:
     needs: [preflight, windows, macos, linux]
     runs-on: ubuntu-latest
     steps:
+      # The stage step reads CHANGELOG.md from the repo — the workspace is
+      # otherwise empty in this job (download-artifact only fills dl/).
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           pattern: "{linux,linux-nix,windows,macos}"
@@ -349,7 +352,8 @@ jobs:
           chmod +x stage/owldrop
           # The changelog is the single source of truth for the site's
           # /changelog page (rendered from raw.githubusercontent.com).
-          cp "$GITHUB_WORKSPACE/CHANGELOG.md" stage/CHANGELOG.md
+          # Optional: a missing changelog must never block a release.
+          [ -f "$GITHUB_WORKSPACE/CHANGELOG.md" ] && cp "$GITHUB_WORKSPACE/CHANGELOG.md" stage/CHANGELOG.md || true
           cat > stage/updates/stable.json <<EOF
           {"schemaVersion":1,"version":"$V","channel":"stable","name":"Owldrop $V","publishedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","artifacts":[
           {"url":"https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-windows-amd64.exe","filename":"owldrop-windows-amd64.exe","filetype":"exe","platform":"windows","arch":"amd64","size":$(stat -c%s "$EXE"),"digestAlgo":"sha256","digest":"$exe_digest"},
@@ -423,12 +427,12 @@ jobs:
           # source of truth); fall back to auto-generated notes only if the
           # section is missing, so a release never blocks.
           V="${{ needs.preflight.outputs.version }}"
-          awk -v v="$V" '
-            /^## / { if (p) exit; if (index($0, "[" v "]")) p = 1 }
-            p { print }
-          ' CHANGELOG.md > /tmp/notes.md
-          if [ -s /tmp/notes.md ]; then
-            printf '\n**Full changelog:** https://owldrop.app/changelog\n' >> /tmp/notes.md
+          if [ -f CHANGELOG.md ]; then
+            awk -v v="$V" '
+              /^## / { if (p) exit; if (index($0, "[" v "]")) p = 1 }
+              p { print }
+            ' CHANGELOG.md > /tmp/notes.md
+            [ -s /tmp/notes.md ] && printf '\n**Full changelog:** https://owldrop.app/changelog\n' >> /tmp/notes.md
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
