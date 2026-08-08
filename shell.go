@@ -266,7 +266,19 @@ func (sh *shell) quickSend(dev device) {
 }
 
 // notify raises a native OS notification (silent, like the Electron shell).
+// A notification must never take the app down: the Wails linux notifier
+// keeps a nil D-Bus session connection when its startup connect fails (no
+// unreachable session bus — DBUS_SESSION_BUS_ADDRESS unset or stale), and its
+// send path then panics instead of returning an error. Recover and log.
 func (sh *shell) notify(title, body string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("notification: %v (notification daemon unavailable — notifications disabled)", r)
+		}
+	}()
+	if sh.notif == nil {
+		return
+	}
 	if err := sh.notif.SendNotification(notifications.NotificationOptions{
 		ID:    fmt.Sprintf("owldrop-%d", time.Now().UnixNano()),
 		Title: title,

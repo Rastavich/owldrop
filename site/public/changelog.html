@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Primary SEO -->
+<title>Owldrop — Changelog</title>
+<meta name="description" content="Release notes for Owldrop, a native desktop app for Tailscale's Taildrop. Every fix, feature, and change, one page.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://owldrop.app/changelog">
+<meta name="theme-color" content="#090c13">
+<meta name="color-scheme" content="dark">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Owldrop">
+<meta property="og:url" content="https://owldrop.app/changelog">
+<meta property="og:title" content="Owldrop — Changelog">
+<meta property="og:description" content="Release notes for Owldrop, a native desktop app for Tailscale's Taildrop. Every fix, feature, and change, one page.">
+<meta property="og:image" content="https://owldrop.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Owldrop — Changelog">
+<meta name="twitter:description" content="Release notes for Owldrop, a native desktop app for Tailscale's Taildrop.">
+<meta name="twitter:image" content="https://owldrop.app/og.png">
+
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/appicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div class="backdrop" aria-hidden="true"></div>
+
+<header>
+  <a class="brand" href="/" aria-label="Owldrop home">
+    <img src="/appicon.png" alt="" class="logo" width="38" height="38">
+    <div>
+      <h1>Owldrop</h1>
+      <p class="tag">a desktop app for Tailscale file sharing</p>
+    </div>
+  </a>
+  <div class="head-right">
+    <nav class="nav" aria-label="Sections">
+      <a href="/">Home</a>
+      <a href="/#downloads">Download</a>
+    </nav>
+    <span class="pill" id="version-pill">v0.6.2</span>
+  </div>
+</header>
+
+<main>
+  <section class="changelog-page">
+    <h1 class="page-title">Changelog</h1>
+    <p class="page-sub">Every fix, feature, and change in Owldrop — newest first. The same notes CI attaches to each GitHub release.</p>
+
+    <div id="changelog" aria-live="polite">
+      <p class="hint">Loading release notes…</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-inner">
+    <p>
+      MIT licensed · independent project · not affiliated with or endorsed by
+      <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale Inc.</a>
+      "Tailscale" and "Taildrop" (the feature this app builds on) are trademarks of Tailscale Inc.
+    </p>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="/changelog">Changelog</a>
+      <a href="/privacy">Privacy</a>
+      <a href="https://github.com/Rastavich/owldrop-install" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://tailscale.com/download" target="_blank" rel="noopener">Get Tailscale</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Version pill: read the public update manifest (same feed the app's
+  // self-updater consumes, refreshed by CI on every release) so the site
+  // never shows a stale version. Falls back to the value baked at deploy.
+  fetch('https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/stable.json')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (m) {
+      if (m && m.version) {
+        document.getElementById('version-pill').textContent = 'v' + m.version;
+      }
+    })
+    .catch(function () { /* keep the baked-in version */ });
+
+  // Changelog: CI publishes CHANGELOG.md to the public install repo on every
+  // release; this page renders it so the notes never live in two places.
+  var MD_URL = 'https://raw.githubusercontent.com/Rastavich/owldrop-install/main/CHANGELOG.md';
+  var ISSUE_BASE = 'https://github.com/Rastavich/owldrop/issues/';
+  var root = document.getElementById('changelog');
+
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Format inline markup. Every string is HTML-escaped before formatting, so
+  // nothing from the changelog reaches innerHTML raw. Order matters: autolinks
+  // before code spans, then [label](url), #N references, and bare URLs last.
+  function inline(s) {
+    s = esc(s);
+    s = s.replace(/&lt;(https?:\/\/[^&]*)&gt;/g,
+      '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/(^|[\s(\[])\#([0-9]+)/g,
+      '$1<a href="' + ISSUE_BASE + '$2" target="_blank" rel="noopener">#$2</a>');
+    s = s.replace(/(^|[\s(])(https?:\/\/[^\s<>")\]]+)/g,
+      '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+    return s;
+  }
+
+  function render(md) {
+    var out = [];
+    var item = null; // collected lines of the current list item (null = not in a list)
+    var para = null; // collected lines of the current paragraph
+    var inCode = false;
+
+    function flushPara() {
+      if (para !== null) {
+        out.push('<p>' + para.join(' ') + '</p>');
+        para = null;
+      }
+    }
+
+    function closeList() {
+      if (item !== null) {
+        out.push('<li>' + item.join('<br>') + '</li>');
+        out.push('</ul>');
+        item = null;
+      }
+    }
+
+    var lines = md.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var tri = lines[i].trim();
+      if (inCode) {
+        if (tri.indexOf('```') === 0) { inCode = false; out.push('</pre>'); }
+        else out.push(esc(lines[i]));
+        continue;
+      }
+      if (tri.indexOf('```') === 0) {
+        closeList();
+        flushPara();
+        inCode = true;
+        out.push('<pre class="cl-code">');
+        continue;
+      }
+      if (tri === '') { closeList(); flushPara(); continue; }
+      if (tri.indexOf('## ') === 0) {
+        closeList();
+        flushPara();
+        out.push('<h2 class="cl-ver">' + inline(tri.slice(3)) + '</h2>');
+        continue;
+      }
+      if (tri.indexOf('### ') === 0) {
+        closeList();
+        flushPara();
+        out.push('<h3 class="cl-sec">' + inline(tri.slice(4)) + '</h3>');
+        continue;
+      }
+      if (tri.indexOf('# ') === 0) {
+        // Document title — the page header already paints "Changelog".
+        closeList();
+        flushPara();
+        continue;
+      }
+      if (tri.indexOf('- ') === 0) {
+        flushPara(); // close any preceding paragraph, but keep the list open
+        if (item !== null) out.push('<li>' + item.join('<br>') + '</li>');
+        else out.push('<ul class="cl-list">');
+        item = [inline(tri.slice(2))];
+        continue;
+      }
+      if (item !== null) {
+        // continuation of a hard-wrapped list item
+        item.push(inline(tri));
+        continue;
+      }
+      // plain paragraph; hard-wrapped lines join into one <p>
+      if (para === null) para = [];
+      para.push(inline(tri));
+    }
+    flushPara();
+    closeList();
+    if (inCode) out.push('</pre>');
+    return out.join('');
+  }
+
+  fetch(MD_URL)
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(function (md) {
+      var html = render(md);
+      if (!html.trim()) throw new Error('empty changelog');
+      root.innerHTML = html;
+    })
+    .catch(function (e) {
+      root.innerHTML =
+        '<p class="hint">Could not load the changelog.</p>' +
+        '<p class="hint">See the <a href="https://github.com/Rastavich/owldrop-install/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md on GitHub</a> in the meantime.</p>';
+    });
+})();
+</script>
+</body>
+</html>

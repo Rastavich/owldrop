@@ -139,6 +139,34 @@ server for LAN use) is available as `wails3 task build:server`
   platform assets, commits, tags and pushes (run with `-n` to preview;
   bare `X.Y.Z` tags match the repo's existing ones).
 
+### Windows code signing (Smart App Control / Defender)
+
+Windows blocks or flags unsigned executables: **Smart App Control** refuses
+to run them at all (users must turn it off), and Defender's ML heuristics
+typically false-positive them as `Wacatac.B!ml` (VirusTotal shows a few
+engines flagging the same thing). There is no code-level workaround —
+**Authenticode code signing with a reputable certificate is the only fix.**
+
+Once you have a certificate (an OV or EV Authenticode cert from a CA like
+DigiCert, Sectigo, SSL.com or Certum; an EV cert plus a build-up of
+SmartScreen reputation is what functionally silences Smart App Control),
+configure the release workflow to sign automatically — CI signs both the
+app exe and the NSIS installer, then uploads/updates the signed artifacts:
+
+1. Export your certificate (with private key) as a `.pfx`.
+2. Set two repository secrets:
+   - `WINDOWS_SIGNING_PFX` — the `.pfx` as a **base64** string
+     (`base64 < cert.pfx`, or PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes('cert.pfx'))`)
+   - `WINDOWS_SIGNING_PASSWORD` — the PFX password
+3. Tag a release. If the secrets are set, the Windows job signs with
+   signtool (RFC 3161 timestamped); if they're missing it prints a loud
+   warning and ships unsigned as before.
+
+For local testing of a signed build on a dev machine:
+`wails3 setup signing` stores the certificate/password in your keychain,
+then `wails3 task windows:sign` and `wails3 task windows:sign:installer`
+sign `bin/owldrop.exe` and the NSIS installer.
+
 ## Notes & limitations
 
 - **Linux system requirements**: default builds need WebKitGTK 6.0 (Debian

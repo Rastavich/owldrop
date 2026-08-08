@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Primary SEO -->
+<title>Owldrop — Privacy policy &amp; legal</title>
+<meta name="description" content="Owldrop's privacy policy and legal disclaimer: what the app and website collect, what they don't, and the fine print.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://owldrop.app/privacy">
+<meta name="theme-color" content="#090c13">
+<meta name="color-scheme" content="dark">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Owldrop">
+<meta property="og:url" content="https://owldrop.app/privacy">
+<meta property="og:title" content="Owldrop — Privacy policy &amp; legal">
+<meta property="og:description" content="What Owldrop collects, what it doesn't, and the fine print.">
+<meta property="og:image" content="https://owldrop.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Owldrop — Privacy policy &amp; legal">
+<meta name="twitter:description" content="What Owldrop collects, what it doesn't, and the fine print.">
+<meta name="twitter:image" content="https://owldrop.app/og.png">
+
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/appicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div class="backdrop" aria-hidden="true"></div>
+
+<header>
+  <a class="brand" href="/" aria-label="Owldrop home">
+    <img src="/appicon.png" alt="" class="logo" width="38" height="38">
+    <div>
+      <h1>Owldrop</h1>
+      <p class="tag">a desktop app for Tailscale file sharing</p>
+    </div>
+  </a>
+  <div class="head-right">
+    <nav class="nav" aria-label="Sections">
+      <a href="/">Home</a>
+      <a href="/#downloads">Download</a>
+    </nav>
+    <span class="pill" id="version-pill">v0.6.2</span>
+  </div>
+</header>
+
+<main>
+  <section class="legal-page">
+    <h1 class="page-title">Privacy policy &amp; legal</h1>
+    <p class="page-sub">Last updated <time datetime="2026-08-08">August 8, 2026</time>. In plain language: Owldrop is a peer-to-peer file tool — your files stay on your machines and your tailnet, and the only thing sent to us is a tiny, optional, anonymous usage count.</p>
+
+    <h2>What Owldrop stores on your machine</h2>
+    <p>Almost everything lives on your own device:</p>
+    <ul>
+      <li>Files you receive (<em>your inbox</em>) and files you save, in the folder you choose.</li>
+      <li>A local history of received and sent files.</li>
+      <li>A small config file: your save folder, notification preferences, an <strong>anonymous install identifier</strong>, and your telemetry on/off choice.</li>
+      <li>Your ntfy topic and server, <em>only if</em> you enable phone notifications in Settings.</li>
+    </ul>
+    <p>Files transfer <strong>directly between your devices over your own Tailscale tailnet</strong>, through the <code>tailscaled</code> running on your machine. Owldrop has no servers that route, host, or inspect file contents — we never see what you send. The transfer is subject to Tailscale's encryption and your tailnet's access controls; see Tailscale's own policies for how their service handles traffic.</p>
+
+    <h2>Anonymous usage telemetry (opt-out)</h2>
+    <p>To know whether the project is worth keeping alive, Owldrop can report an <strong>opt-in, anonymous</strong> usage stream to <code>owldrop.app/api/t</code>. It contains only:</p>
+    <ul>
+      <li>your app version and operating system,</li>
+      <li>a random per-install identifier (generated on first run),</li>
+      <li>an event name and timestamp for events like <code>heartbeat</code>, <code>file_received</code>, <code>file_saved</code>, <code>file_deleted</code>, <code>file_sent</code>, <code>send_failed</code>, and <code>drop_link_created</code>.</li>
+    </ul>
+    <p>It <strong>never</strong> includes file names, file sizes, file contents, recipients, IP addresses, or anything identifying you. Events are sent in small batches and are best-effort — if sending fails, nothing is retried and nothing is queued on your machine. You can turn this off any time in <strong>Settings → “Share anonymous usage stats”</strong>; when off, nothing leaves the machine.</p>
+    <p>Telemetry is stored by Cloudflare (D1) and used only for aggregate adoption statistics (rough install counts, daily active users, files transferred). It is not sold, shared, or used for advertising.</p>
+
+    <h2>What the website collects</h2>
+    <p><code>owldrop.app</code> is a static site. It sets <strong>no cookies</strong>, runs <strong>no advertising or analytics scripts</strong>, and has <strong>no user accounts</strong>. The only things it records:</p>
+    <ul>
+      <li><strong>Download counts</strong> — clicking a download link records the platform you chose (Windows, macOS, Linux, Nix). No IP address is stored.</li>
+      <li><strong>App telemetry</strong> — the optional anonymous events described above, from the desktop app.</li>
+    </ul>
+    <p>The site is hosted on Cloudflare, so standard network/edge metadata (such as connection logs) is handled by Cloudflare under their policies. We do not use that metadata to identify visitors.</p>
+
+    <h2>Third parties</h2>
+    <ul>
+      <li><strong>Cloudflare</strong> — hosts the website and stores telemetry (see Cloudflare's privacy policy).</li>
+      <li><strong>GitHub</strong> — hosts the public install repository, release artifacts, and the update manifest; the app's self-updater checks <code>raw.githubusercontent.com</code> for new versions.</li>
+      <li><strong>Tailscale Inc.</strong> — Owldrop talks to the <code>tailscaled</code> on your machine and transfers use your tailnet. Owldrop is an independent project and is <strong>not affiliated with or endorsed by Tailscale Inc.</strong></li>
+      <li><strong>ntfy</strong> — only if you configure it: your chosen ntfy topic/server handles your phone notifications.</li>
+    </ul>
+
+    <h2>Your control</h2>
+    <ul>
+      <li><strong>Telemetry:</strong> toggle it off in Settings. Existing aggregate rows may remain; new events stop immediately.</li>
+      <li><strong>Anonymous install id:</strong> delete the app's config and a fresh one is generated on next run.</li>
+      <li><strong>Local data:</strong> delete the app's data folder (inbox, saved files, history) to remove everything, or remove individual files from the app.</li>
+    </ul>
+
+    <h2>Contact</h2>
+    <p>Questions about this policy or the project: open an issue on the <a href="https://github.com/Rastavich/owldrop-install" target="_blank" rel="noopener">Owldrop GitHub repo</a>, or reach out via the support link on the <a href="/#support">home page</a>.</p>
+
+    <hr>
+
+    <h2>Legal disclaimer</h2>
+    <p>Owldrop is an independent, open-source project published under the <a href="https://opensource.org/license/mit" target="_blank" rel="noopener">MIT license</a>. It is provided <strong>“as is”, without warranty of any kind</strong>, express or implied — including, but not limited to, warranties of merchantability and fitness for a particular purpose.</p>
+    <ul>
+      <li><strong>No affiliation.</strong> This project is not affiliated with or endorsed by Tailscale Inc. “Tailscale” and “Taildrop” are trademarks of Tailscale Inc.</li>
+      <li><strong>Your responsibility.</strong> You are responsible for the files you send and save, and for complying with applicable law and the consent of anyone you share files with. Do not use Owldrop to transmit unlawful material.</li>
+      <li><strong>No guarantee of security.</strong> Transfers rely on your Tailscale tailnet, your devices, and your operating system. We cannot guarantee the confidentiality of any transfer or that the software is free of defects.</li>
+      <li><strong>Limitation of liability.</strong> To the maximum extent permitted by law, the project and its maintainers are not liable for any direct, indirect, incidental, or consequential damages, data loss, or any harm arising from use of the software. Keep backups of important files.</li>
+      <li><strong>Availability.</strong> <code>owldrop.app</code>, the update feed, and the project itself may change or be discontinued at any time. This policy may be updated; material changes will be noted in the <a href="/changelog">changelog</a>.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-inner">
+    <p>
+      MIT licensed · independent project · not affiliated with or endorsed by
+      <a href="https://tailscale.com" target="_blank" rel="noopener">Tailscale Inc.</a>
+      "Tailscale" and "Taildrop" (the feature this app builds on) are trademarks of Tailscale Inc.
+    </p>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="/changelog">Changelog</a>
+      <a href="/privacy">Privacy</a>
+      <a href="https://github.com/Rastavich/owldrop-install" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://tailscale.com/download" target="_blank" rel="noopener">Get Tailscale</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Version pill: read the public update manifest (same feed the app's
+  // self-updater consumes, refreshed by CI on every release) so the site
+  // never shows a stale version. Falls back to the value baked at deploy.
+  fetch('https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/stable.json')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (m) {
+      if (m && m.version) {
+        document.getElementById('version-pill').textContent = 'v' + m.version;
+      }
+    })
+    .catch(function () { /* keep the baked-in version */ });
+})();
+</script>
+</body>
+</html>

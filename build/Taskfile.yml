@@ -37,6 +37,7 @@ tasks:
     generates:
       - dist/**/*
     cmds:
+      - npm run typecheck
       - npm run build
 
   generate:icons:

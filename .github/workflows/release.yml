@@ -57,6 +57,51 @@ jobs:
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           wails3 task windows:package
+      # Unsigned Windows binaries get flagged by Windows Defender heuristics
+      # (Wacatac.B!ml) and are blocked by Smart App Control, forcing users to
+      # turn it off. Code signing is the only fix. This step signs the app exe
+      # and the NSIS installer when the signing secrets are configured; without
+      # them it warns and ships unsigned (current behavior) so a release isn't
+      # blocked.
+      - name: Sign binaries (Authenticode — Smart App Control / Defender)
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.WINDOWS_SIGNING_PFX }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:PFX_B64)) {
+            Write-Host "::warning::WINDOWS_SIGNING_PFX secret is not set — shipping UNSIGNED. Windows Defender will flag the exe and Smart App Control will block it. Set WINDOWS_SIGNING_PFX (base64 of an Authenticode .pfx) + WINDOWS_SIGNING_PASSWORD and re-run the workflow to get signed artifacts."
+            exit 0
+          }
+          if ([string]::IsNullOrEmpty($env:PFX_PASSWORD)) {
+            throw 'WINDOWS_SIGNING_PFX is set but WINDOWS_SIGNING_PASSWORD is empty'
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'owldrop-signing.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
+          # signtool ships with the Windows SDK, which is always installed on
+          # windows-latest (e.g. ...\Windows Kits\10\bin\10.0.26100.0\x64).
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found under Windows Kits — check the runner image' }
+          Write-Host "signtool: $($signtool.FullName)"
+          $targets = Get-ChildItem -Path 'bin\owldrop.exe', 'bin\*installer.exe' -ErrorAction SilentlyContinue
+          if (-not $targets) { throw 'no binaries found to sign under bin/' }
+          foreach ($t in $targets) {
+            Write-Host "Signing: $($t.FullName)"
+            & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:PFX_PASSWORD `
+              /tr 'http://timestamp.digicert.com' /td SHA256 /v $t.FullName
+            # signtool contract: 0 = success, 1 = failure, 2 = warnings (e.g.
+            # a transient timestamp-server hiccup). Only a hard failure aborts.
+            if ($LASTEXITCODE -eq 1) { throw "signtool sign failed for $($t.FullName)" }
+            if ($LASTEXITCODE -eq 2) { Write-Host "::warning::signtool sign returned warnings for $($t.FullName)" }
+          }
+          foreach ($t in $targets) {
+            & $signtool.FullName verify /pa /v $t.FullName
+            if ($LASTEXITCODE -eq 1) { throw "signtool verify failed for $($t.FullName)" }
+            if ($LASTEXITCODE -eq 2) { Write-Host "::warning::signtool verify returned warnings for $($t.FullName)" }
+          }
+          Remove-Item $pfx -Force
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -302,6 +347,9 @@ jobs:
           cp "$RPM" stage/updates/owldrop-linux-x86_64.rpm
           cp "$NIX" stage/owldrop
           chmod +x stage/owldrop
+          # The changelog is the single source of truth for the site's
+          # /changelog page (rendered from raw.githubusercontent.com).
+          cp "$GITHUB_WORKSPACE/CHANGELOG.md" stage/CHANGELOG.md
           cat > stage/updates/stable.json <<EOF
           {"schemaVersion":1,"version":"$V","channel":"stable","name":"Owldrop $V","publishedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","artifacts":[
           {"url":"https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-windows-amd64.exe","filename":"owldrop-windows-amd64.exe","filetype":"exe","platform":"windows","arch":"amd64","size":$(stat -c%s "$EXE"),"digestAlgo":"sha256","digest":"$exe_digest"},
@@ -371,8 +419,22 @@ jobs:
           else
             TAG="v${{ needs.preflight.outputs.version }}"
           fi
+          # This version's section of CHANGELOG.md is the release notes (single
+          # source of truth); fall back to auto-generated notes only if the
+          # section is missing, so a release never blocks.
+          V="${{ needs.preflight.outputs.version }}"
+          awk -v v="$V" '
+            /^## / { if (p) exit; if (index($0, "[" v "]")) p = 1 }
+            p { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          if [ -s /tmp/notes.md ]; then
+            printf '\n**Full changelog:** https://owldrop.app/changelog\n' >> /tmp/notes.md
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
+            [ -s /tmp/notes.md ] && gh release edit "$TAG" --notes-file /tmp/notes.md
+          elif [ -s /tmp/notes.md ]; then
+            gh release create "$TAG" dist/* --title "Owldrop $TAG" --notes-file /tmp/notes.md
           else
             gh release create "$TAG" dist/* --title "Owldrop $TAG" --generate-notes
           fi

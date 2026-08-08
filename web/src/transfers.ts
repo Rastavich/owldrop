@@ -5,6 +5,7 @@ import { openPathWithWarning } from './components/ConfirmModal';
 import { queryClient } from './queryClient';
 import { putSaving, putSending, removeSaving, removeSending, toast, transfersStore, updateSaving, updateSending } from './store';
 import type { WaitingFile } from './types';
+import { uuid } from './utils';
 
 export async function saveFile(name: string, size: number, dir: string, source = '') {
   if (transfersStore.get().saving.has(name)) {

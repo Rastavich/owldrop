@@ -477,6 +477,58 @@ footer {
 .foot-links a { color: var(--muted); font-weight: 550; }
 .foot-links a:hover { color: var(--text); text-decoration: none; }
 
+/* ---------- changelog page ------------------------------------------------- */
+.changelog-page { max-width: 760px; margin: 0 auto; padding: 56px 20px 96px; }
+.changelog-page .page-title { font-size: 34px; letter-spacing: -.4px; margin: 0 0 6px; }
+.changelog-page .page-sub { color: var(--muted); margin: 0 0 8px; }
+#changelog { margin-top: 24px; }
+#changelog .cl-ver {
+  font-size: 19px;
+  color: var(--text);
+  margin: 44px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+#changelog .cl-sec {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--accent);
+  margin: 22px 0 8px;
+}
+#changelog .cl-list { margin: 0 0 8px; padding-left: 20px; }
+#changelog .cl-list li { margin: 6px 0; color: var(--text); }
+#changelog p { color: var(--muted); }
+#changelog .cl-code {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .88em;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+
+/* ---------- legal / privacy page ------------------------------------------ */
+.legal-page { max-width: 760px; margin: 0 auto; padding: 56px 20px 96px; }
+.legal-page .page-title { font-size: 34px; letter-spacing: -.4px; margin: 0 0 6px; }
+.legal-page .page-sub { color: var(--muted); margin: 0 0 8px; }
+.legal-page h2 {
+  font-size: 19px;
+  color: var(--text);
+  margin: 40px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.legal-page p { color: var(--muted); }
+.legal-page ul { margin: 0 0 8px; padding-left: 20px; }
+.legal-page li { margin: 6px 0; color: var(--text); }
+.legal-page hr { border: none; border-top: 1px solid var(--border); margin: 42px 0 0; }
+
 /* ---------- motion ----------------------------------------------------------- */
 .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2, .65, .3, 1); }
 .reveal.in { opacity: 1; transform: none; }
