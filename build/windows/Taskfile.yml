@@ -135,25 +135,19 @@ tasks:
       INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "machine"}}'
 
   create:msix:package:
-    summary: Creates an MSIX package
+    summary: Creates an unsigned MSIX package for Microsoft Store submission
+    desc: |
+      Packs bin/<app>.exe into an unsigned bin/<app>-<version>-x64.msix
+      (Store submission: Microsoft signs it). Identity defaults live in
+      build/windows/msix/pack.sh (MSIX_PACKAGE_NAME/MSIX_PUBLISHER/
+      MSIX_PUBLISHER_DISPLAY_NAME) and must match your Partner Center
+      product identity. The packer (tools/msixpack) emits the APPX
+      container layout makeappx produces; wails3's own `tool msix` does not
+      exist on any released CLI (beta.5 included), so this replaces it.
     deps:
       - task: build
     cmds:
-      - |-
-        wails3 tool msix \
-          --config "{{.ROOT_DIR}}/wails.json" \
-          --name "{{.APP_NAME}}" \
-          --executable "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" \
-          --arch "{{.ARCH}}" \
-          --out "{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}-{{.ARCH}}.msix" \
-          {{if .CERT_PATH}}--cert "{{.CERT_PATH}}"{{end}} \
-          {{if .PUBLISHER}}--publisher "{{.PUBLISHER}}"{{end}} \
-          {{if .USE_MSIX_TOOL}}--use-msix-tool{{else}}--use-makeappx{{end}}
-    vars:
-      ARCH: '{{.ARCH | default ARCH}}'
-      CERT_PATH: '{{.CERT_PATH | default ""}}'
-      PUBLISHER: '{{.PUBLISHER | default ""}}'
-      USE_MSIX_TOOL: '{{.USE_MSIX_TOOL | default "false"}}'
+      - sh build/windows/msix/pack.sh
 
   install:msix:tools:
     summary: Installs tools required for MSIX packaging

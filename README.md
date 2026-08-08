@@ -58,6 +58,10 @@ hostname where nothing else is reachable.)
 - **Public drop links** — flip on Tailscale Funnel in Settings and anyone on
   the internet can drop a file into your inbox at your public `*.ts.net`
   URL — free, served from your own machine (only `/drop/*` is exposed)
+- **Sync** — a shared clipboard/scratchpad: paste text or upload a file from
+  any device that can reach the app (localhost, LAN, tailnet) and every open
+  page sees it instantly over SSE. Items persist on the host (capped at 100,
+  text ≤ 64 KiB, files ≤ 4 GiB). Never exposed through Funnel
 - **History export** — one click dumps the full log as JSON
 
 ## Docker / NAS (Unraid, Synology, …)
@@ -146,21 +150,39 @@ to run them at all (users must turn it off), and Defender's ML heuristics
 typically false-positive them as `Wacatac.B!ml` (VirusTotal shows a few
 engines flagging the same thing). There is no code-level workaround —
 **Authenticode code signing with a reputable certificate is the only fix.**
+CI signs both `bin/owldrop.exe` and the NSIS installer, then uploads the
+signed artifacts. Two supported paths (Azure wins if both are configured):
 
-Once you have a certificate (an OV or EV Authenticode cert from a CA like
-DigiCert, Sectigo, SSL.com or Certum; an EV cert plus a build-up of
-SmartScreen reputation is what functionally silences Smart App Control),
-configure the release workflow to sign automatically — CI signs both the
-app exe and the NSIS installer, then uploads/updates the signed artifacts:
+**1. Azure Artifact Signing (recommended — Microsoft trust root, immediate
+reputation).** ~$10/mo per-signature pricing; its certificates chain into
+Microsoft's trust root, so Defender heuristics and Smart App Control stop
+immediately (no weeks of SmartScreen warm-up).
 
-1. Export your certificate (with private key) as a `.pfx`.
-2. Set two repository secrets:
-   - `WINDOWS_SIGNING_PFX` — the `.pfx` as a **base64** string
-     (`base64 < cert.pfx`, or PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes('cert.pfx'))`)
-   - `WINDOWS_SIGNING_PASSWORD` — the PFX password
-3. Tag a release. If the secrets are set, the Windows job signs with
-   signtool (RFC 3161 timestamped); if they're missing it prints a loud
-   warning and ships unsigned as before.
+- Azure portal: create an **Artifact Signing** account (note the region),
+  complete identity validation (passport/driver's license for individuals),
+  create a **Certificate Profile** (public trust).
+- Entra: create an **app registration** with a **federated credential** for
+  this repo (GitHub OIDC, e.g. subject `repo:<owner>/<repo>:ref:refs/tags/*`),
+  and give it the **Artifact Signing Certificate Profile Signer** role on the
+  signing account.
+- Repository settings: secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+  `AZURE_SUBSCRIPTION_ID`; variables `TRUSTED_SIGNING_ACCOUNT`,
+  `TRUSTED_SIGNING_PROFILE`, `TRUSTED_SIGNING_REGION` (region slug, e.g.
+  `eus` — must match the account's region).
+
+**2. CA certificate (OV/EV PFX — DigiCert, Sectigo, SSL.com, Certum).**
+Works with no Azure account. OV ~$150–300/yr starts with low SmartScreen
+reputation (a "not commonly downloaded" warning fades with download volume);
+EV is pricier but immediate.
+
+- Export the certificate (with private key) as a `.pfx`, then set two
+  repository secrets:
+  - `WINDOWS_SIGNING_PFX` — the `.pfx` as a **base64** string
+    (`base64 < cert.pfx`, or PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes('cert.pfx'))`)
+  - `WINDOWS_SIGNING_PASSWORD` — the PFX password
+
+If neither is configured the Windows job prints a loud warning and ships
+unsigned as before, so a release never blocks.
 
 For local testing of a signed build on a dev machine:
 `wails3 setup signing` stores the certificate/password in your keychain,

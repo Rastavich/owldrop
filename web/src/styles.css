@@ -180,3 +180,12 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 #dir-new-name{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font:inherit;font-size:12.5px;outline:none;width:150px}
 
 footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size:12px}
+
+/* --- Sync board --- */
+.sync-compose{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.sync-input{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font:inherit;font-size:13px;outline:none;resize:vertical;box-sizing:border-box}
+.sync-item{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.sync-text{flex:1;min-width:0;display:flex;align-items:flex-start;gap:10px}
+.sync-pre{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word;margin:0;font-size:13px;line-height:1.55;max-height:220px;overflow-y:auto}
+.sync-file{flex:1;min-width:0;display:flex;align-items:center;gap:12px}
+.sync-file .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

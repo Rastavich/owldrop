@@ -37,6 +37,28 @@ jobs:
   windows:
     needs: preflight
     runs-on: windows-latest
+    # The `release` environment scopes the Azure federated credential
+    # (repo:<owner>/<repo>:environment:release) — federated credentials
+    # can't wildcard tag refs, so an environment is the stable OIDC subject.
+    # The AZURE_* secrets / TRUSTED_SIGNING_* vars can live on the
+    # environment instead of the repo.
+    environment: release
+    # id-token: write is needed for the Azure OIDC login used by Artifact
+    # (Trusted) Signing. Job-level permissions replace the workflow-level
+    # `contents: read`, so it must be restated here.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # Signing configuration. Precedence: Azure Artifact Signing (all four
+      # TRUSTED_SIGNING_* vars + the three AZURE_* secrets set) > PFX secrets
+      # > unsigned (with a warning).
+      SIGN_ACCOUNT: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+      SIGN_PROFILE: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+      SIGN_REGION: ${{ vars.TRUSTED_SIGNING_REGION }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -57,13 +79,38 @@ jobs:
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           wails3 task windows:package
-      # Unsigned Windows binaries get flagged by Windows Defender heuristics
-      # (Wacatac.B!ml) and are blocked by Smart App Control, forcing users to
-      # turn it off. Code signing is the only fix. This step signs the app exe
-      # and the NSIS installer when the signing secrets are configured; without
-      # them it warns and ships unsigned (current behavior) so a release isn't
-      # blocked.
-      - name: Sign binaries (Authenticode — Smart App Control / Defender)
+      # Code signing is the only fix for Defender heuristic flags (Wacatac.B!ml)
+      # and Smart App Control blocks. Preferred path: Azure Artifact (Trusted)
+      # Signing — Microsoft-trust-rooted certs, immediate SmartScreen/Defender
+      # reputation. Runs when all TRUSTED_SIGNING_* vars and AZURE_* secrets
+      # are set; otherwise the PFX step below handles signing (or warns that
+      # the build ships unsigned).
+      - name: Azure login (OIDC — Artifact Signing)
+        if: ${{ env.AZURE_CLIENT_ID != '' && env.SIGN_ACCOUNT != '' && env.SIGN_PROFILE != '' && env.SIGN_REGION != '' }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign binaries (Azure Artifact Signing)
+        if: ${{ env.AZURE_CLIENT_ID != '' && env.SIGN_ACCOUNT != '' && env.SIGN_PROFILE != '' && env.SIGN_REGION != '' }}
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: https://${{ vars.TRUSTED_SIGNING_REGION }}.codesigning.azure.net/
+          signing-account-name: ${{ vars.TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.TRUSTED_SIGNING_PROFILE }}
+          # Signs both bin\owldrop.exe and bin\owldrop-*-installer.exe.
+          files-folder: ${{ github.workspace }}\bin
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      # PFX fallback: an OV/EV Authenticode certificate from a CA (DigiCert,
+      # Sectigo, SSL.com, Certum). Runs only when Azure Artifact Signing isn't
+      # configured. Without any signing config it warns and ships unsigned
+      # (current behavior) so a release isn't blocked.
+      - name: Sign binaries (Authenticode PFX fallback)
+        if: ${{ !(env.AZURE_CLIENT_ID != '' && env.SIGN_ACCOUNT != '' && env.SIGN_PROFILE != '' && env.SIGN_REGION != '') }}
         shell: pwsh
         env:
           PFX_B64: ${{ secrets.WINDOWS_SIGNING_PFX }}
@@ -102,6 +149,20 @@ jobs:
             if ($LASTEXITCODE -eq 2) { Write-Host "::warning::signtool verify returned warnings for $($t.FullName)" }
           }
           Remove-Item $pfx -Force
+      # Store submission package: unsigned MSIX (Microsoft signs it during
+      # certification). Packed by tools/msixpack via build/windows/msix/pack.sh.
+      # Kept out of the windows artifact so the unsigned MSIX never lands on
+      # the GitHub release — it's only for Partner Center upload.
+      - name: Package MSIX (Store submission)
+        shell: bash
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 task windows:package FORMAT=msix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-msix
+          path: bin/*.msix
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: windows

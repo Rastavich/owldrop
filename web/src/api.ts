@@ -10,6 +10,7 @@ import type {
   HistoryEvent,
   HistoryStats,
   PageConfig,
+  SyncItem,
   TailscaleState,
   UpdateState,
   WaitingFile,
@@ -74,6 +75,16 @@ export const downloadTailscale = () => api('/api/tailscale/download', { method: 
 export const testNtfy = () => api('/api/ntfy/test', { method: 'POST' });
 export const openExternal = (url: string) => api('/api/open-external', { method: 'POST', json: { url } });
 export const tailscaleUp = () => api('/api/tailscale/up', { method: 'POST', json: {} });
+export const getSync = () => api<{ items: SyncItem[] }>('/api/sync').then((r) => r.items);
+export const addSyncText = (text: string) =>
+  api<SyncItem>('/api/sync', { method: 'POST', json: { text } });
+export const uploadSyncFile = (file: File) => {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  return api<SyncItem>('/api/sync/file', { method: 'POST', body: fd });
+};
+export const deleteSyncItem = (id: string) => api('/api/sync/' + id, { method: 'DELETE' });
+export const clearSync = () => api('/api/sync', { method: 'DELETE' });
 export const getUpdateState = () => api<UpdateState>('/api/update');
 export const checkUpdate = () => api<UpdateState>('/api/update/check', { method: 'POST', json: {} });
 export const installUpdate = () => api('/api/update/install', { method: 'POST', json: {} });

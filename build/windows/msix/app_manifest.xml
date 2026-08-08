@@ -1,55 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for the Microsoft Store build.
+
+  Placeholders substituted by build/windows/msix/pack.ps1 at pack time:
+    __MSIX_PACKAGE_NAME__           Package/Identity/Name     (Partner Center → Product identity)
+    __MSIX_PUBLISHER__              Package/Identity/Publisher (CN=…)
+    __MSIX_PUBLISHER_DISPLAY_NAME__ Package/Properties/PublisherDisplayName
+    __VERSION__                     4-part version (e.g. 0.6.2.0) from build/config.yml
+
+  runFullTrust + windows.fullTrustProcess: owldrop is a desktop-bridge app —
+  it keeps its tray icon, global shortcut, localhost HTTP server and
+  tailscaled IPC. The Store allows runFullTrust for desktop apps.
+-->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
-  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
-  IgnorableNamespaces="uap3">
-  
-  <Identity 
-    Name="com.example.tsdscratch"
-    Publisher="CN=My Company"
-    Version="0.1.0.0" 
+  IgnorableNamespaces="uap rescap desktop">
+
+  <Identity
+    Name="__MSIX_PACKAGE_NAME__"
+    Publisher="__MSIX_PUBLISHER__"
+    Version="__VERSION__"
     ProcessorArchitecture="x64" />
-  
+
   <Properties>
-    <DisplayName>My Product</DisplayName>
-    <PublisherDisplayName>My Company</PublisherDisplayName>
-    <Description>A tsd-scratch application</Description>
+    <DisplayName>Owldrop</DisplayName>
+    <PublisherDisplayName>__MSIX_PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
+    <Description>Owldrop — desktop app for Tailscale file sharing</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
-  
+
   <Dependencies>
-    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
-  
+
   <Resources>
     <Resource Language="en-us" />
   </Resources>
-  
+
   <Applications>
-    <Application Id="com.example.tsdscratch" Executable="tsd-scratch" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="owldrop" Executable="owldrop.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="My Product"
-        Description="A tsd-scratch application"
+        DisplayName="Owldrop"
+        Description="Owldrop — desktop app for Tailscale file sharing"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
-      
       <Extensions>
-        <desktop:Extension Category="windows.fullTrustProcess" Executable="tsd-scratch" />
-        
-        
+        <desktop:Extension Category="windows.fullTrustProcess" Executable="owldrop.exe" />
       </Extensions>
     </Application>
   </Applications>
-  
+
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
-    
   </Capabilities>
 </Package>

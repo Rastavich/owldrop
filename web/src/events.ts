@@ -74,6 +74,10 @@ export function handleSseEvent(ev: SseEvent) {
       }
       break;
     }
+    case 'sync':
+      // A device added/removed a board item — every open page refreshes.
+      queryClient.invalidateQueries({ queryKey: ['sync'] });
+      break;
     case 'update':
       queryClient.invalidateQueries({ queryKey: ['update'] });
       if (ev.kind === 'available') toast('A new version is available — Settings → Updates to install');

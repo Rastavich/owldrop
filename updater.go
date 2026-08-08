@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +55,16 @@ func (s *server) initUpdater(app *application.App) {
 	if !semverish.MatchString(appVersion) {
 		log.Printf("updater: skipped (appVersion %q, dev build)", appVersion)
 		return
+	}
+	// Microsoft Store (MSIX) installs: the package directory is read-only and
+	// the Store ships updates itself, so self-update is impossible and must
+	// not be offered. Packaged desktop apps run from
+	// C:\Program Files\WindowsApps\<PackageFullName>\.
+	if runtime.GOOS == "windows" {
+		if exe, err := os.Executable(); err == nil && strings.Contains(exe, `\WindowsApps\`) {
+			log.Printf("updater: skipped (MSIX/Store install — updates are Store-managed)")
+			return
+		}
 	}
 	feed := defaultUpdateFeed
 	// Only allow an https override: an http:// feed would let a local

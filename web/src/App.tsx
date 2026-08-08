@@ -66,6 +66,9 @@ export default function App() {
         <Link to="/drops" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
           Drop links {activeLinks > 0 && <span className="badge">{activeLinks}</span>}
         </Link>
+        <Link to="/sync" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
+          Sync
+        </Link>
         <Link to="/settings" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
           Settings
         </Link>

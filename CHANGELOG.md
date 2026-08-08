@@ -8,6 +8,14 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.6.5] - 2026-08-08
+
+### Added 
+
+- Added CI for windows build to have a signing for downloading via the microsoft store - still awaiting certificiation in Microsoft Partner Center.
+- Added a new sync tab for easily copying links to and from machines (main use case is for mobile -> desktop text syncing while there is no mobile app)
+- Cleaned up some old docs
+
 ## [0.6.4] - 2026-08-08
 
 ### Fixed

@@ -132,7 +132,18 @@ export type SseEvent =
       err?: string;
     }
   | { type: 'status'; err?: string }
+  | { type: 'sync' }
   | { type: 'update'; kind: 'available' | 'none' | 'downloading' | 'installed' | 'error'; detail?: unknown };
+
+// One item on the shared Sync board (visible on every device on the tailnet).
+export interface SyncItem {
+  id: string;
+  kind: 'text' | 'file';
+  text?: string;
+  name?: string;
+  size?: number;
+  createdAt: string;
+}
 
 export interface UpdateState {
   current: string;

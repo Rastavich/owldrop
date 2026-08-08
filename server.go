@@ -128,6 +128,7 @@ type server struct {
 	hub         *hub
 	history     *history
 	drops       *dropManager
+	sync        *syncStore
 	update      *updateManager
 	port        int
 	lan         bool
@@ -162,6 +163,7 @@ func newServerDir(cfg *config, dataDir string) *server {
 		hub:          newHub(),
 		history:      newHistory(dataDir),
 		drops:        newDropManager(dataDir),
+		sync:         newSyncStore(dataDir),
 		lan:          cfg.LAN,
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
@@ -319,6 +321,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/update", s.guard(s.handleUpdate))
 	mux.HandleFunc("/api/update/check", s.guard(s.handleUpdateCheck))
 	mux.HandleFunc("/api/update/install", s.guard(s.handleUpdateInstall))
+	mux.HandleFunc("/api/sync", s.guard(s.handleSync))
+	mux.HandleFunc("/api/sync/", s.guard(s.handleSyncItem))
 	// Public drop-link pages: the URL token is the auth, not the session
 	// token. Host checks still apply; through the funnel hostname ONLY drop
 	// pages are reachable (everything else 404s there).
