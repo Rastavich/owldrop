@@ -30,6 +30,10 @@ import (
 //go:embed web/dist
 var webFS embed.FS
 
+// startTsnet is replaced by tsnetmode.go in server builds (-tags server) to
+// start an embedded Tailscale node; the desktop build never does.
+var startTsnet = func(srv *server) (net.Listener, error) { return nil, nil }
+
 func main() {
 	var (
 		port    = flag.Int("port", 8976, "port for the UI (0 = pick a free port)")

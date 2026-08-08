@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"syscall"
@@ -47,7 +48,14 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 		httpSrv.Shutdown(shutCtx)
 	}()
 
-	err = srv.serveHTTP(httpSrv, ln)
+	errCh := make(chan error, 2)
+	go func() { errCh <- srv.serveHTTP(httpSrv, ln) }()
+	if tln, terr := startTsnet(srv); terr != nil {
+		log.Printf("tsnet: %v", terr)
+	} else if tln != nil {
+		go func() { errCh <- httpSrv.Serve(tln) }()
+	}
+	err = <-errCh
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil // graceful SIGINT/SIGTERM shutdown
 	}
