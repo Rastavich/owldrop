@@ -35,6 +35,10 @@ type dropLink struct {
 	MaxUses int       `json:"maxUses"` // 0 = unlimited
 	Uses    int       `json:"uses"`
 	Revoked bool      `json:"revoked"`
+	// AutoSaveDir, when set, auto-saves every file uploaded through this
+	// link into that folder — even when global auto-save is off. The rule
+	// is keyed on the token, so renaming the link keeps it intact.
+	AutoSaveDir string `json:"autoSaveDir,omitempty"`
 }
 
 // linkFile is one uploaded file sitting in the quarantine area, exposed to
@@ -253,6 +257,30 @@ func (m *dropManager) storeFile(token, baseName string, size int64, content io.R
 	return lf, nil
 }
 
+// setAutoSaveDir sets (or, with dir == "", clears) the per-link auto-save
+// rule. The dir must exist.
+func (m *dropManager) setAutoSaveDir(token, dir string) error {
+	if dir != "" {
+		fi, err := os.Stat(dir)
+		if err != nil {
+			return errors.New("folder does not exist")
+		}
+		if !fi.IsDir() {
+			return errors.New("not a folder")
+		}
+	}
+	m.mu.Lock()
+	l := m.links[token]
+	if l == nil {
+		m.mu.Unlock()
+		return errors.New("no such drop link")
+	}
+	l.AutoSaveDir = dir
+	m.mu.Unlock()
+	m.persist()
+	return nil
+}
+
 // useOnce counts one upload batch against the link's use budget.
 func (m *dropManager) useOnce(token string) {
 	m.mu.Lock()
@@ -270,11 +298,12 @@ func (m *dropManager) linkInbox() []waitingFile {
 	out := make([]waitingFile, 0, len(m.files))
 	for _, f := range m.files {
 		out = append(out, waitingFile{
-			Name:    f.Name,
-			Size:    f.Size,
-			Arrived: f.Arrived,
-			Source:  "link",
-			Sender:  f.Sender,
+			Name:      f.Name,
+			Size:      f.Size,
+			Arrived:   f.Arrived,
+			Source:    "link",
+			Sender:    f.Sender,
+			LinkToken: f.Token,
 		})
 	}
 	return out

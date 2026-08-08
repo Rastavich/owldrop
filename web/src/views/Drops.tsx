@@ -1,6 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { createDropLink, getDropLinks, getFunnel, revokeDropLink, setFunnel } from '../api';
+import {
+  createDropLink,
+  getDropLinks,
+  getFunnel,
+  revokeDropLink,
+  setDropLinkAutoSave,
+  setFunnel,
+} from '../api';
 import { toast } from '../store';
 import { copyText, fmtAge } from '../utils';
 import type { DropLink } from '../types';
@@ -38,6 +45,20 @@ export default function Drops() {
       toast('Funnel: ' + (e instanceof Error ? e.message : e), undefined, 'err');
     }
     setFunnelBusy(false);
+  };
+
+  const [ruleDirs, setRuleDirs] = useState<Record<string, string>>({});
+
+  const saveRule = async (token: string) => {
+    const dir = (ruleDirs[token] ?? '').trim();
+    try {
+      const res = await setDropLinkAutoSave(token, dir);
+      setRuleDirs((m) => ({ ...m, [token]: res.autoSaveDir }));
+      qc.invalidateQueries({ queryKey: ['droplinks'] });
+      toast(dir ? 'Files via this link will auto-save to ' + dir : 'Auto-save rule removed');
+    } catch (e) {
+      toast('Auto-save: ' + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
   };
 
   const create = async () => {
@@ -157,6 +178,25 @@ export default function Drops() {
                         Copy
                       </button>
                     </div>
+                    <div className="dl-url-row">
+                      <span className="dl-url-label">Auto-save</span>
+                      <input
+                        className="search"
+                        style={{ flex: '1', minWidth: 0, padding: '3px 8px' }}
+                        type="text"
+                        placeholder="/path/to/folder (empty = off)"
+                        value={ruleDirs[l.token] ?? l.autoSaveDir ?? ''}
+                        onChange={(e) => setRuleDirs((m) => ({ ...m, [l.token]: e.target.value }))}
+                        spellCheck={false}
+                        autoComplete="off"
+                      />
+                      <button className="dl-copy" onClick={() => saveRule(l.token)} disabled={l.revoked || l.expired}>
+                        Save
+                      </button>
+                    </div>
+                    {l.autoSaveDir && (
+                      <p className="sub2 muted">Files via this link auto-save to {l.autoSaveDir}</p>
+                    )}
                     {funnel?.enabled && publicUrl && (
                       <div className="dl-url-row">
                         <span className="dl-url-label">Public</span>

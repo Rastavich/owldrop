@@ -28,6 +28,8 @@ export interface Device {
   online: boolean;
   lastSeen?: string;
   taildrop: string; // "available" or a human reason
+  relay?: string; // DERP region ("syd") when reached via relay
+  curAddr?: string; // direct address when connected directly
 }
 
 export interface WaitingFile {
@@ -70,6 +72,12 @@ export interface DropLink {
   expired: boolean;
   url: string;
   publicUrl?: string;
+  autoSaveDir?: string;
+}
+
+export interface ServeState {
+  enabled: boolean;
+  url?: string;
 }
 
 export interface FunnelState {

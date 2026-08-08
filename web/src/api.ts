@@ -10,6 +10,7 @@ import type {
   HistoryEvent,
   HistoryStats,
   PageConfig,
+  ServeState,
   SyncItem,
   TailscaleState,
   UpdateState,
@@ -70,6 +71,14 @@ export const revokeDropLink = (token: string) =>
 export const getFunnel = () => api<FunnelState>('/api/funnel');
 export const setFunnel = (enabled: boolean) =>
   api<FunnelState>('/api/funnel', { method: 'POST', json: { enabled } });
+export const getServe = () => api<ServeState>('/api/serve');
+export const setServe = (enabled: boolean) =>
+  api<ServeState>('/api/serve', { method: 'POST', json: { enabled } });
+export const setDropLinkAutoSave = (token: string, dir: string) =>
+  api<{ ok: boolean; autoSaveDir: string }>('/api/droplinks/' + token + '/autosave', {
+    method: 'POST',
+    json: { dir },
+  });
 export const getTailscaleState = () => api<TailscaleState>('/api/tailscale');
 export const downloadTailscale = () => api('/api/tailscale/download', { method: 'POST' });
 export const testNtfy = () => api('/api/ntfy/test', { method: 'POST' });

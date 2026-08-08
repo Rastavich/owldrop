@@ -137,6 +137,12 @@ export default function Send() {
                       <span className="pv-name">
                         {d.name + (d.os ? ' (' + d.os + ')' : '') + (!d.online ? ' · offline' : usable ? '' : ' · ' + d.taildrop)}
                       </span>
+                      {d.online && d.curAddr && <span className="badge transport" title="Direct connection">⚡</span>}
+                      {d.online && !d.curAddr && d.relay && (
+                        <span className="badge transport relay" title={'Relayed via ' + d.relay}>
+                          {d.relay}
+                        </span>
+                      )}
                     </label>
                   );
                 })}

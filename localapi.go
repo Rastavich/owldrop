@@ -35,11 +35,12 @@ func newTSClient() *local.Client {
 
 // waitingFile is one file sitting in the Taildrop inbox on this machine.
 type waitingFile struct {
-	Name    string    `json:"name"`
-	Size    int64     `json:"size"`
-	Arrived time.Time `json:"arrived"`          // when we first noticed it (daemon exposes no timestamp)
-	Source  string    `json:"source,omitempty"` // "" = taildrop, "link" = drop link
-	Sender  string    `json:"sender,omitempty"` // drop link label, for link drops
+	Name      string    `json:"name"`
+	Size      int64     `json:"size"`
+	Arrived   time.Time `json:"arrived"`             // when we first noticed it (daemon exposes no timestamp)
+	Source    string    `json:"source,omitempty"`    // "" = taildrop, "link" = drop link
+	Sender    string    `json:"sender,omitempty"`    // drop link label, for link drops
+	LinkToken string    `json:"linkToken,omitempty"` // drop link token, for link drops (rule matching)
 }
 
 var (
@@ -185,6 +186,20 @@ type device struct {
 	Online   bool                 `json:"online"`
 	LastSeen *time.Time           `json:"lastSeen,omitempty"`
 	Taildrop string               `json:"taildrop"` // "available" or a human reason
+	Relay    string               `json:"relay,omitempty"`    // DERP region ("syd") when relayed
+	CurAddr  string               `json:"curAddr,omitempty"`  // current direct address when connected directly
+}
+
+// peerTransport summarizes how this machine currently reaches the peer:
+// "direct" (CurAddr set), the relay region code when relayed, or "" when
+// nothing is known. Derived from the daemon's status fields (verified on
+// v1.102: direct peers carry CurAddr, relayed peers carry Relay with an
+// empty CurAddr).
+func peerTransport(curAddr, relay string) string {
+	if curAddr != "" {
+		return "direct"
+	}
+	return relay
 }
 
 // tsDevices lists all tailnet devices, marking which can receive Taildrop and
@@ -210,6 +225,8 @@ func tsDevices(ctx context.Context) ([]device, error) {
 		if ps, ok := peerByID[n.StableID]; ok {
 			d.OS = ps.OS
 			d.Online = ps.Online
+			d.Relay = ps.Relay
+			d.CurAddr = ps.CurAddr
 			if !ps.LastSeen.IsZero() {
 				t := ps.LastSeen
 				d.LastSeen = &t
@@ -226,7 +243,7 @@ func tsDevices(ctx context.Context) ([]device, error) {
 		if _, ok := byID[id]; ok {
 			continue
 		}
-		d := device{ID: id, Name: ps.HostName, OS: ps.OS, Online: ps.Online}
+		d := device{ID: id, Name: ps.HostName, OS: ps.OS, Online: ps.Online, Relay: ps.Relay, CurAddr: ps.CurAddr}
 		if !ps.LastSeen.IsZero() {
 			t := ps.LastSeen
 			d.LastSeen = &t

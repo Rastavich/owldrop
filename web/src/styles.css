@@ -37,6 +37,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:16px;pa
 .tab:hover{color:var(--text)}
 .tab.active{color:var(--text);background:var(--panel);border-color:var(--border);position:relative;top:1px}
 .badge{min-width:20px;padding:1px 6px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-align:center}
+.badge.transport{min-width:0;padding:1px 6px;font-size:10.5px;font-weight:600;letter-spacing:.3px;background:rgba(52,211,153,.16);color:var(--green)}
+.badge.transport.relay{background:rgba(251,191,36,.14);color:var(--amber)}
 
 main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 

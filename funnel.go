@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"net/http"
-	"os/exec"
-	"strings"
 	"time"
 )
 
-// Funnel integration: the app shows the machine's public MagicDNS URL and
-// can start/stop `tailscale funnel` itself, so no manual scripting is
-// needed to expose drop links to the public internet.
+// Funnel integration: public (internet-visible) drop links via Tailscale
+// Funnel. Managed through the serve-config LocalAPI (serving.go), the same
+// config surface `tailscale funnel` uses — so CLI-configured funnels and the
+// in-app toggle can never disagree. Funnel is a superset of Serve: when
+// enabled, https://<machine>.<tailnet>.ts.net/ terminates TLS for the app
+// and the guard restricts it to /drop/* (public pages only); when only
+// Serve is on, the full app stays tailnet-only.
 
 // funnelPublicURL is https://<machine>.<tailnet>.ts.net/ — the public base
 // under which drop links are reachable while Funnel is enabled.
@@ -22,53 +24,22 @@ func (s *server) funnelPublicURL() string {
 	return "https://" + dns + "/"
 }
 
-// funnelEnabled reports whether a Funnel (or serve) config is currently
-// active. `tailscale funnel status --json` prints {} when nothing is on.
-func (s *server) funnelEnabled() (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// funnelEnabled reports whether Funnel is active for this app.
+func (s *server) funnelEnabled() bool {
+	hp := s.hostPort()
+	if hp == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "tailscale", "funnel", "status", "--json").Output()
-	if err != nil {
-		return false, err
-	}
-	return len(strings.TrimSpace(string(out))) > 2, nil
+	cfg := s.serving.get(ctx)
+	return cfg != nil && cfg.AllowFunnel[hp]
 }
-
-// setFunnel starts or stops public exposure of the app via Tailscale Funnel.
-func (s *server) setFunnel(on bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	var cmd *exec.Cmd
-	if on {
-		cmd = exec.CommandContext(ctx, "tailscale", "funnel", "--bg", "http://127.0.0.1:8976")
-	} else {
-		// funnel reset clears the serve/funnel config.
-		cmd = exec.CommandContext(ctx, "tailscale", "funnel", "reset")
-	}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return &funnelError{msg}
-	}
-	return nil
-}
-
-type funnelError struct{ msg string }
-
-func (e *funnelError) Error() string { return e.msg }
 
 func (s *server) handleFunnel(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		enabled, err := s.funnelEnabled()
-		if err != nil {
-			writeErr(w, err)
-			return
-		}
-		writeJSON(w, map[string]any{"enabled": enabled, "url": s.funnelPublicURL()})
+		writeJSON(w, map[string]any{"enabled": s.funnelEnabled(), "url": s.funnelPublicURL()})
 	case http.MethodPost:
 		var req struct {
 			Enabled bool `json:"enabled"`
@@ -77,10 +48,13 @@ func (s *server) handleFunnel(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := s.setFunnel(req.Enabled); err != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		if err := s.setFunnel(ctx, req.Enabled); err != nil {
 			writeErr(w, err)
 			return
 		}
+		s.serving.invalidate()
 		writeJSON(w, map[string]any{"enabled": req.Enabled, "url": s.funnelPublicURL()})
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

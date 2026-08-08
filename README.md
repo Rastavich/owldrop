@@ -44,6 +44,15 @@ hostname where nothing else is reachable.)
 - **LAN mode** — Settings toggle (or `--lan`): other devices on your
   tailnet can open the app at `http://<tailnet-ip>:8976/` (token-
   protected, hostnames blocked against DNS rebinding).
+- **HTTPS access** — Settings toggle: serves the app at
+  `https://<machine>.<tailnet>.ts.net/` via Tailscale Serve with an
+  automatically issued/renewed Let's Encrypt certificate, tailnet-only
+  (Funnel for public drop links is unchanged; when Funnel is on, only
+  `/drop/*` is exposed to the internet).
+- **Per-link auto-save** — Drop links can route their uploads straight
+  into a folder: set it on the link row in Drop links, and files sent
+  through that link are saved there automatically, even when global
+  auto-save is off.
 - **Auto-save** — one checkbox: incoming files land in your folder the
   moment they arrive (like `tailscale file get --loop`), with notifications
 - **Notifications** — arrival + save/send results, native OS notifications
@@ -88,6 +97,12 @@ container borrows the host's Tailscale — it doesn't need its own account.
 
    - `/var/run/tailscale/tailscaled.sock` — leave as-is on Linux; this is how
      the container talks to your Tailscale.
+   - **No host Tailscale?** Run the container with `OWLDROP_TSNET=1` (and
+     `OWLDROP_HOSTNAME=owldrop-nas`) and the app joins the tailnet as its
+     own node — UI, drop links and Sync work without any host daemon
+     (`TS_AUTHKEY` pre-approves the node). Note: the Taildrop inbox is
+     provided by a tailscaled daemon, so a tsnet-only node has no inbox
+     (upload via drop links instead).
    - `/mnt/user/downloads` — the folder where saved files land. Point it at
      any share/folder you want files to arrive in (on Unraid, e.g.
      `/mnt/user/media`).
