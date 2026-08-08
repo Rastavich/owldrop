@@ -259,8 +259,8 @@ jobs:
           tags: |
             ${{ steps.img.outputs.name }}:latest
             ${{ steps.img.outputs.name }}:${{ needs.preflight.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # NOTE: no type=gha cache — its cache artifact breaks the catch-all
+          # artifact downloads in the release/publish-updates jobs.
 
   # Publishes to the public owldrop-install repo (source stays private):
   # the nix-built linux binary (for `nix profile install`), the .deb/.rpm
