@@ -1,10 +1,10 @@
 {
 	"fixed": {
-		"file_version": "0.7.0"
+		"file_version": "0.7.1"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "0.7.0",
+			"ProductVersion": "0.7.1",
 			"CompanyName": "Owldrop",
 			"FileDescription": "Owldrop — desktop app for Tailscale file sharing",
 			"LegalCopyright": "(c) 2026, Owldrop",
