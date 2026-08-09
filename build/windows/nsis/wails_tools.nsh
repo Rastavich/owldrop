@@ -14,7 +14,7 @@
     !define INFO_PRODUCTNAME "Owldrop"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "0.6.5"
+    !define INFO_PRODUCTVERSION "0.6.6"
 !endif
 !ifndef INFO_COPYRIGHT
     !define INFO_COPYRIGHT "(c) 2026, Owldrop"
