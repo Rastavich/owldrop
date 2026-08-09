@@ -37,4 +37,10 @@ grep -q "\"softwareVersion\": \"$V\"" public/index.html || { echo "error: failed
 grep -q "id=\"version-pill\">v$V" public/index.html || { echo "error: failed to bake version pill" >&2; exit 1; }
 
 echo "baked v$V into public/index.html"
-exec npx wrangler deploy
+
+# Prefer the lockfile-pinned wrangler so deploy matches npm audit / CI.
+if [[ ! -x node_modules/.bin/wrangler ]]; then
+  echo "installing pinned wrangler (npm ci)"
+  npm ci
+fi
+exec ./node_modules/.bin/wrangler deploy

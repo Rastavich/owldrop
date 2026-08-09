@@ -52,6 +52,14 @@ fi
 
 command -v wails3 >/dev/null || { echo "error: wails3 not on PATH (needed to regenerate platform assets)" >&2; exit 1; }
 
+# Fail the release early on high/critical advisories (web/site/Go/Wails).
+# Runs before any version edits so a dirty failure can't leave a half-bump.
+if (( DRY_RUN )); then
+  echo "  would: ./scripts/vulncheck.sh"
+else
+  ./scripts/vulncheck.sh
+fi
+
 run() { # run [desc] cmd...
   local desc="$1"; shift
   if (( DRY_RUN )); then echo "  would: $desc"; else "$@"; fi

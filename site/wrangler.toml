@@ -1,10 +1,11 @@
 # Owldrop landing page — static site + telemetry worker on Cloudflare.
 #
-# Deploy from this directory:
+# Deploy from this directory (wrangler is pinned in package.json):
+#   npm ci
 #   npx wrangler d1 create owldrop-analytics   # once; paste the id below
 #   npx wrangler secret put STATS_TOKEN        # once; e.g. openssl rand -hex 16
 #   npx wrangler d1 migrations apply owldrop-analytics
-#   npx wrangler deploy
+#   npm run deploy                            # or ./scripts/deploy.sh
 #
 # Runtime: the worker serves ./public for everything it doesn't handle,
 # ingests anonymous app telemetry at /api/t (D1), counts downloads via

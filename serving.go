@@ -15,17 +15,15 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"os"
-	"strings"
-	"sync"
-	"time"
+       "bytes"
+       "context"
+       "encoding/json"
+       "fmt"
+       "io"
+       "net/http"
+       "strings"
+       "sync"
+       "time"
 )
 
 // --- raw LocalAPI serve-config client ---------------------------------------
@@ -60,47 +58,33 @@ type httpHandlerWire struct {
 // them (405/412).
 type serveConfigStore interface {
 	getServeConfig(ctx context.Context) (cfg *serveConfigWire, etag string, err error)
-	putServeConfig(ctx context.Context, cfg *serveConfigWire, etag string) error
+       putServeConfig(ctx context.Context, cfg *serveConfigWire, etag string) error
 }
-
-// rawServeClient dials the daemon socket directly (OWLDROP_TS_SOCKET
-// overridable, like the rest of the app).
-type rawServeClient struct {
-	sock string
-}
+// rawServeClient makes LocalAPI HTTP requests through the same cross-platform
+// client used by the rest of the app (local.Client). No hardcoded socket paths.
+type rawServeClient struct{}
 
 func newRawServeClient() *rawServeClient {
-	sock := os.Getenv("OWLDROP_TS_SOCKET")
-	if sock == "" {
-		sock = "/var/run/tailscale/tailscaled.sock"
-	}
-	return &rawServeClient{sock: sock}
+       return &rawServeClient{}
 }
 
 func (c *rawServeClient) do(ctx context.Context, method, path string, body io.Reader, hdr http.Header) (int, http.Header, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, "http://local-tailscaled.sock"+path, body)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	for k, vs := range hdr {
-		for _, v := range vs {
-			req.Header.Add(k, v)
-		}
-	}
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, "unix", c.sock)
-			},
-		},
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	defer res.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
-	return res.StatusCode, res.Header, b, nil
+       req, err := http.NewRequestWithContext(ctx, method, "http://local-tailscaled.sock"+path, body)
+       if err != nil {
+               return 0, nil, nil, err
+       }
+       for k, vs := range hdr {
+               for _, v := range vs {
+                       req.Header.Add(k, v)
+               }
+       }
+       res, err := tsClient.DoLocalRequest(req)
+       if err != nil {
+               return 0, nil, nil, err
+       }
+       defer res.Body.Close()
+       b, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+       return res.StatusCode, res.Header, b, nil
 }
 
 func (c *rawServeClient) getServeConfig(ctx context.Context) (*serveConfigWire, string, error) {

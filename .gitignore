@@ -6,6 +6,9 @@
 .task
 web/node_modules
 web/dist
+site/node_modules
+site/.wrangler
+site/.dev.vars
 build/linux/appimage/build
 build/linux/appimage/owldrop
 build/linux/appimage/owldrop.png

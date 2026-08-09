@@ -34,8 +34,29 @@ jobs:
             exit 1
           fi
 
-  windows:
+  # High/critical npm advisories (web + site) and reachable Go/Wails vulns.
+  # Runs before the expensive OS package jobs.
+  vuln:
     needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            site/package-lock.json
+      - name: Vulnerability check (high/critical)
+        run: ./scripts/vulncheck.sh
+
+
+  windows:
+    needs: [preflight, vuln]
     runs-on: windows-latest
     # The `release` environment scopes the Azure federated credential
     # (repo:<owner>/<repo>:environment:release) — federated credentials
@@ -65,7 +86,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
       - name: Install NSIS
         run: choco install nsis -y --no-progress
       # The choco nsis package (a silent NSIS installer run) installs makensis
@@ -170,7 +191,7 @@ jobs:
           if-no-files-found: error
 
   macos:
-    needs: preflight
+    needs: [preflight, vuln]
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -178,7 +199,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
       - name: Package (.app bundle + dmg)
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
@@ -209,7 +230,7 @@ jobs:
   # image. The host only needs docker: setup:docker is a plain `docker build`
   # (see build/Taskfile.yml).
   linux:
-    needs: preflight
+    needs: [preflight, vuln]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -231,7 +252,7 @@ jobs:
             wails-cross -c '
               set -e
               export PATH="$PATH:$(go env GOPATH)/bin"
-              go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.2
+              go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
               wails3 task linux:package
             '
       - uses: actions/upload-artifact@v4
@@ -338,7 +359,7 @@ jobs:
   # static -tags server binary on alpine). Independent of the OS builds — the
   # container compiles its own binary and frontend from source.
   docker:
-    needs: preflight
+    needs: [preflight, vuln]
     runs-on: ubuntu-latest
     permissions:
       contents: read

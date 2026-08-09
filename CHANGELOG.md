@@ -8,6 +8,39 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.7.2]
+
+### Fixed
+
+- Windows headless builds (`GOOS=windows -tags server`) failed to compile against
+  Wails v3 beta.2 (`undefined: windowsWebviewWindow`). Bumped Wails to
+  `v3.0.0-beta.5`, which correctly excludes Windows webview code from server
+  builds.
+- Serve/Funnel LocalAPI client no longer hardcodes the Linux Tailscale socket
+  path; it uses the same cross-platform `local.Client` as the rest of the app
+  (fixes Serve/Funnel on Windows and other non-Linux hosts).
+
+### Added
+
+- `scripts/vulncheck.sh`: fails on high/critical npm advisories in `web/` and
+  `site/`, and on reachable Go/Wails vulns via `govulncheck`.
+- CI workflow on PRs and `main`, plus a required `vuln` job in the release
+  pipeline; `scripts/bump-release.sh` runs the same check locally before
+  bumping.
+- Marketing site now pins `wrangler` in `site/package.json` so deploys and
+  audits use a lockfile instead of floating `npx wrangler`.
+- `buildWindows.sh` for a quick headless Windows cross-compile.
+
+### Security
+
+- Bumped `nanoid` (web transitive) and `golang.org/x/text` to clear high
+  advisories caught by the new vuln gate.
+
+### Changed
+
+- Release packaging installs Wails CLI `v3.0.0-beta.5` to match `go.mod`.
+- Stopped tracking Cloudflare Wrangler cache/state under `site/.wrangler`.
+
 ## [0.7.1]
 
 ### Added
