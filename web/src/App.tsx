@@ -5,6 +5,7 @@ import { getDropLinks, getInbox } from './api';
 import { connectEvents } from './events';
 import DaemonPill from './components/DaemonPill';
 import ConnectBanner from './components/ConnectBanner';
+import UpdateBanner from './components/UpdateBanner';
 import ConfirmModal from './components/ConfirmModal';
 import FolderPicker from './components/FolderPicker';
 import Toasts from './components/Toasts';
@@ -76,6 +77,7 @@ export default function App() {
       </nav>
 
       <ConnectBanner />
+      <UpdateBanner />
 
       <main>
         <Outlet />

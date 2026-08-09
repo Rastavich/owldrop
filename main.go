@@ -63,6 +63,8 @@ func main() {
 
 	srv := newServer(cfg)
 
+       go srv.startVersionCheck(ctx)
+
 	httpSrv := &http.Server{
 		Handler:           srv.routes(),
 		ReadHeaderTimeout: 5 * time.Second,

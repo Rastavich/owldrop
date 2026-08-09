@@ -48,6 +48,9 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .connect-banner .col{display:flex;flex-direction:column;gap:2px;flex:1}
 .connect-banner .col p{flex:none}
 
+.update-banner{display:flex;align-items:center;gap:12px;max-width:860px;margin:0 auto;padding:10px 14px;background:var(--panel2);border:1px solid var(--accent);border-radius:10px;font-size:13px;color:var(--text)}
+.update-banner span{flex:1}
+.update-banner .btn.mini{flex:0 0 auto}
 .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .dir-field{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:6px 12px;flex:1;min-width:240px}
 .dir-field span{color:var(--muted);font-size:12.5px;white-space:nowrap}

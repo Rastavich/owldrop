@@ -8,6 +8,12 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.7.1]
+
+### Added
+
+- Update to new release banner
+- Fixed last release issue
 
 ## [0.7.0]
 

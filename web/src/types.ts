@@ -154,11 +154,11 @@ export interface SyncItem {
   size?: number;
   createdAt: string;
 }
-
 export interface UpdateState {
   current: string;
   latest?: string;
   available: boolean;
+  autoInstall: boolean;
   state: 'idle' | 'checking' | 'available' | 'downloading' | 'installed' | 'error' | 'disabled';
   error?: string;
 }

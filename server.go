@@ -54,26 +54,25 @@ func (h *hub) unsubscribeWeb(c chan []byte) {
 }
 
 func (h *hub) broadcast(v any) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return
-	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	switch v.(type) {
-	case inboxEvent:
-		h.lastInbox = b
-	case devicesEvent:
-		h.lastDevices = b
-	}
-	for c := range h.webClients {
-		select {
-		case c <- b:
-		default: // drop for slow consumers
-		}
-	}
+       b, err := json.Marshal(v)
+       if err != nil {
+               return
+       }
+       h.mu.Lock()
+       defer h.mu.Unlock()
+       switch v.(type) {
+       case inboxEvent:
+               h.lastInbox = b
+       case devicesEvent:
+               h.lastDevices = b
+       }
+       for c := range h.webClients {
+               select {
+               case c <- b:
+               default: // drop for slow consumers
+               }
+       }
 }
-
 type inboxEvent struct {
 	Type  string        `json:"type"`
 	Files []waitingFile `json:"files"`
@@ -127,11 +126,12 @@ type server struct {
 	token       string
 	hub         *hub
 	history     *history
-	drops       *dropManager
-	sync        *syncStore
-	serving     *servingManager
-	update      *updateManager
-	tsnet       any    // *tsnet.Server, set by tsnetmode.go (server build only)
+       drops       *dropManager
+       sync        *syncStore
+       serving     *servingManager
+       update      *updateManager
+       version     *versionCheck  // server-side version poll (all builds)
+       tsnet       any    // *tsnet.Server, set by tsnetmode.go (server build only)
 	tsnetHost   string // the tsnet node's MagicDNS name, when active
 
 	port        int

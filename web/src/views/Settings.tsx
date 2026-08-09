@@ -207,8 +207,11 @@ export default function Settings() {
             {update?.state === 'downloading' ? ' — downloading…' : ''}
             {update?.state === 'error' ? ` — ${update.error ?? 'update failed'}` : ''}
           </p>
-          {update?.state !== 'disabled' && (
+          {update?.state !== 'disabled' && update?.autoInstall && (
             <p className="sub2">Checks the release feed and replaces this app in place (Windows/macOS).</p>
+          )}
+          {update?.state !== 'disabled' && !update?.autoInstall && (
+            <p className="sub2">Self-update is not available on this platform. Download the latest version from the GitHub releases page.</p>
           )}
         </div>
         {update?.state !== 'disabled' && (
@@ -216,10 +219,15 @@ export default function Settings() {
             <button className="btn ghost" onClick={checkForUpdates} disabled={updateBusy || update?.state === 'downloading'}>
               Check for updates
             </button>
-            {update?.available && (
+            {update?.available && update?.autoInstall && (
               <button className="btn" onClick={doInstallUpdate} disabled={updateBusy}>
                 Download &amp; install
               </button>
+            )}
+            {update?.available && !update?.autoInstall && (
+              <a className="btn" href="https://github.com/Rastavich/owldrop-install/releases/latest" target="_blank" rel="noopener">
+                Download from GitHub
+              </a>
             )}
           </div>
         )}
