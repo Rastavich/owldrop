@@ -9,7 +9,7 @@ notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
 
-## [Unreleased]
+## [0.7.0]
 
 ### Added
 
