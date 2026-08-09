@@ -8,6 +8,43 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+
+## [Unreleased]
+
+### Added
+
+- Tailscale Serve integration: toggle tailnet-only HTTPS on your MagicDNS name
+  with automatic Let's Encrypt certificates, managed through the daemon's
+  serve-config API (no CLI needed). Funnel moved onto the same config manager
+  so CLI-configured funnels and the in-app toggle can never disagree.
+- Per-drop-link auto-save: each link can route its uploads into a specific
+  folder, even when global auto-save is off. Configured via the link row.
+- Peer transport badges in the Send picker: each device shows whether the
+  connection is direct or relayed, with the relay region when applicable.
+- tsnet mode for headless server builds (`OWLDROP_TSNET=1`): the container
+  joins the tailnet as its own node when no host `tailscaled` exists. UI, drop
+  links, and Sync work without a host daemon.
+- Per-drop-link upload rate limiting: each link can cap uploads per minute
+  (token bucket). Rate-limited uploads return 429 with a `Retry-After` header.
+  Configurable in the create-link form or via `ratePerMin` in the API.
+- tsnet state persistence: the embedded node stores its state under the config
+  directory so auth keys survive container restarts.
+- Server build now checks save-directory writability at startup and logs a
+  warning when the folder isn't usable.
+- `build.sh` and updated `run.sh`: one-command build (frontend + Go).
+
+### Fixed
+
+- Serve-config writes use POST with `If-Match` etag (the daemon rejects PUT)
+  and refetch the etag before every write so CLI-made changes aren't silently
+  clobbered.
+
+### Changed
+
+- In-app header logo is now the owl-eyes mark, matching the tray and app icons.
+- Drop-link creation API now accepts `ratePerMin` (0 = unlimited).
+- MagicDNS hostnames appear in LAN URL listings for stable cross-device access.
+
 ## [0.6.5] - 2026-08-08
 
 ### Added 
