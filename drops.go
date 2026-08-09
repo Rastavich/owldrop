@@ -1,21 +1,23 @@
 package main
 
 import (
-	"archive/zip"
-	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"mime/multipart"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
+       "archive/zip"
+       "context"
+       "crypto/rand"
+       "encoding/hex"
+       "encoding/json"
+       "errors"
+       "fmt"
+       "io"
+       "math"
+       "mime/multipart"
+       "net/http"
+       "os"
+       "path/filepath"
+       "strconv"
+       "strings"
+       "sync"
+       "time"
 )
 
 // Drop links are short-lived, capability-URL invitations to upload files
@@ -28,17 +30,20 @@ import (
 const maxDropUploadSize = 4 << 30 // 4 GiB, matching Taildrop's cap
 
 type dropLink struct {
-	Token   string    `json:"token"`
-	Name    string    `json:"name"` // optional sender label
-	Created time.Time `json:"created"`
-	Expires time.Time `json:"expires"`
-	MaxUses int       `json:"maxUses"` // 0 = unlimited
-	Uses    int       `json:"uses"`
-	Revoked bool      `json:"revoked"`
-	// AutoSaveDir, when set, auto-saves every file uploaded through this
-	// link into that folder — even when global auto-save is off. The rule
-	// is keyed on the token, so renaming the link keeps it intact.
-	AutoSaveDir string `json:"autoSaveDir,omitempty"`
+       Token   string    `json:"token"`
+       Name    string    `json:"name"` // optional sender label
+       Created time.Time `json:"created"`
+       Expires time.Time `json:"expires"`
+       MaxUses int       `json:"maxUses"` // 0 = unlimited
+       Uses    int       `json:"uses"`
+       Revoked bool      `json:"revoked"`
+       // AutoSaveDir, when set, auto-saves every file uploaded through this
+       // link into that folder — even when global auto-save is off. The rule
+       // is keyed on the token, so renaming the link keeps it intact.
+       AutoSaveDir string `json:"autoSaveDir,omitempty"`
+       // RatePerMin caps uploads per minute; 0 = unlimited. Token-bucket
+       // enforced per link, memory-resident (resets on restart).
+       RatePerMin int `json:"ratePerMin"`
 }
 
 // linkFile is one uploaded file sitting in the quarantine area, exposed to
@@ -53,23 +58,56 @@ type linkFile struct {
 }
 
 type dropManager struct {
-	mu       sync.Mutex
-	path     string // config file (droplinks.json)
-	dir      string // quarantine dir (drops/)
-	links    map[string]*dropLink
-	files    map[string]*linkFile // inbox basename → uploaded file
-	uploadMu sync.Map // per-token *sync.Mutex: serializes uploads to one link (kills TOCTOU on maxUses/TTL + the concurrent map race)
+       mu       sync.Mutex
+       path     string // config file (droplinks.json)
+       dir      string // quarantine dir (drops/)
+       links    map[string]*dropLink
+       files    map[string]*linkFile // inbox basename → uploaded file
+       uploadMu sync.Map // per-token *sync.Mutex: serializes uploads to one link (kills TOCTOU on maxUses/TTL + the concurrent map race)
+       // rate limiters for upload throttling (token bucket per link).
+       rateLimiters map[string]*rateLimiter
+       rlMu         sync.Mutex
+}
+
+// rateLimiter is a token bucket that caps upload frequency for one drop link.
+// State is memory-resident; restarting resets all buckets.
+type rateLimiter struct {
+       mu        sync.Mutex
+       burst     int       // max tokens (bucket capacity)
+       tokens    float64   // current tokens
+       rate      float64   // tokens per second
+       lastCheck time.Time
+}
+
+func (rl *rateLimiter) allow() (bool, int) {
+       rl.mu.Lock()
+       defer rl.mu.Unlock()
+       now := time.Now()
+       elapsed := now.Sub(rl.lastCheck).Seconds()
+       rl.tokens = math.Min(float64(rl.burst), rl.tokens+elapsed*rl.rate)
+       rl.lastCheck = now
+       if rl.tokens >= 1.0 {
+               rl.tokens -= 1.0
+               return true, 0
+       }
+       // Seconds until one full token refills.
+       retryAfter := int(math.Ceil((1.0 - rl.tokens) / rl.rate))
+       if retryAfter < 1 {
+               retryAfter = 1
+       }
+       return false, retryAfter
 }
 
 func newDropManager(cfgDir string) *dropManager {
-	m := &dropManager{
-		path:  filepath.Join(cfgDir, "droplinks.json"),
-		dir:   filepath.Join(cfgDir, "drops"),
-		links: map[string]*dropLink{},
-		files: map[string]*linkFile{},
-	}
-	m.load()
-	return m
+       m := &dropManager{
+               path:         filepath.Join(cfgDir, "droplinks.json"),
+               dir:          filepath.Join(cfgDir, "drops"),
+               links:        map[string]*dropLink{},
+               files:        map[string]*linkFile{},
+               rateLimiters: map[string]*rateLimiter{},
+       }
+       m.load()
+       return m
 }
 
 // uploadLock returns the per-token mutex used to serialize uploads to a
@@ -147,23 +185,24 @@ func (m *dropManager) linkListLocked() []*dropLink {
 	return out
 }
 
-// create makes a new link; ttl is a duration, maxUses 0 = unlimited.
-func (m *dropManager) create(name string, ttl time.Duration, maxUses int) *dropLink {
-	tok := make([]byte, 16)
-	rand.Read(tok)
-	l := &dropLink{
-		Token:   hex.EncodeToString(tok),
-		Name:    name,
-		Created: time.Now(),
-		Expires: time.Now().Add(ttl),
-		MaxUses: maxUses,
-	}
-	m.mu.Lock()
-	m.links[l.Token] = l
-	m.mu.Unlock()
-	tele.event("drop_link_created")
-	m.persist()
-	return l
+// create makes a new link; ttl is a duration, maxUses and ratePerMin 0 = unlimited.
+func (m *dropManager) create(name string, ttl time.Duration, maxUses int, ratePerMin int) *dropLink {
+       tok := make([]byte, 16)
+       rand.Read(tok)
+       l := &dropLink{
+               Token:      hex.EncodeToString(tok),
+               Name:       name,
+               Created:    time.Now(),
+               Expires:    time.Now().Add(ttl),
+               MaxUses:    maxUses,
+               RatePerMin: ratePerMin,
+       }
+       m.mu.Lock()
+       m.links[l.Token] = l
+       m.mu.Unlock()
+       tele.event("drop_link_created")
+       m.persist()
+       return l
 }
 
 // usable reports whether the link currently accepts uploads.
@@ -291,6 +330,31 @@ func (m *dropManager) useOnce(token string) {
 	m.persist()
 }
 
+// checkRate tests the per-link rate limit against this token. Returns
+// (allowed, retryAfterSeconds). Links without a rate limit (RatePerMin <= 0)
+// always pass. Rate-limit state is memory-resident and not persisted.
+func (m *dropManager) checkRate(token string) (bool, int) {
+       m.mu.Lock()
+       l, ok := m.links[token]
+       m.mu.Unlock()
+       if !ok || l.Revoked || l.RatePerMin <= 0 {
+               return true, 0
+       }
+       m.rlMu.Lock()
+       rl, ok := m.rateLimiters[token]
+       if !ok {
+               rl = &rateLimiter{
+                       burst:     l.RatePerMin,
+                       tokens:    float64(l.RatePerMin),
+                       rate:      float64(l.RatePerMin) / 60.0,
+                       lastCheck: time.Now(),
+               }
+               m.rateLimiters[token] = rl
+       }
+       m.rlMu.Unlock()
+       return rl.allow()
+}
+
 // linkInbox returns the current uploaded files as waitingFile items.
 func (m *dropManager) linkInbox() []waitingFile {
 	m.mu.Lock()
@@ -343,16 +407,21 @@ func (s *server) handleDropUpload(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusGone, map[string]any{"error": msg})
 		return
 	}
-	// Consume the use up front: a single-use link can't be raced past 1
-	// upload, and a failed upload consumes the slot (safer default than
-	// letting an attacker retry into a bypass).
-	s.drops.useOnce(token)
-	r.Body = http.MaxBytesReader(w, r.Body, maxDropUploadSize)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "upload too large or malformed"})
-		return
-	}
-	defer r.MultipartForm.RemoveAll() // never leak the 4 GiB temp spool
+       if ok, retry := s.drops.checkRate(token); !ok {
+               w.Header().Set("Retry-After", strconv.Itoa(retry))
+               writeJSONStatus(w, http.StatusTooManyRequests, map[string]any{"error": "rate limit exceeded", "retryAfter": retry})
+               return
+       }
+       // Consume the use up front: a single-use link can't be raced past 1
+       // upload, and a failed upload consumes the slot (safer default than
+       // letting an attacker retry into a bypass).
+       s.drops.useOnce(token)
+       r.Body = http.MaxBytesReader(w, r.Body, maxDropUploadSize)
+       if err := r.ParseMultipartForm(32 << 20); err != nil {
+               writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "upload too large or malformed"})
+               return
+       }
+       defer r.MultipartForm.RemoveAll() // never leak the 4 GiB temp spool
 	parts := r.MultipartForm.File["file"]
 	if len(parts) == 0 {
 		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "no file part named \"file\""})

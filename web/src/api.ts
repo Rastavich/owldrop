@@ -61,10 +61,10 @@ export const browse = (path: string) =>
 export const mkdir = (path: string, name: string) =>
   api('/api/mkdir', { method: 'POST', json: { path, name } });
 export const getDropLinks = () => api<{ links: DropLink[] }>('/api/droplinks').then((r) => r.links);
-export const createDropLink = (name: string, ttlMinutes: number, maxUses: number) =>
+export const createDropLink = (name: string, ttlMinutes: number, maxUses: number, ratePerMin: number) =>
   api<{ url: string; publicUrl?: string }>('/api/droplinks', {
     method: 'POST',
-    json: { name, ttlMinutes, maxUses },
+    json: { name, ttlMinutes, maxUses, ratePerMin },
   });
 export const revokeDropLink = (token: string) =>
   api('/api/droplinks/' + token + '/revoke', { method: 'POST', json: {} });

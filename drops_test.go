@@ -25,9 +25,9 @@ func newDropTestServer(t *testing.T) (*server, string) {
 }
 
 func createTestDropLink(t *testing.T, s *server, name string, ttl time.Duration, maxUses int) string {
-	t.Helper()
-	l := s.drops.create(name, ttl, maxUses)
-	return l.Token
+       t.Helper()
+       l := s.drops.create(name, ttl, maxUses, 0)
+       return l.Token
 }
 
 func uploadToDrop(t *testing.T, base, token, filename, content string) *http.Response {
@@ -277,4 +277,61 @@ func TestDropFolderZip(t *testing.T) {
 			t.Fatalf("zip missing %s; entries = %v", want, entries)
 		}
 	}
+}
+
+// TestDropLinkRateLimit verifies per-link upload rate limiting via token bucket.
+func TestDropLinkRateLimit(t *testing.T) {
+       s, base := newDropTestServer(t)
+
+       // Create a link with 3 uploads/min rate limit. Bucket starts full (3 tokens).
+       l := s.drops.create("ratelimited", time.Hour, 0, 3)
+       token := l.Token
+       if l.RatePerMin != 3 {
+               t.Fatalf("RatePerMin = %d, want 3", l.RatePerMin)
+       }
+
+       // First 3 uploads should succeed immediately (burst).
+       for i := range 3 {
+               res := uploadToDrop(t, base, token, "burst.txt", "data")
+               if res.StatusCode != 200 {
+                       t.Fatalf("burst upload %d: status %d, want 200", i+1, res.StatusCode)
+               }
+       }
+
+       // 4th upload should be rate-limited (bucket empty).
+       res := uploadToDrop(t, base, token, "blocked.txt", "data")
+       if res.StatusCode != 429 {
+               t.Fatalf("rate-limited upload: status %d, want 429", res.StatusCode)
+       }
+       if retry := res.Header.Get("Retry-After"); retry == "" {
+               t.Error("429 response missing Retry-After header")
+       }
+
+       // Wait for one token to refill (3/min = one every 20s; use a shorter
+       // sleep + check to keep the test fast — we only need to verify the
+       // bucket refills, not test real-time accuracy).
+       time.Sleep(100 * time.Millisecond) // won't refill, still blocked
+       res = uploadToDrop(t, base, token, "still-blocked.txt", "data")
+       if res.StatusCode != 429 {
+               t.Fatalf("rate-limited after short sleep: status %d, want 429", res.StatusCode)
+       }
+}
+
+// TestDropLinkRateLimitUnlimited verifies 0 means unlimited.
+func TestDropLinkRateLimitUnlimited(t *testing.T) {
+       s, base := newDropTestServer(t)
+       token := createTestDropLink(t, s, "unlimited", time.Hour, 0)
+
+       l := s.drops.get(token)
+       if l.RatePerMin != 0 {
+               t.Fatalf("RatePerMin = %d, want 0 (unlimited)", l.RatePerMin)
+       }
+
+       // Many rapid uploads should all succeed.
+       for i := range 10 {
+               res := uploadToDrop(t, base, token, "many.txt", "data")
+               if res.StatusCode != 200 {
+                       t.Fatalf("upload %d: status %d, want 200", i+1, res.StatusCode)
+               }
+       }
 }

@@ -28,6 +28,18 @@ export default function Drops() {
   const [name, setName] = useState('');
   const [ttl, setTtl] = useState(60);
   const [single, setSingle] = useState(true);
+  const [ratePerMin, setRatePerMin] = useState(0);
+  const create = async () => {
+    try {
+      const res = await createDropLink(name.trim(), ttl, single ? 1 : 0, ratePerMin);
+      setName('');
+      await copyText(res.url, true);
+      toast('Link created');
+      qc.invalidateQueries({ queryKey: ['droplinks'] });
+    } catch (e) {
+      toast("Couldn't create link: " + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+  };
   const [funnelBusy, setFunnelBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const activeLinks = links.filter((l) => linkState(l) === 'active');
@@ -58,18 +70,6 @@ export default function Drops() {
       toast(dir ? 'Files via this link will auto-save to ' + dir : 'Auto-save rule removed');
     } catch (e) {
       toast('Auto-save: ' + (e instanceof Error ? e.message : e), undefined, 'err');
-    }
-  };
-
-  const create = async () => {
-    try {
-      const res = await createDropLink(name.trim(), ttl, single ? 1 : 0);
-      setName('');
-      await copyText(res.url, true);
-      toast('Link created');
-      qc.invalidateQueries({ queryKey: ['droplinks'] });
-    } catch (e) {
-      toast("Couldn't create link: " + (e instanceof Error ? e.message : e), undefined, 'err');
     }
   };
 
@@ -139,6 +139,13 @@ export default function Drops() {
           <option value="5">5 minutes</option>
           <option value="60">1 hour</option>
           <option value="1440">1 day</option>
+        </select>
+        <select className="search" style={{ flex: '0 0 auto', width: 'auto' }} value={ratePerMin} onChange={(e) => setRatePerMin(Number(e.target.value))}>
+          <option value="0">No rate limit</option>
+          <option value="1">1/min</option>
+          <option value="3">3/min</option>
+          <option value="5">5/min</option>
+          <option value="10">10/min</option>
         </select>
         <label className="check">
           <input type="checkbox" checked={single} onChange={(e) => setSingle(e.target.checked)} /> single file

@@ -436,30 +436,31 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
 				r.PublicURL = pub + "drop/" + l.Token
 			}
 			rows = append(rows, r)
-		}
-		writeJSON(w, map[string]any{"links": rows, "baseUrl": base, "publicUrl": pub})
-	case http.MethodPost:
-		var req struct {
-			Name    string `json:"name"`
-			TTLMin  int    `json:"ttlMinutes"`
-			MaxUses int    `json:"maxUses"` // 0 = unlimited
-		}
-		if err := decodeJSON(r, &req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if req.TTLMin <= 0 {
-			req.TTLMin = 60
-		}
-		if req.TTLMin > 7*24*60 {
-			req.TTLMin = 7 * 24 * 60
-		}
-		l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses)
-		resp := map[string]any{"link": l, "url": s.dropBaseURL() + "drop/" + l.Token}
-		if pub := s.funnelPublicURL(); pub != "" {
-			resp["publicUrl"] = pub + "drop/" + l.Token
-		}
-		writeJSON(w, resp)
+               }
+               writeJSON(w, map[string]any{"links": rows, "baseUrl": base, "publicUrl": pub})
+       case http.MethodPost:
+               var req struct {
+                       Name       string `json:"name"`
+                       TTLMin     int    `json:"ttlMinutes"`
+                       MaxUses    int    `json:"maxUses"`    // 0 = unlimited
+                       RatePerMin int    `json:"ratePerMin"` // 0 = unlimited
+               }
+               if err := decodeJSON(r, &req); err != nil {
+                       http.Error(w, err.Error(), http.StatusBadRequest)
+                       return
+               }
+               if req.TTLMin <= 0 {
+                       req.TTLMin = 60
+               }
+               if req.TTLMin > 7*24*60 {
+                       req.TTLMin = 7 * 24 * 60
+               }
+               l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses, req.RatePerMin)
+               resp := map[string]any{"link": l, "url": s.dropBaseURL() + "drop/" + l.Token}
+               if pub := s.funnelPublicURL(); pub != "" {
+                       resp["publicUrl"] = pub + "drop/" + l.Token
+               }
+               writeJSON(w, resp)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}

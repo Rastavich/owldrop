@@ -12,12 +12,13 @@
 package main
 
 import (
-	"flag"
-	"log"
-	"net"
-	"os"
+       "flag"
+       "log"
+       "net"
+       "os"
+       "path/filepath"
 
-	"tailscale.com/tsnet"
+       "tailscale.com/tsnet"
 )
 
 var (
@@ -50,9 +51,10 @@ func startTsnetMode(s *server) (net.Listener, error) {
 	if !*tsnetFlag {
 		return nil, nil
 	}
-	t := &tsnet.Server{
-		Hostname: *tsnetHostname,
-	}
+       t := &tsnet.Server{
+               Hostname: *tsnetHostname,
+               Dir:      filepath.Join(filepath.Dir(configPath()), "tsnet"),
+       }
 	if key := os.Getenv("TS_AUTHKEY"); key != "" {
 		t.AuthKey = key
 	}

@@ -7,14 +7,15 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"log"
-	"net"
-	"net/http"
-	"syscall"
-	"time"
+       "context"
+       "errors"
+       "fmt"
+       "log"
+       "net"
+       "net/http"
+       "os"
+       "syscall"
+       "time"
 )
 
 func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string) error {
@@ -33,13 +34,16 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	portNum := ln.Addr().(*net.TCPAddr).Port
 	srv.setListenerPort(portNum)
 	fmt.Printf("owldrop UI: http://127.0.0.1:%d/\n", portNum)
-	fmt.Printf("inbox saved to: %s\n", srv.saveDir())
-	if srv.lan {
-		for _, u := range srv.lanURLs() {
-			fmt.Printf("LAN UI: %s\n", u)
-		}
-		fmt.Println("note: anyone on your tailnet who knows the URL can control the app")
-	}
+       fmt.Printf("inbox saved to: %s\n", srv.saveDir())
+       if err := checkDirWritable(srv.saveDir()); err != nil {
+               log.Printf("WARNING: save directory %s is not writable: %v — saves will fail", srv.saveDir(), err)
+       }
+       if srv.lan {
+               for _, u := range srv.lanURLs() {
+                       fmt.Printf("LAN UI: %s\n", u)
+               }
+               fmt.Println("note: anyone on your tailnet who knows the URL can control the app")
+       }
 
 	go func() {
 		<-serverCtx.Done()
@@ -60,4 +64,19 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 		return nil // graceful SIGINT/SIGTERM shutdown
 	}
 	return err
+}
+
+// checkDirWritable creates and removes a temp file in dir to verify it's usable.
+func checkDirWritable(dir string) error {
+       if err := os.MkdirAll(dir, 0o755); err != nil {
+               return err
+       }
+       f, err := os.CreateTemp(dir, ".owldrop-write-test-*")
+       if err != nil {
+               return err
+       }
+       name := f.Name()
+       f.Close()
+       os.Remove(name)
+       return nil
 }

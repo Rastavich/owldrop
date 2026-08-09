@@ -35,7 +35,7 @@ func TestAutosaveTargetRuleWins(t *testing.T) {
 	cfgDir := t.TempDir()
 	ruleDir := t.TempDir()
 	s := newServerDir(&config{SaveDir: t.TempDir(), AutoSave: false}, cfgDir)
-	l := s.drops.create("family", time.Hour, 0)
+       l := s.drops.create("family", time.Hour, 0, 0)
 	if err := s.drops.setAutoSaveDir(l.Token, ruleDir); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestDropLinkAutosaveEndpoint(t *testing.T) {
 	s.port = 8976
 	ts := httptest.NewServer(s.routes())
 	defer ts.Close()
-	l := s.drops.create("family", time.Hour, 0)
+       l := s.drops.create("family", time.Hour, 0, 0)
 
 	post := func(token, dir string) *http.Response {
 		t.Helper()
@@ -109,7 +109,7 @@ func TestDropLinkAutosaveEndpoint(t *testing.T) {
 func TestWaitingFileLinkToken(t *testing.T) {
 	cfgDir := t.TempDir()
 	s := newServerDir(&config{}, cfgDir)
-	l := s.drops.create("family", time.Hour, 0)
+       l := s.drops.create("family", time.Hour, 0, 0)
 	src := filepath.Join(t.TempDir(), "a.txt")
 	os.WriteFile(src, []byte("hi"), 0o644)
 	f, _ := os.Open(src)

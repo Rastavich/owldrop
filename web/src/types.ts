@@ -73,6 +73,7 @@ export interface DropLink {
   url: string;
   publicUrl?: string;
   autoSaveDir?: string;
+  ratePerMin: number;
 }
 
 export interface ServeState {
