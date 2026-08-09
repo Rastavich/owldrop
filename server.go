@@ -129,7 +129,11 @@ type server struct {
 	history     *history
 	drops       *dropManager
 	sync        *syncStore
+	serving     *servingManager
 	update      *updateManager
+	tsnet       any    // *tsnet.Server, set by tsnetmode.go (server build only)
+	tsnetHost   string // the tsnet node's MagicDNS name, when active
+
 	port        int
 	lan         bool
 	selfDNS     string
@@ -164,6 +168,7 @@ func newServerDir(cfg *config, dataDir string) *server {
 		history:      newHistory(dataDir),
 		drops:        newDropManager(dataDir),
 		sync:         newSyncStore(dataDir),
+		serving:      newServingManager(newRawServeClient()),
 		lan:          cfg.LAN,
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
@@ -209,6 +214,7 @@ func (s *server) funnelHost(host string) bool {
 }
 
 // lanURLs returns the URLs other tailnet devices can use to open the UI.
+// The MagicDNS hostname comes first: readable and stable across IP changes.
 func (s *server) lanURLs() []string {
 	if !s.lan || s.port == 0 {
 		return nil
@@ -219,11 +225,31 @@ func (s *server) lanURLs() []string {
 	if err != nil || st.Self == nil {
 		return nil
 	}
+	return lanURLsForSelf(st.Self, s.port)
+}
+
+// lanURLsForSelf builds the LAN URLs from the daemon's self status.
+func lanURLsForSelf(self *ipnstate.PeerStatus, port int) []string {
 	var urls []string
-	for _, ip := range st.Self.TailscaleIPs {
-		urls = append(urls, fmt.Sprintf("http://%s:%d/", ip, s.port))
+	if dns := strings.TrimSuffix(self.DNSName, "."); dns != "" {
+		urls = append(urls, fmt.Sprintf("http://%s:%d/", dns, port))
+	}
+	for _, ip := range self.TailscaleIPs {
+		urls = append(urls, fmt.Sprintf("http://%s:%d/", ip, port))
 	}
 	return urls
+}
+
+// peerIsLoopback reports whether the request came from this machine. Funnel
+// traffic is proxied by the local tailscaled, so its peer is loopback; a
+// tailnet peer connecting over LAN arrives from a non-loopback address.
+func peerIsLoopback(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (s *server) setListenerPort(p int) {
@@ -313,6 +339,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/droplinks", s.guard(s.handleDropLinks))
 	mux.HandleFunc("/api/droplinks/", s.guard(s.handleDropLinks))
 	mux.HandleFunc("/api/funnel", s.guard(s.handleFunnel))
+	mux.HandleFunc("/api/serve", s.guard(s.handleServe))
 	mux.HandleFunc("/api/tailscale", s.guard(s.handleTailscale))
 	mux.HandleFunc("/api/tailscale/up", s.guard(s.handleTailscaleUp))
 	mux.HandleFunc("/api/tailscale/download", s.guard(s.handleTailscaleDownload))
@@ -365,6 +392,28 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"ok": true})
 		return
 	}
+	// Auto-save rule: POST /api/droplinks/<token>/autosave {"dir": ...}
+	if rest := strings.TrimPrefix(r.URL.Path, "/api/droplinks/"); rest != r.URL.Path && strings.HasSuffix(rest, "/autosave") {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Dir string `json:"dir"`
+		}
+		if err := decodeJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		token := strings.TrimSuffix(rest, "/autosave")
+		if err := s.drops.setAutoSaveDir(token, strings.TrimSpace(req.Dir)); err != nil {
+			// Client input (unknown token / bad folder) — 400, not 500.
+			writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true, "autoSaveDir": s.drops.get(token).AutoSaveDir})
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		links := s.drops.list()
@@ -387,30 +436,31 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
 				r.PublicURL = pub + "drop/" + l.Token
 			}
 			rows = append(rows, r)
-		}
-		writeJSON(w, map[string]any{"links": rows, "baseUrl": base, "publicUrl": pub})
-	case http.MethodPost:
-		var req struct {
-			Name    string `json:"name"`
-			TTLMin  int    `json:"ttlMinutes"`
-			MaxUses int    `json:"maxUses"` // 0 = unlimited
-		}
-		if err := decodeJSON(r, &req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if req.TTLMin <= 0 {
-			req.TTLMin = 60
-		}
-		if req.TTLMin > 7*24*60 {
-			req.TTLMin = 7 * 24 * 60
-		}
-		l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses)
-		resp := map[string]any{"link": l, "url": s.dropBaseURL() + "drop/" + l.Token}
-		if pub := s.funnelPublicURL(); pub != "" {
-			resp["publicUrl"] = pub + "drop/" + l.Token
-		}
-		writeJSON(w, resp)
+               }
+               writeJSON(w, map[string]any{"links": rows, "baseUrl": base, "publicUrl": pub})
+       case http.MethodPost:
+               var req struct {
+                       Name       string `json:"name"`
+                       TTLMin     int    `json:"ttlMinutes"`
+                       MaxUses    int    `json:"maxUses"`    // 0 = unlimited
+                       RatePerMin int    `json:"ratePerMin"` // 0 = unlimited
+               }
+               if err := decodeJSON(r, &req); err != nil {
+                       http.Error(w, err.Error(), http.StatusBadRequest)
+                       return
+               }
+               if req.TTLMin <= 0 {
+                       req.TTLMin = 60
+               }
+               if req.TTLMin > 7*24*60 {
+                       req.TTLMin = 7 * 24 * 60
+               }
+               l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses, req.RatePerMin)
+               resp := map[string]any{"link": l, "url": s.dropBaseURL() + "drop/" + l.Token}
+               if pub := s.funnelPublicURL(); pub != "" {
+                       resp["publicUrl"] = pub + "drop/" + l.Token
+               }
+               writeJSON(w, resp)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -432,9 +482,13 @@ func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		// Through the Funnel hostname only the public drop pages exist; the
-		// full app (which embeds the session token) must never be public.
-		if s.funnelHost(r.Host) && !strings.HasPrefix(r.URL.Path, "/drop/") {
+		// The MagicDNS hostname is shared with Tailscale Funnel (public), so
+		// ONLY when Funnel is active are non-drop paths withheld there —
+		// Funnel traffic comes proxied from the local tailscaled (loopback
+		// peer). With tailnet-only Serve (no Funnel), tailscaled has already
+		// authenticated the peer, so the full app is fine. LAN peers
+		// (non-loopback) always get the full app.
+		if s.funnelHost(r.Host) && s.funnelActive() && peerIsLoopback(r) && !strings.HasPrefix(r.URL.Path, "/drop/") {
 			http.NotFound(w, r)
 			return
 		}
@@ -737,6 +791,7 @@ func (s *server) configResponse(c config) map[string]any {
 	if c.LAN {
 		if urls := s.lanURLs(); len(urls) > 0 {
 			resp["lanUrl"] = urls[0]
+			resp["lanUrls"] = urls
 		}
 	}
 	resp["ntfyTopic"] = c.NtfyTopic
@@ -950,13 +1005,25 @@ func (s *server) watchInbox(ctx context.Context) {
 }
 
 // maybeAutoSave saves incoming files automatically when auto-save is on.
+// autosaveTarget resolves the folder (and whether saving is forced) for a
+// waiting file. Per-link rules win over the global auto-save folder and
+// apply even when global auto-save is off.
+func (s *server) autosaveTarget(f waitingFile) (dir string, force bool) {
+	if f.Source == "link" && f.LinkToken != "" {
+		if l := s.drops.get(f.LinkToken); l != nil && l.AutoSaveDir != "" {
+			return l.AutoSaveDir, true
+		}
+	}
+	return s.saveDir(), false
+}
+
 // Failed attempts are remembered so the watcher doesn't retry in a hot loop.
 func (s *server) maybeAutoSave(ctx context.Context, files []waitingFile) {
-	if !s.autoSave() {
-		return
-	}
-	dir := s.saveDir()
 	for _, f := range files {
+		dir, force := s.autosaveTarget(f)
+		if !force && !s.autoSave() {
+			continue
+		}
 		s.autosaveMu.Lock()
 		if s.autosaving[f.Name] {
 			s.autosaveMu.Unlock()
@@ -969,7 +1036,7 @@ func (s *server) maybeAutoSave(ctx context.Context, files []waitingFile) {
 		s.autosaving[f.Name] = true
 		s.autosaveMu.Unlock()
 
-		go func(f waitingFile) {
+		go func(f waitingFile, dir string) {
 			defer func() {
 				s.autosaveMu.Lock()
 				delete(s.autosaving, f.Name)
@@ -986,7 +1053,7 @@ func (s *server) maybeAutoSave(ctx context.Context, files []waitingFile) {
 				s.autosaveFail[f.Name] = time.Now()
 				s.autosaveMu.Unlock()
 			}
-		}(f)
+		}(f, dir)
 	}
 }
 

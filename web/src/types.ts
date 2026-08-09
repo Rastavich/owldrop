@@ -11,6 +11,7 @@ export interface AppConfig {
   autoSave: boolean;
   lan: boolean;
   lanUrl?: string;
+  lanUrls?: string[];
   ntfyTopic?: string; // set = push a phone notification via ntfy after sends
   ntfyServer?: string; // empty = https://ntfy.sh
   notifyArrival: boolean;
@@ -27,6 +28,8 @@ export interface Device {
   online: boolean;
   lastSeen?: string;
   taildrop: string; // "available" or a human reason
+  relay?: string; // DERP region ("syd") when reached via relay
+  curAddr?: string; // direct address when connected directly
 }
 
 export interface WaitingFile {
@@ -69,6 +72,13 @@ export interface DropLink {
   expired: boolean;
   url: string;
   publicUrl?: string;
+  autoSaveDir?: string;
+  ratePerMin: number;
+}
+
+export interface ServeState {
+  enabled: boolean;
+  url?: string;
 }
 
 export interface FunnelState {

@@ -3,10 +3,12 @@ import { useState } from 'react';
 import {
   checkUpdate,
   getConfig,
+  getServe,
   getUpdateState,
   installUpdate,
   openExternal,
   patchConfig,
+  setServe,
   testNtfy,
 } from '../api';
 import { toast } from '../store';
@@ -16,8 +18,23 @@ export default function Settings() {
   const qc = useQueryClient();
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: getConfig });
   const { data: update } = useQuery({ queryKey: ['update'], queryFn: getUpdateState });
+  const { data: serve } = useQuery({ queryKey: ['serve'], queryFn: getServe });
   const [updateBusy, setUpdateBusy] = useState(false);
   const [ntfyBusy, setNtfyBusy] = useState(false);
+  const [serveBusy, setServeBusy] = useState(false);
+
+  const toggleServe = async (want: boolean) => {
+    setServeBusy(true);
+    try {
+      const res = await setServe(want);
+      qc.setQueryData(['serve'], res);
+      toast(want ? 'HTTPS enabled — https://' + (res.url ?? '') + ' is live on your tailnet' : 'HTTPS disabled');
+    } catch (e) {
+      qc.invalidateQueries({ queryKey: ['serve'] });
+      toast('HTTPS: ' + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+    setServeBusy(false);
+  };
   const [ntfyTopicEdit, setNtfyTopicEdit] = useState<string | null>(null);
 
   const patch = async (body: Partial<AppConfig>, okMsg?: string) => {
@@ -144,8 +161,37 @@ export default function Settings() {
         <input type="checkbox" checked={!!config?.lan} onChange={(e) => patch({ lan: e.target.checked }, 'Applying LAN mode — reload the page if it disconnects')} />
         Allow other devices on my tailnet to open this app
       </label>
-      {config?.lan && config.lanUrl && <p className="sub2">{config.lanUrl}</p>}
+      {config?.lan && config.lanUrl && (
+        <p className="sub2">
+          {config.lanUrl}
+          {config.lanUrls && config.lanUrls.length > 1 && (
+            <span className="muted">
+              <br />
+              also via {config.lanUrls.slice(1).join(' · ')}
+            </span>
+          )}
+        </p>
+      )}
       <p className="sub2">Opening this app from another device is as powerful as being at this machine — only enable it if you trust your tailnet.</p>
+
+      </div>
+
+      <div className="set-card">
+      <h3>HTTPS access</h3>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={!!serve?.enabled}
+          disabled={serveBusy}
+          onChange={(e) => toggleServe(e.target.checked)}
+        />
+        Secure https:// link on my tailnet (Tailscale Serve)
+      </label>
+      {serve?.enabled && serve.url && <p className="sub2">{serve.url.replace('https://', '')}</p>}
+      <p className="sub2">
+        Tailscale issues and renews the certificate automatically. Same URL shape as your Funnel drop-link
+        hostname, but reachable only on your tailnet. Requires MagicDNS.
+      </p>
 
       </div>
 
@@ -202,10 +248,10 @@ export default function Settings() {
       <p className="sub2">
         Owldrop is free — public drop links included. If it saves you time,{' '}
         <a
-          href="https://ko-fi.com/owldrop"
+          href="https://ko-fi.com/X8X51XKA5G"
           onClick={(e) => {
             e.preventDefault(); // the webview can't navigate; the server opens the system browser
-            openExternal('https://ko-fi.com/owldrop').catch((err) => toast('Could not open link: ' + (err instanceof Error ? err.message : err), undefined, 'err'));
+            openExternal('https://ko-fi.com/X8X51XKA5G').catch((err) => toast('Could not open link: ' + (err instanceof Error ? err.message : err), undefined, 'err'));
           }}
         >
           buy me a coffee

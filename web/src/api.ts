@@ -10,6 +10,7 @@ import type {
   HistoryEvent,
   HistoryStats,
   PageConfig,
+  ServeState,
   SyncItem,
   TailscaleState,
   UpdateState,
@@ -60,16 +61,24 @@ export const browse = (path: string) =>
 export const mkdir = (path: string, name: string) =>
   api('/api/mkdir', { method: 'POST', json: { path, name } });
 export const getDropLinks = () => api<{ links: DropLink[] }>('/api/droplinks').then((r) => r.links);
-export const createDropLink = (name: string, ttlMinutes: number, maxUses: number) =>
+export const createDropLink = (name: string, ttlMinutes: number, maxUses: number, ratePerMin: number) =>
   api<{ url: string; publicUrl?: string }>('/api/droplinks', {
     method: 'POST',
-    json: { name, ttlMinutes, maxUses },
+    json: { name, ttlMinutes, maxUses, ratePerMin },
   });
 export const revokeDropLink = (token: string) =>
   api('/api/droplinks/' + token + '/revoke', { method: 'POST', json: {} });
 export const getFunnel = () => api<FunnelState>('/api/funnel');
 export const setFunnel = (enabled: boolean) =>
   api<FunnelState>('/api/funnel', { method: 'POST', json: { enabled } });
+export const getServe = () => api<ServeState>('/api/serve');
+export const setServe = (enabled: boolean) =>
+  api<ServeState>('/api/serve', { method: 'POST', json: { enabled } });
+export const setDropLinkAutoSave = (token: string, dir: string) =>
+  api<{ ok: boolean; autoSaveDir: string }>('/api/droplinks/' + token + '/autosave', {
+    method: 'POST',
+    json: { dir },
+  });
 export const getTailscaleState = () => api<TailscaleState>('/api/tailscale');
 export const downloadTailscale = () => api('/api/tailscale/download', { method: 'POST' });
 export const testNtfy = () => api('/api/ntfy/test', { method: 'POST' });

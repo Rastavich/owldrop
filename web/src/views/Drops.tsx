@@ -1,6 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { createDropLink, getDropLinks, getFunnel, revokeDropLink, setFunnel } from '../api';
+import {
+  createDropLink,
+  getDropLinks,
+  getFunnel,
+  revokeDropLink,
+  setDropLinkAutoSave,
+  setFunnel,
+} from '../api';
 import { toast } from '../store';
 import { copyText, fmtAge } from '../utils';
 import type { DropLink } from '../types';
@@ -21,6 +28,18 @@ export default function Drops() {
   const [name, setName] = useState('');
   const [ttl, setTtl] = useState(60);
   const [single, setSingle] = useState(true);
+  const [ratePerMin, setRatePerMin] = useState(0);
+  const create = async () => {
+    try {
+      const res = await createDropLink(name.trim(), ttl, single ? 1 : 0, ratePerMin);
+      setName('');
+      await copyText(res.url, true);
+      toast('Link created');
+      qc.invalidateQueries({ queryKey: ['droplinks'] });
+    } catch (e) {
+      toast("Couldn't create link: " + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+  };
   const [funnelBusy, setFunnelBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const activeLinks = links.filter((l) => linkState(l) === 'active');
@@ -40,15 +59,17 @@ export default function Drops() {
     setFunnelBusy(false);
   };
 
-  const create = async () => {
+  const [ruleDirs, setRuleDirs] = useState<Record<string, string>>({});
+
+  const saveRule = async (token: string) => {
+    const dir = (ruleDirs[token] ?? '').trim();
     try {
-      const res = await createDropLink(name.trim(), ttl, single ? 1 : 0);
-      setName('');
-      await copyText(res.url, true);
-      toast('Link created');
+      const res = await setDropLinkAutoSave(token, dir);
+      setRuleDirs((m) => ({ ...m, [token]: res.autoSaveDir }));
       qc.invalidateQueries({ queryKey: ['droplinks'] });
+      toast(dir ? 'Files via this link will auto-save to ' + dir : 'Auto-save rule removed');
     } catch (e) {
-      toast("Couldn't create link: " + (e instanceof Error ? e.message : e), undefined, 'err');
+      toast('Auto-save: ' + (e instanceof Error ? e.message : e), undefined, 'err');
     }
   };
 
@@ -119,6 +140,13 @@ export default function Drops() {
           <option value="60">1 hour</option>
           <option value="1440">1 day</option>
         </select>
+        <select className="search" style={{ flex: '0 0 auto', width: 'auto' }} value={ratePerMin} onChange={(e) => setRatePerMin(Number(e.target.value))}>
+          <option value="0">No rate limit</option>
+          <option value="1">1/min</option>
+          <option value="3">3/min</option>
+          <option value="5">5/min</option>
+          <option value="10">10/min</option>
+        </select>
         <label className="check">
           <input type="checkbox" checked={single} onChange={(e) => setSingle(e.target.checked)} /> single file
         </label>
@@ -157,6 +185,25 @@ export default function Drops() {
                         Copy
                       </button>
                     </div>
+                    <div className="dl-url-row">
+                      <span className="dl-url-label">Auto-save</span>
+                      <input
+                        className="search"
+                        style={{ flex: '1', minWidth: 0, padding: '3px 8px' }}
+                        type="text"
+                        placeholder="/path/to/folder (empty = off)"
+                        value={ruleDirs[l.token] ?? l.autoSaveDir ?? ''}
+                        onChange={(e) => setRuleDirs((m) => ({ ...m, [l.token]: e.target.value }))}
+                        spellCheck={false}
+                        autoComplete="off"
+                      />
+                      <button className="dl-copy" onClick={() => saveRule(l.token)} disabled={l.revoked || l.expired}>
+                        Save
+                      </button>
+                    </div>
+                    {l.autoSaveDir && (
+                      <p className="sub2 muted">Files via this link auto-save to {l.autoSaveDir}</p>
+                    )}
                     {funnel?.enabled && publicUrl && (
                       <div className="dl-url-row">
                         <span className="dl-url-label">Public</span>
