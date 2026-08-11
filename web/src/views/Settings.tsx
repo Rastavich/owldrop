@@ -3,22 +3,27 @@ import { useState } from 'react';
 import {
   checkUpdate,
   getConfig,
+  getDevicesAll,
   getServe,
   getUpdateState,
   installUpdate,
   openExternal,
   patchConfig,
+  setDeviceHidden,
   setServe,
   testNtfy,
 } from '../api';
 import { toast } from '../store';
-import type { AppConfig } from '../types';
+import type { AppConfig, Device } from '../types';
 
 export default function Settings() {
   const qc = useQueryClient();
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: getConfig });
   const { data: update } = useQuery({ queryKey: ['update'], queryFn: getUpdateState });
   const { data: serve } = useQuery({ queryKey: ['serve'], queryFn: getServe });
+  // Includes hidden devices (each flagged) so the visibility list can unhide.
+  const { data: allDevices = [] } = useQuery({ queryKey: ['devices-all'], queryFn: getDevicesAll });
+  const [devicesBusy, setDevicesBusy] = useState<string | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [ntfyBusy, setNtfyBusy] = useState(false);
   const [serveBusy, setServeBusy] = useState(false);
@@ -36,6 +41,7 @@ export default function Settings() {
     setServeBusy(false);
   };
   const [ntfyTopicEdit, setNtfyTopicEdit] = useState<string | null>(null);
+  const [domainsEdit, setDomainsEdit] = useState<string | null>(null);
 
   const patch = async (body: Partial<AppConfig>, okMsg?: string) => {
     try {
@@ -46,6 +52,29 @@ export default function Settings() {
       qc.invalidateQueries({ queryKey: ['config'] });
       toast(e instanceof Error ? e.message : String(e), undefined, 'err');
     }
+  };
+
+  const toggleHidden = async (d: Device, hidden: boolean) => {
+    setDevicesBusy(d.id);
+    try {
+      await setDeviceHidden(d.id, hidden);
+      qc.invalidateQueries({ queryKey: ['devices-all'] });
+      toast(hidden ? `"${d.name}" hidden from Send` : `"${d.name}" shown in Send`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), undefined, 'err');
+    } finally {
+      setDevicesBusy(null);
+    }
+  };
+
+  const saveDomains = async () => {
+    const text = domainsEdit ?? (config?.trustedDomains ?? []).join('\n');
+    const list = text
+      .split(/[\s,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    await patch({ trustedDomains: list }, list.length ? 'Trusted domains saved — reach it via that hostname' : 'Trusted domains cleared');
+    setDomainsEdit(null);
   };
 
   const checkForUpdates = async () => {
@@ -174,6 +203,57 @@ export default function Settings() {
       )}
       <p className="sub2">Opening this app from another device is as powerful as being at this machine — only enable it if you trust your tailnet.</p>
 
+      </div>
+
+      <div className="set-card">
+      <h3>Hidden devices</h3>
+      <p className="sub2">
+        Uncheck a device to hide it from the Send tab and the tray's quick-send menu. Hidden devices can still
+        <b> receive </b> files — they're just not offered as a send target.
+      </p>
+      {allDevices.length === 0 ? (
+        <p className="sub2 muted">No devices found on your tailnet.</p>
+      ) : (
+        <div className="device-vis-list">
+          {allDevices.map((d) => (
+            <label key={d.id} className="check">
+              <input
+                type="checkbox"
+                checked={!d.hidden}
+                disabled={devicesBusy === d.id}
+                onChange={(e) => toggleHidden(d, !e.target.checked)}
+              />
+              <span>
+                {d.name}
+                {d.os ? ` (${d.os})` : ''}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+      </div>
+
+      <div className="set-card">
+      <h3>Trusted domains (reverse proxy)</h3>
+      <p className="sub2">
+        Serve the app through a reverse proxy at a hostname you control, e.g. <code>drop.example.com</code>. One per line;
+        a domain covers all of its subdomains. The app must be reachable from the proxy (run with{' '}
+        <code>--lan</code> in Docker). Trusting a domain means trusting its DNS and every page served from it — the same
+        posture as LAN access.
+      </p>
+      <textarea
+        className="search"
+        rows={3}
+        spellCheck={false}
+        placeholder="drop.example.com"
+        value={domainsEdit ?? (config?.trustedDomains ?? []).join('\n')}
+        onChange={(e) => setDomainsEdit(e.target.value)}
+      />
+      <div className="updrow">
+        <button className="btn" onClick={saveDomains}>
+          Save trusted domains
+        </button>
+      </div>
       </div>
 
       <div className="set-card">

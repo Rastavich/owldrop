@@ -139,6 +139,8 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .settings-hrow h3{margin:0}
 .pane .check{margin:2px 0}
 .updrow{display:flex;gap:8px}
+.device-vis-list{display:flex;flex-direction:column;gap:2px;max-height:230px;overflow-y:auto}
+.device-vis-list .check{white-space:normal}
 .dropform{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0}
 .dropform .search{flex:1}
 .drop-links{display:flex;flex-direction:column;gap:6px;margin-top:6px}

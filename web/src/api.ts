@@ -28,6 +28,13 @@ interface ApiOpts {
   body?: BodyInit;
 }
 
+// After a container rebuild/update the server keeps the same session token
+// (it's persisted in config.json), but if the volume was ever lost the
+// token embedded in an already-open page goes stale and mutations 403.
+// Reload once to pick up the freshly-embedded token; a second 403 in the
+// same page is a real error, so we stop retrying rather than loop.
+let reloadedOn403 = false;
+
 export async function api<T>(path: string, opts: ApiOpts = {}): Promise<T> {
   const headers: Record<string, string> = { 'X-Owldrop-Token': CONFIG.token };
   if (opts.json !== undefined) headers['Content-Type'] = 'application/json';
@@ -37,7 +44,14 @@ export async function api<T>(path: string, opts: ApiOpts = {}): Promise<T> {
     body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.body,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+  if (!res.ok) {
+    if (opts.method && opts.method !== 'GET' && res.status === 403 && !reloadedOn403) {
+      reloadedOn403 = true;
+      window.location.reload();
+      return await new Promise<never>(() => {}); // the page is reloading
+    }
+    throw new Error(data.error || 'HTTP ' + res.status);
+  }
   return data as T;
 }
 
@@ -46,6 +60,10 @@ export const getConfig = () => api<AppConfig>('/api/config');
 export const patchConfig = (patch: Partial<AppConfig>) =>
   api<AppConfig>('/api/config', { method: 'POST', json: patch });
 export const getDevices = () => api<{ devices: Device[] }>('/api/devices').then((r) => r.devices);
+// Settings visibility list — includes hidden devices, each flagged.
+export const getDevicesAll = () => api<{ devices: Device[] }>('/api/devices/all').then((r) => r.devices);
+export const setDeviceHidden = (id: string, hidden: boolean) =>
+  api('/api/devices/hidden', { method: 'POST', json: { id, hidden } });
 export const getHistory = () =>
   api<{ events: HistoryEvent[]; stats: HistoryStats }>('/api/history');
 export const clearHistory = () => api('/api/history', { method: 'DELETE' });

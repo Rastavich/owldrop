@@ -6,9 +6,10 @@
 // any host Tailscale install.
 //
 // NOTE: Taildrop's inbox/send protocol is implemented in tailscaled, not
-// tsnet — a tsnet-only node has no inbox functionality. This mode is an
-// *addition* to the existing listeners, not a replacement. See
-// docs/tailscale-enhancements.md (#3).
+// tsnet — a tsnet-only node has no inbox functionality (tsnet's LocalAPI
+// serves status/prefs/whois but not the /localapi/v0/files endpoints the
+// inbox and Send tab call). This mode is an *addition* to the existing
+// listeners, not a replacement. See docs/tailscale-enhancements.md (#3).
 package main
 
 import (
@@ -64,6 +65,16 @@ func startTsnetMode(s *server) (net.Listener, error) {
 	}
 	s.tsnet = t
 	s.tsnetHost = *tsnetHostname
+	// Point the app's local API client at the embedded node (in-memory, no
+	// socket needed) so status, the tailnet-state pill and the self MagicDNS
+	// name resolve against this node instead of a missing host socket.
+	// Taildrop's file endpoints aren't served by tsnet, so inbox/send stay
+	// unavailable in this mode regardless.
+	if lc, err := t.LocalClient(); err != nil {
+		log.Printf("tsnet: local client: %v", err)
+	} else {
+		tsClient = lc
+	}
 	ln, err := t.Listen("tcp", ":80")
 	if err != nil {
 		return nil, err

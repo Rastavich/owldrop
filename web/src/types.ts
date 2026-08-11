@@ -19,6 +19,7 @@ export interface AppConfig {
   notifySend: boolean;
   notifyError: boolean;
   telemetry: boolean; // anonymous usage stats (opt-out)
+  trustedDomains?: string[]; // reverse-proxy hostnames approved in Settings
 }
 
 export interface Device {
@@ -30,6 +31,7 @@ export interface Device {
   taildrop: string; // "available" or a human reason
   relay?: string; // DERP region ("syd") when reached via relay
   curAddr?: string; // direct address when connected directly
+  hidden?: boolean; // operator hid it from the Send picker (Settings)
 }
 
 export interface WaitingFile {

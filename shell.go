@@ -198,7 +198,8 @@ func (sh *shell) rebuildTrayMenu() {
 	menu.AddSeparator()
 
 	sendMenu := menu.AddSubmenu("Send file to…")
-	devs, err := tsDevices(context.Background())
+	// Hidden devices (Settings → Send) are excluded from quick-send too.
+	devs, err := sh.srv.tsDevicesVisible(context.Background())
 	if err != nil {
 		sendMenu.Add("(tailscaled unreachable)").SetEnabled(false)
 	} else {

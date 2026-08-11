@@ -186,8 +186,9 @@ type device struct {
 	Online   bool                 `json:"online"`
 	LastSeen *time.Time           `json:"lastSeen,omitempty"`
 	Taildrop string               `json:"taildrop"` // "available" or a human reason
-	Relay    string               `json:"relay,omitempty"`    // DERP region ("syd") when relayed
-	CurAddr  string               `json:"curAddr,omitempty"`  // current direct address when connected directly
+	Relay    string               `json:"relay,omitempty"`   // DERP region ("syd") when relayed
+	CurAddr  string               `json:"curAddr,omitempty"` // current direct address when connected directly
+	Hidden   bool                 `json:"hidden"`            // operator hid it from the send picker (Settings)
 }
 
 // peerTransport summarizes how this machine currently reaches the peer:

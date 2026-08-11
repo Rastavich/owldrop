@@ -158,12 +158,23 @@ func newServer(cfg *config) *server {
 	return newServerDir(cfg, filepath.Join(dir, "owldrop"))
 }
 
+// sessionToken returns the configured session token, minting a fresh one
+// only for callers that built a config without loadConfig (tests). In
+// production loadConfig persists the token in config.json so the same token
+// survives restarts and container updates.
+func sessionToken(configured string) string {
+	if configured != "" {
+		return configured
+	}
+	return newToken()
+}
+
 // newServerDir builds a server with an explicit data dir (tests use a temp
 // dir; production uses the user config dir).
 func newServerDir(cfg *config, dataDir string) *server {
 	return &server{
 		cfg:          cfg,
-		token:        newToken(),
+		token:        sessionToken(cfg.Token),
 		hub:          newHub(),
 		history:      newHistory(dataDir),
 		drops:        newDropManager(dataDir),
@@ -328,6 +339,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/events", s.guard(s.handleEvents))
 	mux.HandleFunc("/api/inbox", s.guard(s.handleInbox))
 	mux.HandleFunc("/api/devices", s.guard(s.handleDevices))
+	mux.HandleFunc("/api/devices/all", s.guard(s.handleDevicesAll))
+	mux.HandleFunc("/api/devices/hidden", s.guard(s.handleDeviceHidden))
 	mux.HandleFunc("/api/browse", s.guard(s.handleBrowse))
 	mux.HandleFunc("/api/config", s.guard(s.handleConfig))
 	mux.HandleFunc("/api/mkdir", s.guard(s.handleMkdir))
@@ -504,8 +517,9 @@ func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // hostAllowed: loopback always; this machine's own MagicDNS name (so Tailscale
-// Funnel works); in LAN mode any IP literal (tailnet/LAN clients). Hostnames
-// stay blocked against DNS rebinding except our own.
+// Funnel works); in LAN mode any IP literal (tailnet/LAN clients); and any
+// domain the operator explicitly trusted for reverse-proxy access. Hostnames
+// otherwise stay blocked against DNS rebinding.
 func (s *server) hostAllowed(host string) bool {
 	h := host
 	if hh, _, err := net.SplitHostPort(host); err == nil {
@@ -518,8 +532,42 @@ func (s *server) hostAllowed(host string) bool {
 	if s.funnelHost(host) {
 		return true
 	}
+	if s.trustedDomain(h) {
+		return true
+	}
 	if s.lan {
 		return net.ParseIP(strings.Trim(h, "[]")) != nil
+	}
+	return false
+}
+
+// trustedDomain reports whether host is, or is a subdomain of, a domain the
+// operator approved in Settings (config TrustedDomains) for reverse-proxy
+// access. Matching is on label boundaries only — "evilowldrop.com" never
+// matches "owldrop.com". Trusting a domain means trusting its DNS and any
+// page served from it, same posture as LAN mode.
+func (s *server) trustedDomain(host string) bool {
+	s.cfgMu.Lock()
+	domains := s.cfg.TrustedDomains
+	s.cfgMu.Unlock()
+	if len(domains) == 0 {
+		return false
+	}
+	host = strings.ToLower(strings.Trim(host, "[]"))
+	if !strings.HasSuffix(host, ".") {
+		host += "." // both forms canonicalized to the rooted FQDN
+	}
+	for _, d := range domains {
+		// A leading "*." (or a legacy entry that slipped past the
+		// normalizer) means the same thing as a bare domain: trust it and
+		// all subdomains.
+		d = strings.TrimPrefix(strings.ToLower(strings.TrimSuffix(d, ".")), "*.")
+		if !strings.HasSuffix(d, ".") {
+			d += "."
+		}
+		if host == d || strings.HasSuffix(host, "."+d) {
+			return true
+		}
 	}
 	return false
 }
@@ -552,6 +600,10 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	html := strings.Replace(string(b), "__OWLDROP_CONFIG__", string(cfgJSON), 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Never cache the shell page: it carries the per-load session token.
+	// A stale cached copy would keep sending a dead token and 403 every
+	// mutation after a restart/update.
+	w.Header().Set("Cache-Control", "no-store")
 	io.WriteString(w, html)
 }
 
@@ -611,13 +663,116 @@ func (s *server) handleInbox(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleDevices(w http.ResponseWriter, r *http.Request) {
-	devs, err := tsDevices(r.Context())
+	devs, err := s.tsDevicesVisible(r.Context())
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
+	// Broadcast the *visible* set so open Send pages live-update when a
+	// device is hidden or unhidden elsewhere.
 	s.hub.broadcast(devicesEvent{Type: "devices", Devices: devs})
 	writeJSON(w, map[string]any{"devices": devs})
+}
+
+// handleDevicesAll serves every tailnet device — hidden ones included,
+// flagged — for the Settings visibility list.
+func (s *server) handleDevicesAll(w http.ResponseWriter, r *http.Request) {
+	devs, err := s.tsDevicesAll(r.Context())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"devices": devs})
+}
+
+// handleDeviceHidden persists whether a device appears in the send picker.
+// Hidden devices can still receive files; they're just removed from where a
+// sender chooses a target (Send tab, tray quick-send).
+func (s *server) handleDeviceHidden(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID     string `json:"id"`
+		Hidden bool   `json:"hidden"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.ID == "" {
+		http.Error(w, "missing device id", http.StatusBadRequest)
+		return
+	}
+	s.cfgMu.Lock()
+	if s.cfg.HiddenDevices == nil {
+		s.cfg.HiddenDevices = map[string]bool{}
+	}
+	if req.Hidden {
+		s.cfg.HiddenDevices[req.ID] = true
+	} else {
+		delete(s.cfg.HiddenDevices, req.ID)
+	}
+	s.cfgMu.Unlock()
+	if err := s.cfg.save(); err != nil {
+		writeErr(w, err)
+		return
+	}
+	// Let open Send pages drop/restore the device immediately.
+	s.broadcastDevices()
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// tsDevicesVisible returns the tailnet devices the operator hasn't hidden —
+// the list the Send tab and the tray quick-send actually offer.
+func (s *server) tsDevicesVisible(ctx context.Context) ([]device, error) {
+	devs, err := tsDevices(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.cfgMu.Lock()
+	hidden := s.cfg.HiddenDevices
+	s.cfgMu.Unlock()
+	return filterHidden(devs, hidden), nil
+}
+
+// tsDevicesAll returns every tailnet device with its hidden flag set, for
+// the Settings visibility list (so hidden devices can be shown again).
+func (s *server) tsDevicesAll(ctx context.Context) ([]device, error) {
+	devs, err := tsDevices(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.cfgMu.Lock()
+	hidden := s.cfg.HiddenDevices
+	s.cfgMu.Unlock()
+	if len(hidden) > 0 {
+		for i := range devs {
+			devs[i].Hidden = hidden[string(devs[i].ID)]
+		}
+	}
+	return devs, nil
+}
+
+// broadcastDevices pushes the visible device list to open pages (SSE). Best
+// effort — no daemon just means nothing new is broadcast.
+func (s *server) broadcastDevices() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if devs, err := s.tsDevicesVisible(ctx); err == nil {
+		s.hub.broadcast(devicesEvent{Type: "devices", Devices: devs})
+	}
+}
+
+// filterHidden drops devices the operator hid from the send surface.
+func filterHidden(devs []device, hidden map[string]bool) []device {
+	if len(hidden) == 0 {
+		return devs
+	}
+	out := make([]device, 0, len(devs))
+	for _, d := range devs {
+		if !hidden[string(d.ID)] {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // handleBrowse lists the subdirectories of path (default: the configured
@@ -693,16 +848,17 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.configResponse(c))
 	case http.MethodPost:
 		var req struct {
-			SaveDir       string  `json:"saveDir"`
-			AutoSave      *bool   `json:"autoSave"`
-			Lan           *bool   `json:"lan"`
-			NotifyArrival *bool   `json:"notifyArrival"`
-			NotifySave    *bool   `json:"notifySave"`
-			NotifySend    *bool   `json:"notifySend"`
-			NotifyError   *bool   `json:"notifyError"`
-			Telemetry     *bool   `json:"telemetry"`
-			NtfyTopic     *string `json:"ntfyTopic"`
-			NtfyServer    *string `json:"ntfyServer"`
+			SaveDir        string    `json:"saveDir"`
+			AutoSave       *bool     `json:"autoSave"`
+			Lan            *bool     `json:"lan"`
+			NotifyArrival  *bool     `json:"notifyArrival"`
+			NotifySave     *bool     `json:"notifySave"`
+			NotifySend     *bool     `json:"notifySend"`
+			NotifyError    *bool     `json:"notifyError"`
+			Telemetry      *bool     `json:"telemetry"`
+			NtfyTopic      *string   `json:"ntfyTopic"`
+			NtfyServer     *string   `json:"ntfyServer"`
+			TrustedDomains *[]string `json:"trustedDomains"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -756,6 +912,9 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if req.NtfyServer != nil {
 			s.cfg.NtfyServer = strings.TrimRight(strings.TrimSpace(*req.NtfyServer), "/")
 		}
+		if req.TrustedDomains != nil {
+			s.cfg.TrustedDomains = normalizeDomains(*req.TrustedDomains)
+		}
 		c := *s.cfg
 		s.cfgMu.Unlock()
 		if err := s.cfg.save(); err != nil {
@@ -796,6 +955,7 @@ func (s *server) configResponse(c config) map[string]any {
 	}
 	resp["ntfyTopic"] = c.NtfyTopic
 	resp["ntfyServer"] = ntfyServer(&c)
+	resp["trustedDomains"] = c.TrustedDomains
 	return resp
 }
 

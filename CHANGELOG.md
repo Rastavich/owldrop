@@ -8,6 +8,35 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.7.3]
+
+### Added
+
+- **Session token now persists in the config file** instead of being minted
+  per process start. On Docker/NAS installs (config in the `/data` volume)
+  an already-open UI keeps working across container rebuilds and updates —
+  no more 403s (and re-auth) on every image update. Covers the lost-volume
+  case too: the UI reloads once to pick up a freshly-embedded token when a
+  mutation is refused.
+- **Hidden devices** — Settings → Hidden devices lets you remove a device
+  from the Send picker and the tray's quick-send menu. Hidden devices can
+  still receive files; the setting persists in the config file.
+- **Trusted domains for reverse proxies** — Settings → Trusted domains
+  lets you serve the app at your own hostname through a reverse proxy
+  (e.g. `drop.example.com`, subdomains included) while keeping the default
+  DNS-rebinding protection for everything else.
+- **tsnet mode now reads status from the embedded node** — with
+  `OWLDROP_TSNET=1` (no host Tailscale) the app's local API client talks
+  to the in-process node instead of a missing host socket, so the
+  tailnet-state indicator and self MagicDNS name reflect the node itself.
+  Taildrop inbox/send still need a tailscaled daemon and remain unavailable
+  in tsnet mode.
+
+### Security
+
+- `index.html` is served with `Cache-Control: no-store` so a stale cached
+  page can never keep sending a dead session token.
+
 ## [0.7.2]
 
 ### Fixed

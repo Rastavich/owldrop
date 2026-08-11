@@ -44,6 +44,13 @@ hostname where nothing else is reachable.)
 - **LAN mode** — Settings toggle (or `--lan`): other devices on your
   tailnet can open the app at `http://<tailnet-ip>:8976/` (token-
   protected, hostnames blocked against DNS rebinding).
+- **Hidden devices** — hide a device from the Send picker and the tray's
+  quick-send menu (Settings → Hidden devices). Hidden devices can still
+  *receive* files — this only removes them as a send target.
+- **Reverse-proxy trusted domains** — serve the full app at your own
+  hostname through a reverse proxy by listing the domain under Settings →
+  Trusted domains. A domain covers all its subdomains; same trust posture
+  as LAN mode (see Notes).
 - **HTTPS access** — Settings toggle: serves the app at
   `https://<machine>.<tailnet>.ts.net/` via Tailscale Serve with an
   automatically issued/renewed Let's Encrypt certificate, tailnet-only
@@ -99,8 +106,9 @@ container borrows the host's Tailscale — it doesn't need its own account.
      the container talks to your Tailscale.
    - **No host Tailscale?** Run the container with `OWLDROP_TSNET=1` (and
      `OWLDROP_HOSTNAME=owldrop-nas`) and the app joins the tailnet as its
-     own node — UI, drop links and Sync work without any host daemon
-     (`TS_AUTHKEY` pre-approves the node). Note: the Taildrop inbox is
+     own node — UI, drop links, Sync and HTTPS work without any host daemon
+     (`TS_AUTHKEY` pre-approves the node). The tailnet-state indicator and
+     status read from this node directly. Note: the Taildrop inbox is
      provided by a tailscaled daemon, so a tsnet-only node has no inbox
      (upload via drop links instead).
    - `/mnt/user/downloads` — the folder where saved files land. Point it at
@@ -111,6 +119,33 @@ container borrows the host's Tailscale — it doesn't need its own account.
 
 That's it. To let every device on your tailnet *send* files through it, keep
 the `--lan` flag as above; drop links work the same way as the desktop app.
+
+Settings, history, drop links, Sync items and the session token all live in
+the `owldrop-config:/data` volume — so when you pull a new image and rebuild
+or update the container, the already-open UI keeps working without re-opening
+or re-authenticating: the session token is read from the volume, not minted
+fresh per run.
+
+### Reverse proxy / trusted domain
+
+Serve the app at your own domain through a reverse proxy (Nginx Proxy
+Manager, Traefik, Caddy, …):
+
+1. Keep `--lan` in the run command — the app must bind all interfaces so the
+   proxy container can reach it.
+2. In **Settings → Trusted domains**, add your domain (e.g. `drop.example.com`;
+   subdomains are covered automatically). No restart needed.
+3. Create a proxy host in your proxy pointing the domain at the `owldrop`
+   container (or `host-ip:8976`), HTTPS enabled, **no Host/Origin header
+   rewrites**, and proxy at the **root path only** — the UI uses absolute
+   `/api/...` and `/assets/...` paths, so a subpath will not work.
+4. Point the domain's DNS at the proxy and open `https://drop.example.com/`.
+
+Quick check before the proxy is involved: `curl -I -H 'Host: drop.example.com' http://<nas-ip>:8976/` should return 200 once the domain is saved.
+
+> Security: a page served on a trusted domain can drive the app (same posture
+> as LAN mode), so only ever add hostnames whose DNS you control.
+
 
 ## Run
 
@@ -171,9 +206,16 @@ server for LAN use) is available as `wails3 task build:server`
   for waiting files — no sender identity — so auto-save applies to
   everything. A per-host trust list needs a daemon API that doesn't exist
   yet.
-- The server binds `127.0.0.1:8976` with a per-run session token + Origin
-  and Host checks on mutating calls; LAN mode exposes it to your tailnet
-  only, and Funnel exposes only the `/drop/*` pages.
+- The server binds `127.0.0.1:8976` with a session token + Origin and Host
+  checks on mutating calls; LAN mode exposes it to your tailnet only, and
+  Funnel exposes only the `/drop/*` pages. The token is persisted in the
+  config file (mode 0600) so it survives restarts and container updates —
+  the config directory is the trust boundary, same as the LocalAPI socket.
+- A domain you add under
+  Settings → Trusted domains is treated like LAN access: any page served on
+  that hostname can drive the app, and the session token is embedded in the
+  page. Only ever add hostnames whose DNS you control (a reverse proxy you
+  run yourself).
 
 ## Layout
 
