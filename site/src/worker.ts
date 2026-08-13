@@ -171,6 +171,20 @@ interface Count {
   n: number;
 }
 
+// One merged day-by-day row: all views keyed by date are folded into this.
+interface DayRow {
+  d: string;
+  dau: number; // distinct installs that sent a heartbeat
+  active: number; // distinct installs with any event
+  received: number;
+  sent: number;
+  sync: number; // sync items added
+  drop_used: number; // drop-link uploads used
+  drop_created: number;
+  downloads: number;
+  new_installs: number; // first-ever event seen that day
+}
+
 async function stats(url: URL, env: Env): Promise<Response> {
   if (url.searchParams.get('token') !== env.STATS_TOKEN) {
     return json({ error: 'forbidden' }, 401);
@@ -241,9 +255,9 @@ async function stats(url: URL, env: Env): Promise<Response> {
   ]);
 
   // Merge the date-keyed views into one row per day.
-  const empty = () => ({ dau: 0, active: 0, received: 0, sent: 0, sync: 0, drop_used: 0, drop_created: 0, downloads: 0, new_installs: 0 });
-  const byDay = new Map<string, ReturnType<typeof empty>>();
-  const day = (d: string) => {
+  const empty = (): DayRow => ({ d: '', dau: 0, active: 0, received: 0, sent: 0, sync: 0, drop_used: 0, drop_created: 0, downloads: 0, new_installs: 0 });
+  const byDay = new Map<string, DayRow>();
+  const day = (d: string): DayRow => {
     let r = byDay.get(d);
     if (!r) byDay.set(d, (r = empty()));
     return r;
@@ -260,9 +274,9 @@ async function stats(url: URL, env: Env): Promise<Response> {
   }
   for (const x of downloadDaily.results ?? []) day(x.d).downloads = x.n;
   for (const x of newInstalls.results ?? []) day(x.d).new_installs = x.n;
-  const daySeries = [...byDay.entries()]
+  const daySeries: DayRow[] = [...byDay.entries()]
     .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([d, r]) => ({ d, ...r }));
+    .map(([d, r]) => ({ ...r, d }));
 
   return html(
     statsPage({
@@ -298,18 +312,21 @@ function table(title: string, headers: string[], rows: (string | number)[][]): s
 }
 
 function statsPage(d: {
-  dau: { d: string; n: number }[];
+  daySeries: DayRow[];
   downloads: { platform: string; n: number }[];
-  transfers: { d: string; files: number; sync: number; drops: number }[];
   installs: number;
   versions: { version: string; n: number }[];
   funnel: { downloads_30d: number; heartbeat_installs: number; activated: number; repeat_14d: number };
   jobs: { sync_n: number; drop_used_n: number; files_n: number };
+  days: number;
+  token: string;
 }): string {
-  const dauRows = d.dau.map((r) => [r.d, r.n]);
+  const dayRows = d.daySeries.map((r) => [r.d, r.dau, r.active, r.received, r.sent, r.sync, r.drop_used, r.drop_created, r.downloads, r.new_installs]);
   const dlRows = d.downloads.map((r) => [r.platform, r.n]);
-  const txRows = d.transfers.map((r) => [r.d, r.files, r.sync, r.drops]);
   const verRows = d.versions.map((r) => [r.version, r.n]);
+  const range = `<p class="muted">Range: ${[7, 14, 30, 60, 90]
+    .map((n) => `<a class="${n === d.days ? 'sel' : ''}" href="/stats?days=${n}&amp;token=${esc(d.token)}">${n}d</a>`)
+    .join(' · ')}</p>`;
   const f = d.funnel;
   const pct = (num: number, den: number) => (den > 0 ? Math.round((num * 100) / den) + '%' : '—');
   return `<!doctype html>
@@ -327,6 +344,8 @@ function statsPage(d: {
   .funnel div { min-width: 140px; }
   .funnel .lbl { color: #97a0b6; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
   .muted { color: #97a0b6; }
+  .muted a { color: #6d7bff; text-decoration: none; margin: 0 4px; }
+  .muted a.sel { color: #e8ebf3; font-weight: 700; }
 </style></head><body>
 <h1>Owldrop — usage stats</h1>
 <p><span class="big">${esc(d.installs)}</span> installs seen (distinct anonymous install ids)</p>
@@ -338,15 +357,15 @@ function statsPage(d: {
   <div><div class="lbl">Activated (any success)</div><div class="big">${esc(f.activated)}</div><div class="muted">${esc(pct(f.activated, f.heartbeat_installs))} of installs · file / sync / drop-link</div></div>
   <div><div class="lbl">14-day repeat</div><div class="big">${esc(f.repeat_14d)}</div><div class="muted">${esc(pct(f.repeat_14d, f.heartbeat_installs))} opened on 2+ days</div></div>
 </div>
-<h2>Jobs (14 days)</h2>
+<h2>Jobs (last ${d.days} days)</h2>
 <div class="funnel">
   <div><div class="lbl">Files transferred</div><div class="big">${esc(d.jobs.files_n)}</div></div>
   <div><div class="lbl">Sync items</div><div class="big">${esc(d.jobs.sync_n)}</div></div>
   <div><div class="lbl">Drop-link uploads</div><div class="big">${esc(d.jobs.drop_used_n)}</div></div>
 </div>
-${table('Daily opens (heartbeat, 14 days)', ['date', 'installs'], dauRows)}
-${table('Downloads (30 days)', ['platform', 'count'], dlRows)}
-${table('Jobs by day (14 days)', ['date', 'files', 'sync', 'drop-link'], txRows)}
+${range}
+${table(`Day by day (last ${d.days} days)`, ['date', 'DAU', 'active', 'received', 'sent', 'sync', 'drop uploads', 'drop links created', 'downloads', 'new installs'], dayRows)}
+${table(`Downloads by platform (last ${d.days} days)`, ['platform', 'count'], dlRows)}
 ${table('Versions in the wild', ['version', 'installs'], verRows)}
 </body></html>`;
 }
