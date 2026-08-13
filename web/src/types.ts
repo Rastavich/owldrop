@@ -145,6 +145,7 @@ export type SseEvent =
     }
   | { type: 'status'; err?: string }
   | { type: 'sync' }
+  | { type: 'share'; n?: number }
   | { type: 'update'; kind: 'available' | 'none' | 'downloading' | 'installed' | 'error'; detail?: unknown };
 
 // One item on the shared Sync board (visible on every device on the tailnet).

@@ -80,7 +80,7 @@ export const mkdir = (path: string, name: string) =>
   api('/api/mkdir', { method: 'POST', json: { path, name } });
 export const getDropLinks = () => api<{ links: DropLink[] }>('/api/droplinks').then((r) => r.links);
 export const createDropLink = (name: string, ttlMinutes: number, maxUses: number, ratePerMin: number) =>
-  api<{ url: string; publicUrl?: string }>('/api/droplinks', {
+  api<{ url: string; publicUrl?: string; shareUrl: string; link: DropLink }>('/api/droplinks', {
     method: 'POST',
     json: { name, ttlMinutes, maxUses, ratePerMin },
   });
@@ -115,3 +115,9 @@ export const clearSync = () => api('/api/sync', { method: 'DELETE' });
 export const getUpdateState = () => api<UpdateState>('/api/update');
 export const checkUpdate = () => api<UpdateState>('/api/update/check', { method: 'POST', json: {} });
 export const installUpdate = () => api('/api/update/install', { method: 'POST', json: {} });
+export const getPhoneAccess = () => api<{ url: string }>('/api/phone');
+export const getSharePending = () =>
+  api<{ files: { id: string; name: string; size: number }[] }>('/api/share').then((r) => r.files);
+export const clearSharePending = () => api('/api/share', { method: 'DELETE' });
+export const sendShareFile = (id: string, peers: string[]) =>
+  api('/api/share/send', { method: 'POST', json: { id, peers } });

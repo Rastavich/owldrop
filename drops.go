@@ -418,6 +418,7 @@ func (s *server) handleDropUpload(w http.ResponseWriter, r *http.Request) {
        s.drops.useOnce(token)
        r.Body = http.MaxBytesReader(w, r.Body, maxDropUploadSize)
        if err := r.ParseMultipartForm(32 << 20); err != nil {
+               tele.event("drop_link_failed")
                writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "upload too large or malformed"})
                return
        }
@@ -494,6 +495,7 @@ func (s *server) handleDropUpload(w http.ResponseWriter, r *http.Request) {
 		names = append(names, lf.Name)
 		total += lf.Size
 	}
+	tele.event("drop_link_used")
 	writeJSON(w, map[string]any{"ok": true, "names": names, "size": total})
 }
 

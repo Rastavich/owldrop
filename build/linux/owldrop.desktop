@@ -1,10 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=owldrop
-Exec=owldrop
+Name=Owldrop
+Exec=owldrop %F
 Icon=owldrop
 Categories=Utility;
 Terminal=false
-Keywords=wails
-Version=1.0
+MimeType=application/octet-stream;
 StartupNotify=false

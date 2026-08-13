@@ -13,13 +13,14 @@
 package main
 
 import (
-       "flag"
-       "log"
-       "net"
-       "os"
-       "path/filepath"
+	"flag"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 
-       "tailscale.com/tsnet"
+	"tailscale.com/tsnet"
 )
 
 var (
@@ -52,10 +53,10 @@ func startTsnetMode(s *server) (net.Listener, error) {
 	if !*tsnetFlag {
 		return nil, nil
 	}
-       t := &tsnet.Server{
-               Hostname: *tsnetHostname,
-               Dir:      filepath.Join(filepath.Dir(configPath()), "tsnet"),
-       }
+	t := &tsnet.Server{
+		Hostname: *tsnetHostname,
+		Dir:      filepath.Join(filepath.Dir(configPath()), "tsnet"),
+	}
 	if key := os.Getenv("TS_AUTHKEY"); key != "" {
 		t.AuthKey = key
 	}
@@ -80,8 +81,20 @@ func startTsnetMode(s *server) (net.Listener, error) {
 		return nil, err
 	}
 	log.Printf("tsnet: listening on http://%s/ (tailnet only)", *tsnetHostname)
-	// Funnel-from-container (public drop links) is deliberately not wired
-	// yet: it needs tsnet.ListenFunnel plus ACL config, and the host guard
-	// for /drop is written around the local daemon's tunnel. See the plan.
+	// Public drop links from this node: ListenFunnel is a dedicated
+	// listener, not the daemon's loopback proxy, so we serve ONLY /drop/*
+	// here — never the full app or session token.
+	if fln, err := t.ListenFunnel("tcp", ":443"); err != nil {
+		log.Printf("tsnet: funnel (public drop links) unavailable: %v", err)
+	} else {
+		go func() {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/drop/", s.handleDropPageOrUpload)
+			log.Printf("tsnet: funnel listening on https://%s/drop/…", *tsnetHostname)
+			if err := http.Serve(fln, mux); err != nil {
+				log.Printf("tsnet: funnel serve: %v", err)
+			}
+		}()
+	}
 	return ln, nil
 }

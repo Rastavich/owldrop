@@ -33,8 +33,8 @@ export default function Drops() {
     try {
       const res = await createDropLink(name.trim(), ttl, single ? 1 : 0, ratePerMin);
       setName('');
-      await copyText(res.url, true);
-      toast('Link created');
+      await copyText(res.shareUrl || res.publicUrl || res.url, true);
+      toast(res.publicUrl ? 'Public link copied' : 'Link copied (tailnet only — enable Public access for anyone on the internet)');
       qc.invalidateQueries({ queryKey: ['droplinks'] });
     } catch (e) {
       toast("Couldn't create link: " + (e instanceof Error ? e.message : e), undefined, 'err');

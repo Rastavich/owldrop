@@ -71,7 +71,8 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .popover-item.disabled:hover{background:transparent}
 .popover-foot{display:flex;gap:6px;padding-top:6px;border-top:1px solid var(--border)}
 .popover-foot .spacer{flex:1}
-.btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600}
+.btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
 .btn:hover{filter:brightness(1.1)}
 .btn.ghost{border-color:var(--border);background:var(--panel);color:var(--text)}
 .btn.ghost:hover{border-color:#333d55}
@@ -122,6 +123,21 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .empty svg{width:56px;height:56px;opacity:.55;margin-bottom:14px}
 .empty .t{font-size:15px;font-weight:600;color:var(--text)}
 .empty .s{font-size:13px;max-width:380px;margin-top:4px}
+.empty-onboard{padding:40px 20px;gap:8px}
+.empty-onboard .s{max-width:480px}
+.onboard-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:16px 0}
+.onboard-actions .btn{text-decoration:none}
+.onboard-hint{max-width:480px}
+.phone-qr{display:flex;gap:16px;align-items:center;text-align:left;margin-top:20px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:520px}
+.phone-qr img{border-radius:8px;background:#fff;flex:0 0 auto}
+.phone-url{display:block;font-size:12px;word-break:break-all;margin:6px 0}
+.share-banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.share-banner .t{font-weight:600;margin:0 0 8px}
+.share-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+.share-row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tagged-hint{display:block;font-size:11.5px;color:var(--muted);font-weight:400;line-height:1.35;margin-top:2px}
+.popover-item.tagged{opacity:1;align-items:flex-start}
+.popover-item.tagged .pv-name{white-space:normal}
 
 .drop-zone{margin-bottom:14px;border:1.5px dashed #2c3550;border-radius:var(--radius);padding:34px 20px;text-align:center;color:var(--muted);background:var(--panel);transition:border-color .15s,background .15s}
 .drop-zone svg{width:40px;height:40px;opacity:.6;margin-bottom:8px}

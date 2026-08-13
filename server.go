@@ -143,6 +143,9 @@ type server struct {
 	autosaving   map[string]bool      // inbox files currently being auto-saved
 	autosaveFail map[string]time.Time // failed auto-saves, for backoff
 
+	shareMu sync.Mutex
+	shares  []pendingShare // files handed over by the OS share sheet / Open With
+
 	// HTTP listener ownership: the shell hands the listener to serveHTTP,
 	// and LAN-mode toggles rebind it without restarting the process.
 	listenerMu sync.Mutex
@@ -363,6 +366,10 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/update/install", s.guard(s.handleUpdateInstall))
 	mux.HandleFunc("/api/sync", s.guard(s.handleSync))
 	mux.HandleFunc("/api/sync/", s.guard(s.handleSyncItem))
+	mux.HandleFunc("/api/qr", s.guard(s.handleQR))
+	mux.HandleFunc("/api/phone", s.guard(s.handlePhoneAccess))
+	mux.HandleFunc("/api/share", s.guard(s.handleSharePending))
+	mux.HandleFunc("/api/share/send", s.guard(s.handleShareSend))
 	// Public drop-link pages: the URL token is the auth, not the session
 	// token. Host checks still apply; through the funnel hostname ONLY drop
 	// pages are reachable (everything else 404s there).
@@ -469,9 +476,14 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
                        req.TTLMin = 7 * 24 * 60
                }
                l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses, req.RatePerMin)
-               resp := map[string]any{"link": l, "url": s.dropBaseURL() + "drop/" + l.Token}
-               if pub := s.funnelPublicURL(); pub != "" {
-                       resp["publicUrl"] = pub + "drop/" + l.Token
+               local := s.dropBaseURL() + "drop/" + l.Token
+               var pub string
+               if base := s.funnelPublicURL(); s.funnelEnabled() && base != "" {
+                       pub = base + "drop/" + l.Token
+               }
+               resp := map[string]any{"link": l, "url": local, "shareUrl": shareableDropURL(local, pub)}
+               if pub != "" {
+                       resp["publicUrl"] = pub
                }
                writeJSON(w, resp)
 	default:

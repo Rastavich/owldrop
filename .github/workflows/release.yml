@@ -200,12 +200,12 @@ jobs:
           go-version-file: go.mod
       - name: Install wails3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
-      - name: Package (.app bundle + dmg)
+      - name: Package (.app bundle + universal dmg)
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          wails3 task darwin:package:dmg
+          wails3 task darwin:package:dmg:universal
       # The self-updater's darwin artifact is a zip of the .app bundle (it
-      # replaces the bundle in place).
+      # replaces the bundle in place). One zip serves amd64 and arm64.
       - name: Zip .app for the updater
         run: |
           APP=$(find bin -maxdepth 3 -name '*.app' | head -1)
@@ -213,8 +213,10 @@ jobs:
             echo "no .app bundle found in bin/"; exit 1
           fi
           cd "$(dirname "$APP")"
-          zip -rq "$GITHUB_WORKSPACE/bin/owldrop-darwin-amd64.zip" "$(basename "$APP")"
-          ls -la "$GITHUB_WORKSPACE/bin/owldrop-darwin-amd64.zip"
+          zip -rq "$GITHUB_WORKSPACE/bin/owldrop-darwin-universal.zip" "$(basename "$APP")"
+          # Keep the old filename so existing updater URLs and bookmarks work.
+          cp "$GITHUB_WORKSPACE/bin/owldrop-darwin-universal.zip" "$GITHUB_WORKSPACE/bin/owldrop-darwin-amd64.zip"
+          ls -la "$GITHUB_WORKSPACE/bin/"*.zip
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -281,6 +283,43 @@ jobs:
         with:
           name: linux-nix
           path: /tmp/owldrop-nix
+          if-no-files-found: error
+
+  # Ubuntu 24.04 LTS (and Debian 12) ship WebKit2GTK 4.1, not WebKitGTK 6.0.
+  # Build with -tags gtk3 on the 24.04 runner so the artifact actually launches.
+  linux-gtk3:
+    needs: [preflight, vuln]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install GTK3 + WebKit2GTK 4.1 headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev rpm
+      - name: Install wails3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+      - name: Package gtk3 deb + rpm
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          wails3 task linux:package:gtk3
+          mkdir -p gtk3out
+          DEB=$(ls bin/*.deb | head -1)
+          RPM=$(ls bin/*.rpm | head -1)
+          cp "$DEB" gtk3out/owldrop-linux-amd64-webkit41.deb
+          cp "$RPM" gtk3out/owldrop-linux-x86_64-webkit41.rpm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-gtk3
+          path: gtk3out/*
           if-no-files-found: error
 
   # NOTE: no AppImage in the release. WebKitGTK hardcodes its helper-process
@@ -400,7 +439,7 @@ jobs:
   # write-enabled deploy key on Rastavich/owldrop-install (one repo only).
   publish-updates:
     # preflight is required: its `version` output names the release.
-    needs: [preflight, windows, macos, linux]
+    needs: [preflight, windows, macos, linux, linux-gtk3]
     runs-on: ubuntu-latest
     steps:
       # The stage step reads CHANGELOG.md from the repo — the workspace is
@@ -408,28 +447,34 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: "{linux,linux-nix,windows,macos}"
+          pattern: "{linux,linux-nix,linux-gtk3,windows,macos}"
           path: dl
       - name: Build update manifest and stage files
         run: |
           set -e
           V="${{ needs.preflight.outputs.version }}"
           EXE=$(ls dl/windows/*.exe | grep -v installer | head -1)
-          ZIP=$(ls dl/macos/*.zip | head -1)
+          ZIP=$(ls dl/macos/owldrop-darwin-universal.zip)
           NIX=dl/linux-nix/owldrop-nix
           DEB=$(ls dl/linux/*.deb | head -1)
           RPM=$(ls dl/linux/*.rpm | head -1)
-          [ -n "$EXE" ] && [ -n "$ZIP" ] && [ -f "$NIX" ] && [ -n "$DEB" ] && [ -n "$RPM" ] || { echo "missing artifacts"; exit 1; }
+          GTK3_DEB=$(ls dl/linux-gtk3/*.deb | head -1)
+          GTK3_RPM=$(ls dl/linux-gtk3/*.rpm | head -1)
+          [ -n "$EXE" ] && [ -n "$ZIP" ] && [ -f "$NIX" ] && [ -n "$DEB" ] && [ -n "$RPM" ] && [ -n "$GTK3_DEB" ] && [ -n "$GTK3_RPM" ] || { echo "missing artifacts"; ls -R dl; exit 1; }
           exe_digest=$(sha256sum "$EXE" | cut -d' ' -f1 | xxd -r -p | base64)
           zip_digest=$(sha256sum "$ZIP" | cut -d' ' -f1 | xxd -r -p | base64)
+          zip_size=$(stat -c%s "$ZIP")
           mkdir -p stage/updates
           cp "$EXE" stage/updates/owldrop-windows-amd64.exe
+          cp "$ZIP" stage/updates/owldrop-darwin-universal.zip
           cp "$ZIP" stage/updates/owldrop-darwin-amd64.zip
           # .deb/.rpm are published as static mirrors for the website's
           # download section (not in stable.json — the in-app updater is
           # Windows/macOS only).
           cp "$DEB" stage/updates/owldrop-linux-amd64.deb
           cp "$RPM" stage/updates/owldrop-linux-x86_64.rpm
+          cp "$GTK3_DEB" stage/updates/owldrop-linux-amd64-webkit41.deb
+          cp "$GTK3_RPM" stage/updates/owldrop-linux-x86_64-webkit41.rpm
           cp "$NIX" stage/owldrop
           chmod +x stage/owldrop
           # The changelog is the single source of truth for the site's
@@ -439,7 +484,8 @@ jobs:
           cat > stage/updates/stable.json <<EOF
           {"schemaVersion":1,"version":"$V","channel":"stable","name":"Owldrop $V","publishedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","artifacts":[
           {"url":"https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-windows-amd64.exe","filename":"owldrop-windows-amd64.exe","filetype":"exe","platform":"windows","arch":"amd64","size":$(stat -c%s "$EXE"),"digestAlgo":"sha256","digest":"$exe_digest"},
-          {"url":"https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-darwin-amd64.zip","filename":"owldrop-darwin-amd64.zip","filetype":"zip","platform":"darwin","arch":"amd64","size":$(stat -c%s "$ZIP"),"digestAlgo":"sha256","digest":"$zip_digest"}
+          {"url":"https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-darwin-universal.zip","filename":"owldrop-darwin-universal.zip","filetype":"zip","platform":"darwin","arch":"amd64","size":$zip_size,"digestAlgo":"sha256","digest":"$zip_digest"},
+          {"url":"https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-darwin-universal.zip","filename":"owldrop-darwin-universal.zip","filetype":"zip","platform":"darwin","arch":"arm64","size":$zip_size,"digestAlgo":"sha256","digest":"$zip_digest"}
           ]}
           EOF
           jq . stage/updates/stable.json > /dev/null
@@ -472,7 +518,7 @@ jobs:
           fi
 
   release:
-    needs: [preflight, windows, macos, linux]
+    needs: [preflight, windows, macos, linux, linux-gtk3]
     # Tag pushes publish the tagged release; manual runs publish (or update)
     # the release named after the packaged version, so a dispatch run's
     # artifacts are downloadable too.
@@ -486,7 +532,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          pattern: "{linux,linux-nix,windows,macos}"
+          pattern: "{linux,linux-nix,linux-gtk3,windows,macos}"
           path: dist
           merge-multiple: true
       - name: Checksums

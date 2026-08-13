@@ -5,6 +5,7 @@ import { deleteFile, saveFile } from '../transfers';
 import { openDirPicker, toast, transfersStore, useStore } from '../store';
 import { chipClass, chipLabel, fileType, fmtAge, fmtSize, pct } from '../utils';
 import type { SaveProgress, WaitingFile } from '../types';
+import EmptyInbox from './EmptyInbox';
 
 type InboxType = 'all' | 'img' | 'vid' | 'doc' | 'other';
 
@@ -175,19 +176,7 @@ export default function Inbox() {
       </div>
 
       {inbox.length === 0 ? (
-        <div className="empty">
-          <svg viewBox="0 0 48 48" fill="none">
-            <path
-              d="M14 36a9.5 9.5 0 1 1 1.4-18.9A12 12 0 0 1 39 19a9 9 0 0 1-2 17H14z"
-              stroke="#8a93a8"
-              strokeWidth="2.5"
-              strokeLinejoin="round"
-            />
-            <path d="M24 30.5v-11m0 0-4.2 4.2M24 19.5l4.2 4.2" stroke="#8a93a8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <p className="t">No files waiting</p>
-          <p className="s">When someone on your tailnet sends you a file, it lands here for you to save or delete.</p>
-        </div>
+        <EmptyInbox />
       ) : (
         <div className="list">
           {visible.map((f, i) => (

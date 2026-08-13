@@ -82,6 +82,12 @@ hostname where nothing else is reachable.)
 
 ## Docker / NAS (Unraid, Synology, …)
 
+Taildrop cannot send to tagged devices
+([tailscale/tailscale#10695](https://github.com/tailscale/tailscale/issues/10695))
+— the exact machines homelab people tag. Owldrop on that box is the
+workaround: drop links, LAN, and HTTPS land files in a real inbox when the
+container uses the **host Tailscale socket**.
+
 Run owldrop in a container on a machine that already runs Tailscale. The
 container borrows the host's Tailscale — it doesn't need its own account.
 
@@ -182,8 +188,10 @@ server for LAN use) is available as `wails3 task build:server`
   builds from this repo against nixpkgs' webkitgtk_6_0 and wraps it in an
   FHS environment so the dynamic libs resolve.
 - Other distros: `wails3 task linux:package` produces DEB / RPM / AUR in
-  `bin/` (Windows: `wails3 task windows:package` → NSIS installer; macOS:
-  `wails3 task darwin:package:dmg` → .dmg; build each on its own OS).
+  `bin/` (Ubuntu 24.04 LTS: `wails3 task linux:package:gtk3`); Windows:
+  `wails3 task windows:package` → NSIS installer; macOS:
+  `wails3 task darwin:package:dmg:universal` → universal .dmg. Build each
+  on its own OS.
 - **GitHub Releases**: tag a commit `vX.Y.Z` (or `X.Y.Z`) and CI builds and
   publishes deb/rpm (Linux), dmg (macOS) and NSIS installer (Windows)
   automatically, and ships the raw binary to the public install repo.
@@ -196,9 +204,9 @@ server for LAN use) is available as `wails3 task build:server`
 ## Notes & limitations
 
 - **Linux system requirements**: default builds need WebKitGTK 6.0 (Debian
-  13+, Ubuntu 24.10+, Fedora 40+). Distros stuck on WebKit2GTK 4.1 (Ubuntu
-  22.04/24.04, Debian 12) can build with `-tags gtk3` — supported through
-  the v3.0.x line, removed in Wails v3.1.
+  13+, Ubuntu 24.10+, Fedora 40+). Ubuntu 24.04 LTS / Debian 12 packages are
+  published as `owldrop-linux-*-webkit41.*` (`-tags gtk3`, WebKit2GTK 4.1).
+  Local gtk3 builds: `wails3 task linux:package:gtk3`.
 - **Linux desktop variance**: the tray icon uses the StatusNotifierItem
   protocol (GNOME needs an AppIndicator extension); global shortcuts on
   Wayland go through the XDG portal, so the compositor may re-map keys.
@@ -282,12 +290,16 @@ owl fed: [ko-fi.com/X8X51XKA5G](https://ko-fi.com/X8X51XKA5G).
 
 Owldrop reports a minimal anonymous usage stream (app version, OS, event
 name, timestamp, and a random per-install id) to the site's `/api/t`
-endpoint, which powers the public usage numbers: daily active users, files
-received/sent, drop links created, downloads. No file names, sizes, content,
-or sender/recipient information ever leaves the machine.
+endpoint. The stats page tracks an activation funnel (download → heartbeat
+install → first successful transfer → 14-day repeat), not daily opens as
+the product metric. No file names, sizes, content, or sender/recipient
+information ever leaves the machine.
 
 - Events: heartbeat (app start), file_received, file_saved, file_deleted,
-  file_sent, send_failed, drop_link_created.
+  file_sent, send_failed, drop_link_created, drop_link_used,
+  drop_link_failed, sync_item_added.
+- A successful transfer is `file_received`, `file_sent`, `sync_item_added`,
+  or `drop_link_used`.
 - Opt out anytime in **Settings → Privacy** (writes `telemetry: false` to
   the config). Off means nothing leaves the machine.
 - The site worker stores events in Cloudflare D1; the stats dashboard lives

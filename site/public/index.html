@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- Primary SEO -->
-<title>Owldrop — Desktop app for Tailscale file sharing</title>
-<meta name="description" content="Owldrop is a native desktop app for Tailscale's Taildrop. See files the instant they arrive, save or delete with one click, send files back by drag-and-drop, auto-save to a folder, and receive files from anyone with public drop links. Free for Windows, macOS and Linux.">
+<title>Owldrop — the drop box for your Tailnet</title>
+<meta name="description" content="Owldrop is an always-on drop box for your Tailscale network. Receive from phones, laptops, and anyone with a link. Auto-save to a folder. Works on the tagged NAS Tailscale will not let you Taildrop to. Free for Windows, macOS and Linux.">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="https://owldrop.app/">
 <meta name="theme-color" content="#090c13">
@@ -16,8 +16,8 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Owldrop">
 <meta property="og:url" content="https://owldrop.app/">
-<meta property="og:title" content="Owldrop — Desktop app for Tailscale file sharing">
-<meta property="og:description" content="Files sent over your Tailnet appear the instant they arrive. Save or delete with one click, reply with a drag-and-drop, and let anyone drop files into your inbox with public drop links.">
+<meta property="og:title" content="Owldrop — the drop box for your Tailnet">
+<meta property="og:description" content="One always-on receive node for the household. Phone, laptop, and anyone-with-a-link send into this box — including the tagged NAS Tailscale will not Taildrop to.">
 <meta property="og:image" content="https://owldrop.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -25,8 +25,8 @@
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Owldrop — Desktop app for Tailscale file sharing">
-<meta name="twitter:description" content="Files sent over your Tailnet appear the instant they arrive. Save or delete with one click, reply with a drag-and-drop, and let anyone drop files into your inbox.">
+<meta name="twitter:title" content="Owldrop — the drop box for your Tailnet">
+<meta name="twitter:description" content="One always-on receive node for the household. Phone, laptop, and anyone-with-a-link send into this box.">
 <meta name="twitter:image" content="https://owldrop.app/og.png">
 <meta name="twitter:image:alt" content="Owldrop — a desktop inbox for Tailscale file sharing">
 
@@ -46,7 +46,7 @@
   "softwareVersion": "0.7.3",
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Windows, macOS, Linux",
-  "description": "A native desktop app for Tailscale's Taildrop: an inbox for incoming files with one-click save/delete, drag-and-drop sending, auto-save, full local history, and public drop links.",
+  "description": "An always-on drop box for your Tailscale network: receive from phones, laptops, and anyone with a link, auto-save to a folder, and land files on the tagged NAS Tailscale will not Taildrop to.",
   "license": "https://opensource.org/license/mit",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -63,7 +63,7 @@
     <img src="/appicon.png" alt="" class="logo" width="38" height="38">
     <div>
       <h1>Owldrop</h1>
-      <p class="tag">a desktop app for Tailscale file sharing</p>
+      <p class="tag">the drop box for your Tailnet</p>
     </div>
   </a>
   <div class="head-right">
@@ -82,12 +82,13 @@
   <section class="hero">
     <div class="hero-copy">
       <p class="eyebrow"><span class="dot"></span> For your Tailnet</p>
-      <h2>Tailscale file sharing,<br><span class="grad">with a real desktop UI.</span></h2>
+      <h2>One always-on drop box<br><span class="grad">for the whole household.</span></h2>
       <p class="lede">
-        <strong>Owldrop</strong> is a native desktop app for
-        <a href="https://tailscale.com/kb/1082/taildrop">Tailscale's Taildrop</a>: incoming files
-        appear the instant they arrive, save or delete takes one click, and replying is a single
-        drag-and-drop. No more <code>tailscale file get .</code> on the command line.
+        Leave <strong>Owldrop</strong> running on the desktop in the tray, or on the NAS.
+        Phones, laptops, Tailscale's own apps, and anyone with a drop link all send
+        <em>into that box</em>. Auto-save to a folder. No more
+        <code>tailscale file get .</code> — and it works on the tagged servers
+        <a href="https://github.com/tailscale/tailscale/issues/10695">Taildrop itself cannot target</a>.
       </p>
       <div class="cta-row">
         <a class="btn primary" id="cta" href="#downloads">Download <span class="arr">→</span></a>
@@ -142,7 +143,7 @@
     <div class="sec-head reveal">
       <p class="kicker">Features</p>
       <h3>What you get</h3>
-      <p class="sub">Everything the <code>tailscale file</code> CLI does, plus the things it can't — notifications, history, and links anyone can send to.</p>
+      <p class="sub">A receive node that stays up, plus the things the CLI can't do — notifications, history, a phone scratchpad, and links anyone can send to.</p>
     </div>
     <div class="grid">
       <article class="card reveal">
@@ -173,7 +174,17 @@
       <article class="card reveal">
         <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
         <h4>Drop links</h4>
-        <p>Create a short-lived link anyone can open in a browser — <strong>no Tailscale account needed</strong> — to send a file straight into your inbox.</p>
+        <p>Create a short-lived link anyone can open in a browser — <strong>no Tailscale account needed</strong> — to send a file straight into this box.</p>
+      </article>
+      <article class="card reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
+        <h4>Sync scratchpad</h4>
+        <p>Paste a URL or drop a screenshot from your phone's browser, pick it up on the desktop. Not OS clipboard sync — a shared scratchpad while there is no mobile app.</p>
+      </article>
+      <article class="card reveal">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></div>
+        <h4>Tagged NAS / Unraid</h4>
+        <p>Tailscale will not Taildrop to tagged devices. Install Owldrop on that box with the <strong>host Tailscale socket</strong> and receive via drop links, LAN, or HTTPS. (A tsnet-only container has no Taildrop inbox — UI, Sync, and Funnel drop links still work.)</p>
       </article>
     </div>
   </section>
@@ -226,10 +237,23 @@
           <span class="dl-os">Linux</span>
           <span class="dl-tag">Debian / Ubuntu / Fedora / RHEL</span>
         </div>
-        <p class="dl-desc"><code>.deb</code> for Debian/Ubuntu and <code>.rpm</code> for Fedora/RHEL (require a WebKitGTK 6.0 system).</p>
+        <p class="dl-desc"><code>.deb</code> / <code>.rpm</code> for Ubuntu 24.10+, Debian 13+, Fedora 40+ (WebKitGTK 6.0).</p>
         <div class="dl-actions">
           <a class="btn primary" href="/dl?platform=linux_deb">Download .deb</a>
           <a class="btn ghost" href="/dl?platform=linux_rpm">Download .rpm</a>
+        </div>
+      </article>
+
+      <article class="dl-card reveal" data-os="linux">
+        <span class="dl-badge">Your platform</span>
+        <div class="dl-head">
+          <span class="dl-os">Linux</span>
+          <span class="dl-tag">Ubuntu 24.04 LTS / Debian 12</span>
+        </div>
+        <p class="dl-desc">Same app, built against GTK3 + WebKit2GTK 4.1 so it runs on Ubuntu 24.04 LTS.</p>
+        <div class="dl-actions">
+          <a class="btn primary" href="/dl?platform=linux_deb_2404">Download .deb (24.04)</a>
+          <a class="btn ghost" href="/dl?platform=linux_rpm_2404">Download .rpm (WebKit 4.1)</a>
         </div>
       </article>
 
@@ -237,9 +261,9 @@
         <span class="dl-badge">Your platform</span>
         <div class="dl-head">
           <span class="dl-os">macOS</span>
-          <span class="dl-tag">.zip · amd64</span>
+          <span class="dl-tag">.zip · Universal</span>
         </div>
-        <p class="dl-desc">Download the app bundle, unzip, and drag it to <code>/Applications</code>. Runs on Apple Silicon via Rosetta 2.</p>
+        <p class="dl-desc">Apple Silicon and Intel in one download. Unzip and drag to <code>/Applications</code>.</p>
         <a class="btn primary" href="/dl?platform=mac">Download for macOS</a>
         <p class="hint">Ad-hoc signed — macOS may show a Gatekeeper warning; right-click → Open once.</p>
       </article>

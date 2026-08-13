@@ -78,6 +78,12 @@ export function handleSseEvent(ev: SseEvent) {
       // A device added/removed a board item — every open page refreshes.
       queryClient.invalidateQueries({ queryKey: ['sync'] });
       break;
+    case 'share':
+      queryClient.invalidateQueries({ queryKey: ['share'] });
+      if ((ev.n ?? 0) > 0) toast('File ready to send — pick a device on the Send tab');
+      break;
+    case 'status':
+      break;
     case 'update':
       queryClient.invalidateQueries({ queryKey: ['update'] });
       if (ev.kind === 'available') toast('A new version is available — Settings → Updates to install');
@@ -86,6 +92,10 @@ export function handleSseEvent(ev: SseEvent) {
       else if (ev.kind === 'installed') toast('Update installed — restarting…');
       else if (ev.kind === 'error') toast('Update failed: ' + String(ev.detail ?? 'unknown error'), undefined, 'err');
       break;
+    default: {
+      const _never: never = ev;
+      void _never;
+    }
   }
 }
 

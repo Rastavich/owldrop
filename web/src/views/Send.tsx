@@ -1,19 +1,28 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { getDevices } from '../api';
+import {
+  clearSharePending,
+  createDropLink,
+  getDevices,
+  getSharePending,
+  sendShareFile,
+} from '../api';
 import { sendFileToDevices } from '../transfers';
 import { toast, transfersStore, useStore } from '../store';
-import { chipClass, chipLabel, fmtSize, pct, receiveHint, stamp } from '../utils';
+import { chipClass, chipLabel, copyText, fmtSize, isTaggedTaildropBlock, pct, receiveHint, stamp } from '../utils';
 import type { Device } from '../types';
 
 export default function Send() {
   const qc = useQueryClient();
   const { data: devices = [] } = useQuery({ queryKey: ['devices'], queryFn: getDevices });
+  const { data: pending = [] } = useQuery({ queryKey: ['share'], queryFn: getSharePending });
   const { sending } = useStore(transfersStore, (s) => s);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const tagged = devices.filter((d) => isTaggedTaildropBlock(d.taildrop));
 
   // Default to the first usable device so "send" works out of the box.
   useEffect(() => {
@@ -104,6 +113,38 @@ export default function Send() {
     }
   };
 
+  const sendPending = async (id: string) => {
+    if (targets.length === 0) {
+      toast('Pick a device first', undefined, 'err');
+      return;
+    }
+    setShareBusy(true);
+    try {
+      await sendShareFile(
+        id,
+        targets.map((t) => t.id),
+      );
+      toast('Sent to ' + targets.map((t) => t.name).join(', '));
+      qc.invalidateQueries({ queryKey: ['share'] });
+    } catch (e) {
+      toast("Couldn't send: " + (e instanceof Error ? e.message : e), undefined, 'err');
+      qc.invalidateQueries({ queryKey: ['share'] });
+    }
+    setShareBusy(false);
+  };
+
+  const copyBoxDropLink = async () => {
+    try {
+      const res = await createDropLink('This box', 60, 0, 4);
+      await copyText(res.shareUrl || res.publicUrl || res.url, true);
+      toast(
+        'Drop link to this machine copied. Tailscale will not Taildrop to tagged devices — install Owldrop on the NAS and share a link from there to land files on that box.',
+      );
+    } catch (e) {
+      toast("Couldn't create link: " + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+  };
+
   const toggleDevice = (id: string, checked: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -126,8 +167,12 @@ export default function Send() {
               <div className="popover-list">
                 {devices.map((d) => {
                   const usable = d.taildrop === 'available';
+                  const taggedPeer = isTaggedTaildropBlock(d.taildrop);
                   return (
-                    <label key={d.id} className={'popover-item' + (usable ? '' : ' disabled')}>
+                    <label
+                      key={d.id}
+                      className={'popover-item' + (usable ? '' : taggedPeer ? ' tagged' : ' disabled')}
+                    >
                       <input
                         type="checkbox"
                         checked={usable && selected.has(d.id)}
@@ -135,7 +180,13 @@ export default function Send() {
                         onChange={(e) => toggleDevice(d.id, e.target.checked)}
                       />
                       <span className="pv-name">
-                        {d.name + (d.os ? ' (' + d.os + ')' : '') + (!d.online ? ' · offline' : usable ? '' : ' · ' + d.taildrop)}
+                        {d.name + (d.os ? ' (' + d.os + ')' : '') + (!d.online ? ' · offline' : usable ? '' : taggedPeer ? '' : ' · ' + d.taildrop)}
+                        {taggedPeer && (
+                          <span className="tagged-hint">
+                            Tailscale will not Taildrop to tagged devices. Install Owldrop on that box and share a drop
+                            link from there — a link from here lands on this machine, not the NAS.
+                          </span>
+                        )}
                       </span>
                       {d.online && d.curAddr && <span className="badge transport" title="Direct connection">⚡</span>}
                       {d.online && !d.curAddr && d.relay && (
@@ -160,6 +211,11 @@ export default function Send() {
                   Clear
                 </button>
                 <span className="spacer" />
+                {tagged.length > 0 && (
+                  <button className="btn ghost mini" onClick={copyBoxDropLink}>
+                    Copy drop link to this machine
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -168,6 +224,35 @@ export default function Send() {
           Refresh
         </button>
       </div>
+
+      {pending.length > 0 && (
+        <div className="share-banner">
+          <p className="t">Shared from the OS — pick a device and send</p>
+          {pending.map((f) => (
+            <div key={f.id} className="share-row">
+              <span className="name">
+                {f.name} · {fmtSize(f.size)}
+              </span>
+              <button className="btn mini" disabled={shareBusy} onClick={() => sendPending(f.id)}>
+                Send
+              </button>
+            </div>
+          ))}
+          <button className="btn ghost mini" disabled={shareBusy} onClick={() => clearSharePending().then(() => qc.invalidateQueries({ queryKey: ['share'] }))}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {tagged.length > 0 && !popoverOpen && (
+        <p className="s" style={{ margin: '0 0 12px', color: 'var(--muted)', fontSize: 13 }}>
+          {tagged.length === 1 ? tagged[0].name + ' is tagged' : tagged.length + ' tagged devices'} — Tailscale will not
+          Taildrop there.{' '}
+          <button className="linkbtn" onClick={copyBoxDropLink}>
+            Copy a drop link to this machine
+          </button>
+        </p>
+      )}
 
       <div
         className={'drop-zone' + (dragOver ? ' over' : '')}

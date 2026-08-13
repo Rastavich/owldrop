@@ -8,6 +8,42 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.8.0]
+
+### Added
+
+- **Activation scoreboard** — telemetry now records `sync_item_added`,
+  `drop_link_used`, and `drop_link_failed`. The stats page tracks download →
+  install → first successful transfer (file, Sync, or drop-link upload) and
+  14-day repeat, instead of treating daily opens as the product metric.
+- **Empty inbox onboarding** — an empty inbox is a first-run, not a calm
+  empty state: drop a test file, copy a drop link, paste on Sync, or scan a
+  phone QR (HTTPS Serve or LAN).
+- **Household drop box** — landing page and first-run copy position Owldrop
+  as one always-on receive node. Tagged devices in Send explain why Taildrop
+  cannot reach them and offer a drop link to *this* machine.
+- **OS share / Open With** — files handed to the app (second instance, argv,
+  Linux `%F`, macOS document types, Windows Send to / context menu) land on
+  the Send tab to pick a device.
+- **tsnet Funnel** — a tsnet node now serves public `/drop/*` links on
+  `:443` when Funnel is allowed (still no Taildrop inbox).
+- **Runnable builds** — CI ships a universal Mac zip (amd64 + arm64) and a
+  GTK3 / WebKit2GTK 4.1 Linux package that runs on Ubuntu 24.04 LTS.
+
+### Changed
+
+- Creating a drop link copies the URL a recipient can actually open (Funnel
+  public URL when Public access is on).
+- Sync is on the marketing site as a phone→desktop scratchpad, not clipboard
+  sync.
+- Docker/NAS docs state the tagged-node gap and that host-socket is the
+  path with a real inbox.
+
+### Fixed
+
+- Privacy policy wording now matches the opt-out toggle (it previously said
+  opt-in in the body).
+
 ## [0.7.3]
 
 ### Added

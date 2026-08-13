@@ -147,3 +147,15 @@ export function riskyPath(p: string): boolean {
 export function pct(w: number, s: number): number {
   return s > 0 ? Math.min(100, Math.round((w * 100) / s)) : 0;
 }
+
+/** URL a recipient can actually open: Funnel public URL when present. */
+export function shareableDropUrl(local: string, publicUrl?: string): string {
+  return publicUrl || local;
+}
+
+/** Taildrop blocked because the peer is tagged / owned by no user. */
+export function isTaggedTaildropBlock(reason: string): boolean {
+  const r = reason.toLowerCase();
+  if (!r || r === 'available') return false;
+  return r.includes('tag') || r === 'owned by another user';
+}

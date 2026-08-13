@@ -17,7 +17,12 @@ const EVENT_NAMES = new Set([
   'file_sent',
   'send_failed',
   'drop_link_created',
+  'drop_link_used',
+  'drop_link_failed',
+  'sync_item_added',
 ]);
+
+const SUCCESS_EVENTS = "('file_received','file_sent','sync_item_added','drop_link_used')";
 
 // /dl?platform=... → real artifact URL (raw.githubusercontent). Logged as a
 // download event; 'nix' redirects to the install repo (the nix command on
@@ -25,11 +30,15 @@ const EVENT_NAMES = new Set([
 const DOWNLOADS: Record<string, string> = {
   windows:
     'https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-windows-amd64.exe',
-  mac: 'https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-darwin-amd64.zip',
+  mac: 'https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-darwin-universal.zip',
   linux_deb:
     'https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-linux-amd64.deb',
   linux_rpm:
     'https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-linux-x86_64.rpm',
+  linux_deb_2404:
+    'https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-linux-amd64-webkit41.deb',
+  linux_rpm_2404:
+    'https://raw.githubusercontent.com/Rastavich/owldrop-install/main/updates/owldrop-linux-x86_64-webkit41.rpm',
   nix: 'https://github.com/Rastavich/owldrop-install',
 };
 
@@ -166,7 +175,7 @@ async function stats(url: URL, env: Env): Promise<Response> {
   if (url.searchParams.get('token') !== env.STATS_TOKEN) {
     return json({ error: 'forbidden' }, 401);
   }
-  const [dau, downloads, transfers, installs, versions] = await Promise.all([
+  const [dau, downloads, transfers, installs, versions, funnel, jobs] = await Promise.all([
     env.DB.prepare(
       `SELECT date(ts, 'unixepoch') AS d, COUNT(DISTINCT install_id) AS n
        FROM events WHERE name = 'heartbeat' AND ts >= unixepoch('now', '-13 days')
@@ -178,10 +187,12 @@ async function stats(url: URL, env: Env): Promise<Response> {
     ).all<Count & { platform: string }>(),
     env.DB.prepare(
       `SELECT date(ts, 'unixepoch') AS d,
-              SUM(CASE WHEN name IN ('file_received','file_sent') THEN 1 ELSE 0 END) AS n
-       FROM events WHERE ts >= unixepoch('now', '-13 days')
+              SUM(CASE WHEN name IN ('file_received','file_sent') THEN 1 ELSE 0 END) AS files,
+              SUM(CASE WHEN name = 'sync_item_added' THEN 1 ELSE 0 END) AS sync,
+              SUM(CASE WHEN name = 'drop_link_used' THEN 1 ELSE 0 END) AS drops
+       FROM events WHERE ts >= unixepoch('now', '-13 days') AND install_id != 'site'
        GROUP BY d ORDER BY d`,
-    ).all<{ d: string; n: number }>(),
+    ).all<{ d: string; files: number; sync: number; drops: number }>(),
     env.DB.prepare(
       `SELECT COUNT(DISTINCT install_id) AS n FROM events WHERE install_id != 'site'`,
     ).first<Count>(),
@@ -189,9 +200,46 @@ async function stats(url: URL, env: Env): Promise<Response> {
       `SELECT version, COUNT(DISTINCT install_id) AS n FROM events
        WHERE install_id != 'site' AND version != '' GROUP BY version ORDER BY n DESC LIMIT 8`,
     ).all<Count & { version: string }>(),
+    env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM events WHERE name = 'download' AND ts >= unixepoch('now', '-30 days')) AS downloads_30d,
+         (SELECT COUNT(DISTINCT install_id) FROM events WHERE name = 'heartbeat' AND install_id != 'site') AS heartbeat_installs,
+         (SELECT COUNT(DISTINCT install_id) FROM events WHERE name IN ${SUCCESS_EVENTS} AND install_id != 'site') AS activated,
+         (SELECT COUNT(*) FROM (
+            SELECT install_id FROM events
+            WHERE name = 'heartbeat' AND install_id != 'site' AND ts >= unixepoch('now', '-13 days')
+            GROUP BY install_id HAVING COUNT(DISTINCT date(ts, 'unixepoch')) >= 2
+         )) AS repeat_14d`,
+    ).first<{ downloads_30d: number; heartbeat_installs: number; activated: number; repeat_14d: number }>(),
+    env.DB.prepare(
+      `SELECT
+         SUM(CASE WHEN name = 'sync_item_added' THEN 1 ELSE 0 END) AS sync_n,
+         SUM(CASE WHEN name = 'drop_link_used' THEN 1 ELSE 0 END) AS drop_used_n,
+         SUM(CASE WHEN name IN ('file_received','file_sent') THEN 1 ELSE 0 END) AS files_n
+       FROM events WHERE ts >= unixepoch('now', '-13 days') AND install_id != 'site'`,
+    ).first<{ sync_n: number; drop_used_n: number; files_n: number }>(),
   ]);
 
-  return html(statsPage({ dau: dau.results ?? [], downloads: downloads.results ?? [], transfers: transfers.results ?? [], installs: installs?.n ?? 0, versions: versions.results ?? [] }));
+  return html(
+    statsPage({
+      dau: dau.results ?? [],
+      downloads: downloads.results ?? [],
+      transfers: transfers.results ?? [],
+      installs: installs?.n ?? 0,
+      versions: versions.results ?? [],
+      funnel: {
+        downloads_30d: funnel?.downloads_30d ?? 0,
+        heartbeat_installs: funnel?.heartbeat_installs ?? 0,
+        activated: funnel?.activated ?? 0,
+        repeat_14d: funnel?.repeat_14d ?? 0,
+      },
+      jobs: {
+        sync_n: jobs?.sync_n ?? 0,
+        drop_used_n: jobs?.drop_used_n ?? 0,
+        files_n: jobs?.files_n ?? 0,
+      },
+    }),
+  );
 }
 
 // --- rendering ------------------------------------------------------------
@@ -207,14 +255,18 @@ function table(title: string, headers: string[], rows: (string | number)[][]): s
 function statsPage(d: {
   dau: { d: string; n: number }[];
   downloads: { platform: string; n: number }[];
-  transfers: { d: string; n: number }[];
+  transfers: { d: string; files: number; sync: number; drops: number }[];
   installs: number;
   versions: { version: string; n: number }[];
+  funnel: { downloads_30d: number; heartbeat_installs: number; activated: number; repeat_14d: number };
+  jobs: { sync_n: number; drop_used_n: number; files_n: number };
 }): string {
   const dauRows = d.dau.map((r) => [r.d, r.n]);
   const dlRows = d.downloads.map((r) => [r.platform, r.n]);
-  const txRows = d.transfers.map((r) => [r.d, r.n]);
+  const txRows = d.transfers.map((r) => [r.d, r.files, r.sync, r.drops]);
   const verRows = d.versions.map((r) => [r.version, r.n]);
+  const f = d.funnel;
+  const pct = (num: number, den: number) => (den > 0 ? Math.round((num * 100) / den) + '%' : '—');
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Owldrop stats</title>
@@ -226,12 +278,30 @@ function statsPage(d: {
   th, td { text-align: left; padding: 6px 14px 6px 0; border-bottom: 1px solid #232b40; }
   th { color: #97a0b6; font-weight: 600; }
   .big { font-size: 26px; font-weight: 700; color: #6d7bff; }
+  .funnel { display: flex; flex-wrap: wrap; gap: 28px; margin: 16px 0 8px; }
+  .funnel div { min-width: 140px; }
+  .funnel .lbl { color: #97a0b6; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .muted { color: #97a0b6; }
 </style></head><body>
 <h1>Owldrop — usage stats</h1>
 <p><span class="big">${esc(d.installs)}</span> installs seen (distinct anonymous install ids)</p>
-${table('Daily active users (14 days)', ['date', 'users'], dauRows)}
+<h2>Activation funnel</h2>
+<p class="muted">File send is infrequent — judge activation (first successful transfer) and 14-day repeat, not daily opens.</p>
+<div class="funnel">
+  <div><div class="lbl">Downloads (30d)</div><div class="big">${esc(f.downloads_30d)}</div></div>
+  <div><div class="lbl">Heartbeat installs</div><div class="big">${esc(f.heartbeat_installs)}</div><div class="muted">ran the app at least once</div></div>
+  <div><div class="lbl">Activated (any success)</div><div class="big">${esc(f.activated)}</div><div class="muted">${esc(pct(f.activated, f.heartbeat_installs))} of installs · file / sync / drop-link</div></div>
+  <div><div class="lbl">14-day repeat</div><div class="big">${esc(f.repeat_14d)}</div><div class="muted">${esc(pct(f.repeat_14d, f.heartbeat_installs))} opened on 2+ days</div></div>
+</div>
+<h2>Jobs (14 days)</h2>
+<div class="funnel">
+  <div><div class="lbl">Files transferred</div><div class="big">${esc(d.jobs.files_n)}</div></div>
+  <div><div class="lbl">Sync items</div><div class="big">${esc(d.jobs.sync_n)}</div></div>
+  <div><div class="lbl">Drop-link uploads</div><div class="big">${esc(d.jobs.drop_used_n)}</div></div>
+</div>
+${table('Daily opens (heartbeat, 14 days)', ['date', 'installs'], dauRows)}
 ${table('Downloads (30 days)', ['platform', 'count'], dlRows)}
-${table('Files transferred (14 days)', ['date', 'files'], txRows)}
+${table('Jobs by day (14 days)', ['date', 'files', 'sync', 'drop-link'], txRows)}
 ${table('Versions in the wild', ['version', 'installs'], verRows)}
 </body></html>`;
 }

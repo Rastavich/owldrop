@@ -227,13 +227,15 @@ RequestExecutionLevel "${REQUEST_EXECUTION_LEVEL}"
 !macroend
 
 !macro wails.associateFiles
-    ; Create file associations
-    
+    ; Open With / Send to Owldrop — do not steal default associations.
+    WriteRegStr SHELL_CONTEXT "Software\Classes\*\shell\Owldrop" "" "Send with Owldrop"
+    WriteRegStr SHELL_CONTEXT "Software\Classes\*\shell\Owldrop\command" "" '"$INSTDIR\${PRODUCT_EXECUTABLE}" "%1"'
+    CreateShortCut "$SENDTO\Owldrop.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 !macroend
 
 !macro wails.unassociateFiles
-    ; Delete app associations
-    
+    DeleteRegKey SHELL_CONTEXT "Software\Classes\*\shell\Owldrop"
+    Delete "$SENDTO\Owldrop.lnk"
 !macroend
 
 !macro CUSTOM_PROTOCOL_ASSOCIATE PROTOCOL DESCRIPTION ICON COMMAND

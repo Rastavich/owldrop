@@ -210,6 +210,7 @@ func (s *server) handleSync(w http.ResponseWriter, r *http.Request) {
 			writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 			return
 		}
+		tele.event("sync_item_added")
 		s.syncChanged()
 		writeJSON(w, it)
 	case http.MethodDelete:
@@ -284,6 +285,7 @@ func (s *server) handleSyncUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	it := s.sync.addFile(id, name, written)
+	tele.event("sync_item_added")
 	s.syncChanged()
 	writeJSON(w, it)
 }

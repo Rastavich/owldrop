@@ -57,7 +57,7 @@
 <main>
   <section class="legal-page">
     <h1 class="page-title">Privacy policy &amp; legal</h1>
-    <p class="page-sub">Last updated <time datetime="2026-08-08">August 8, 2026</time>. In plain language: Owldrop is a peer-to-peer file tool — your files stay on your machines and your tailnet, and the only thing sent to us is a tiny, optional, anonymous usage count.</p>
+    <p class="page-sub">Last updated <time datetime="2026-08-13">August 13, 2026</time>. In plain language: Owldrop is a peer-to-peer file tool — your files stay on your machines and your tailnet, and the only thing sent to us is a tiny, optional, anonymous usage count.</p>
 
     <h2>What Owldrop stores on your machine</h2>
     <p>Almost everything lives on your own device:</p>
@@ -70,14 +70,14 @@
     <p>Files transfer <strong>directly between your devices over your own Tailscale tailnet</strong>, through the <code>tailscaled</code> running on your machine. Owldrop has no servers that route, host, or inspect file contents — we never see what you send. The transfer is subject to Tailscale's encryption and your tailnet's access controls; see Tailscale's own policies for how their service handles traffic.</p>
 
     <h2>Anonymous usage telemetry (opt-out)</h2>
-    <p>To know whether the project is worth keeping alive, Owldrop can report an <strong>opt-in, anonymous</strong> usage stream to <code>owldrop.app/api/t</code>. It contains only:</p>
+    <p>To know whether the project is worth keeping alive, Owldrop can report an <strong>opt-out, anonymous</strong> usage stream to <code>owldrop.app/api/t</code>. It is on by default; turn it off in Settings. It contains only:</p>
     <ul>
       <li>your app version and operating system,</li>
       <li>a random per-install identifier (generated on first run),</li>
-      <li>an event name and timestamp for events like <code>heartbeat</code>, <code>file_received</code>, <code>file_saved</code>, <code>file_deleted</code>, <code>file_sent</code>, <code>send_failed</code>, and <code>drop_link_created</code>.</li>
+      <li>an event name and timestamp for events like <code>heartbeat</code>, <code>file_received</code>, <code>file_saved</code>, <code>file_deleted</code>, <code>file_sent</code>, <code>send_failed</code>, <code>drop_link_created</code>, <code>drop_link_used</code>, <code>drop_link_failed</code>, and <code>sync_item_added</code>.</li>
     </ul>
     <p>It <strong>never</strong> includes file names, file sizes, file contents, recipients, IP addresses, or anything identifying you. Events are sent in small batches and are best-effort — if sending fails, nothing is retried and nothing is queued on your machine. You can turn this off any time in <strong>Settings → “Share anonymous usage stats”</strong>; when off, nothing leaves the machine.</p>
-    <p>Telemetry is stored by Cloudflare (D1) and used only for aggregate adoption statistics (rough install counts, daily active users, files transferred). It is not sold, shared, or used for advertising.</p>
+    <p>Telemetry is stored by Cloudflare (D1) and used only for aggregate adoption statistics (install counts, activation — first successful transfer — and 14-day repeat). It is not sold, shared, or used for advertising.</p>
 
     <h2>What the website collects</h2>
     <p><code>owldrop.app</code> is a static site. It sets <strong>no cookies</strong>, runs <strong>no advertising or analytics scripts</strong>, and has <strong>no user accounts</strong>. The only things it records:</p>

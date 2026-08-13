@@ -60,11 +60,12 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "app.owldrop",
-			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+			OnSecondInstanceLaunch: func(d application.SecondInstanceData) {
 				if win != nil {
 					win.Show()
 					win.Focus()
 				}
+				srv.enqueueShare(fileArgs(d.Args))
 			},
 		},
 		Mac: application.MacOptions{
@@ -143,6 +144,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 
 	sh := &shell{app: app, win: win, tray: tray, srv: srv, notif: ns}
 	sh.rebuildTrayMenu()
+	srv.enqueueShare(fileArgs(os.Args[1:]))
 
 	if err := app.GlobalShortcut.Register("CmdOrCtrl+Shift+T", func() {
 		win.Show()

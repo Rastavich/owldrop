@@ -109,6 +109,16 @@ tasks:
       - task: create:rpm
       - task: create:aur
 
+  package:gtk3:
+    summary: Packages GTK3 + WebKit2GTK 4.1 deb/rpm (Ubuntu 24.04 LTS)
+    cmds:
+      - task: build
+        vars:
+          EXTRA_TAGS: gtk3
+      - task: generate:dotdesktop
+      - wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm-gtk3.yaml -out {{.ROOT_DIR}}/bin
+      - wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm-gtk3.yaml -out {{.ROOT_DIR}}/bin
+
   create:appimage:
     summary: Creates an AppImage
     dir: build/linux/appimage
@@ -170,13 +180,18 @@ tasks:
     dir: build
     cmds:
       - mkdir -p {{.ROOT_DIR}}/build/linux/appimage
-      - wails3 generate .desktop -name "{{.APP_NAME}}" -exec "{{.EXEC}}" -icon "{{.ICON}}" -outputfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -categories "{{.CATEGORIES}}"
-    vars:
-      APP_NAME: '{{.APP_NAME}}'
-      EXEC: '{{.APP_NAME}}'
-      ICON: '{{.APP_NAME}}'
-      CATEGORIES: 'Utility;'
-      OUTPUTFILE: '{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop'
+      - |
+        printf '%s\n' \
+          '[Desktop Entry]' \
+          'Type=Application' \
+          'Name=Owldrop' \
+          'Exec=owldrop %F' \
+          'Icon=owldrop' \
+          'Categories=Utility;' \
+          'Terminal=false' \
+          'MimeType=application/octet-stream;' \
+          'StartupNotify=false' \
+          > "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop"
 
   run:
     cmds:

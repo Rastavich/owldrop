@@ -62,7 +62,7 @@ func TestPeerIsLoopback(t *testing.T) {
 	}{
 		{"127.0.0.1:54321", true},
 		{"[::1]:54321", true},
-		{"100.112.233.3:4432", false},  // tailnet peer
+		{"100.112.233.3:4432", false}, // tailnet peer
 		{"fd7a:115c:a1e0::5336:54321", false},
 		{"192.168.1.20:8976", false}, // plain LAN
 		{"not-an-addr", false},
@@ -84,6 +84,9 @@ func TestGuardMagicDNSHost(t *testing.T) {
 	// funnelHost() matches without needing a live tailscaled.
 	s.selfDNSName()
 	s.selfDNS = "desktop.taila4569.ts.net"
+	s.serving = newServingManager(&fakeServeStore{cfg: &serveConfigWire{
+		AllowFunnel: map[string]bool{"desktop.taila4569.ts.net:443": true},
+	}})
 
 	handler := func(t *testing.T, remote, path string) int {
 		t.Helper()
