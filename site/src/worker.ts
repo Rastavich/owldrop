@@ -175,24 +175,39 @@ async function stats(url: URL, env: Env): Promise<Response> {
   if (url.searchParams.get('token') !== env.STATS_TOKEN) {
     return json({ error: 'forbidden' }, 401);
   }
-  const [dau, downloads, transfers, installs, versions, funnel, jobs] = await Promise.all([
+  // ?days= controls the day-by-day window (clamped to 7–365, default 30).
+  const raw = parseInt(url.searchParams.get('days') ?? '', 10);
+  const days = Number.isFinite(raw) ? Math.min(365, Math.max(7, raw)) : 30;
+
+  const [dau, daily, downloads, newInstalls, installs, versions, funnel, jobs, downloadDaily] = await Promise.all([
     env.DB.prepare(
       `SELECT date(ts, 'unixepoch') AS d, COUNT(DISTINCT install_id) AS n
-       FROM events WHERE name = 'heartbeat' AND ts >= unixepoch('now', '-13 days')
+       FROM events WHERE name = 'heartbeat' AND ts >= unixepoch('now', '-${days} days')
        GROUP BY d ORDER BY d`,
     ).all<{ d: string; n: number }>(),
     env.DB.prepare(
-      `SELECT platform, COUNT(*) AS n FROM events WHERE name = 'download'
-       AND ts >= unixepoch('now', '-30 days') GROUP BY platform ORDER BY n DESC`,
-    ).all<Count & { platform: string }>(),
-    env.DB.prepare(
       `SELECT date(ts, 'unixepoch') AS d,
-              SUM(CASE WHEN name IN ('file_received','file_sent') THEN 1 ELSE 0 END) AS files,
+              COUNT(DISTINCT install_id) AS active,
+              SUM(CASE WHEN name = 'file_received' THEN 1 ELSE 0 END) AS received,
+              SUM(CASE WHEN name = 'file_sent' THEN 1 ELSE 0 END) AS sent,
               SUM(CASE WHEN name = 'sync_item_added' THEN 1 ELSE 0 END) AS sync,
-              SUM(CASE WHEN name = 'drop_link_used' THEN 1 ELSE 0 END) AS drops
-       FROM events WHERE ts >= unixepoch('now', '-13 days') AND install_id != 'site'
+              SUM(CASE WHEN name = 'drop_link_used' THEN 1 ELSE 0 END) AS drop_used,
+              SUM(CASE WHEN name = 'drop_link_created' THEN 1 ELSE 0 END) AS drop_created
+       FROM events WHERE install_id != 'site' AND ts >= unixepoch('now', '-${days} days')
        GROUP BY d ORDER BY d`,
-    ).all<{ d: string; files: number; sync: number; drops: number }>(),
+    ).all<{ d: string; active: number; received: number; sent: number; sync: number; drop_used: number; drop_created: number }>(),
+    env.DB.prepare(
+      `SELECT platform, COUNT(*) AS n FROM events WHERE name = 'download'
+       AND ts >= unixepoch('now', '-${days} days') GROUP BY platform ORDER BY n DESC`,
+    ).all<Count & { platform: string }>(),
+    // True "new installs per day": each install's first-ever event, bucketed
+    // by day and restricted to the window.
+    env.DB.prepare(
+      `SELECT date(m, 'unixepoch') AS d, COUNT(*) AS n FROM (
+         SELECT install_id, MIN(ts) AS m FROM events
+         WHERE install_id != 'site' GROUP BY install_id
+       ) t WHERE m >= unixepoch('now', '-${days} days') GROUP BY d ORDER BY d`,
+    ).all<{ d: string; n: number }>(),
     env.DB.prepare(
       `SELECT COUNT(DISTINCT install_id) AS n FROM events WHERE install_id != 'site'`,
     ).first<Count>(),
@@ -216,15 +231,43 @@ async function stats(url: URL, env: Env): Promise<Response> {
          SUM(CASE WHEN name = 'sync_item_added' THEN 1 ELSE 0 END) AS sync_n,
          SUM(CASE WHEN name = 'drop_link_used' THEN 1 ELSE 0 END) AS drop_used_n,
          SUM(CASE WHEN name IN ('file_received','file_sent') THEN 1 ELSE 0 END) AS files_n
-       FROM events WHERE ts >= unixepoch('now', '-13 days') AND install_id != 'site'`,
+       FROM events WHERE ts >= unixepoch('now', '-${days} days') AND install_id != 'site'`,
     ).first<{ sync_n: number; drop_used_n: number; files_n: number }>(),
+    env.DB.prepare(
+      `SELECT date(ts, 'unixepoch') AS d, COUNT(*) AS n FROM events
+       WHERE name = 'download' AND ts >= unixepoch('now', '-${days} days')
+       GROUP BY d ORDER BY d`,
+    ).all<{ d: string; n: number }>(),
   ]);
+
+  // Merge the date-keyed views into one row per day.
+  const empty = () => ({ dau: 0, active: 0, received: 0, sent: 0, sync: 0, drop_used: 0, drop_created: 0, downloads: 0, new_installs: 0 });
+  const byDay = new Map<string, ReturnType<typeof empty>>();
+  const day = (d: string) => {
+    let r = byDay.get(d);
+    if (!r) byDay.set(d, (r = empty()));
+    return r;
+  };
+  for (const x of dau.results ?? []) day(x.d).dau = x.n;
+  for (const x of daily.results ?? []) {
+    const r = day(x.d);
+    r.active = x.active;
+    r.received = x.received;
+    r.sent = x.sent;
+    r.sync = x.sync;
+    r.drop_used = x.drop_used;
+    r.drop_created = x.drop_created;
+  }
+  for (const x of downloadDaily.results ?? []) day(x.d).downloads = x.n;
+  for (const x of newInstalls.results ?? []) day(x.d).new_installs = x.n;
+  const daySeries = [...byDay.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([d, r]) => ({ d, ...r }));
 
   return html(
     statsPage({
-      dau: dau.results ?? [],
+      daySeries,
       downloads: downloads.results ?? [],
-      transfers: transfers.results ?? [],
       installs: installs?.n ?? 0,
       versions: versions.results ?? [],
       funnel: {
@@ -238,6 +281,8 @@ async function stats(url: URL, env: Env): Promise<Response> {
         drop_used_n: jobs?.drop_used_n ?? 0,
         files_n: jobs?.files_n ?? 0,
       },
+      days,
+      token: env.STATS_TOKEN,
     }),
   );
 }
