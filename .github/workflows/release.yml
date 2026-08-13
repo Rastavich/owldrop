@@ -93,7 +93,15 @@ jobs:
       - name: Install NSIS and add makensis to PATH
         shell: pwsh
         run: |
-          choco install nsis -y --no-progress
+          # community.chocolatey.org is a CDN with routine 503s — retry it,
+          # same convention as the docker pulls in the linux job.
+          for ($i = 1; $i -le 3; $i++) {
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($i -eq 3) { exit 1 }
+            Write-Host "choco install attempt $i failed (exit $LASTEXITCODE) — retrying in 15s"
+            Start-Sleep -Seconds 15
+          }
           $dir = @(
             'C:\Program Files\NSIS',
             'C:\Program Files (x86)\NSIS',
@@ -317,8 +325,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev rpm
-      - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+      # The CLI itself links the wails `internal/operatingsystem` package
+      # (cgo + pkg-config), so on this runner it must compile against the
+      # GTK3/WebKit4.1 stack too — without the tag `go install` probes
+      # gtk4/webkitgtk-6.0 and dies before the app build even starts.
+      - name: Install wails3 CLI (gtk3)
+        run: go install -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
       - name: Package gtk3 deb + rpm
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
