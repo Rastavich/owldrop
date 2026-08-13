@@ -87,14 +87,26 @@ jobs:
           go-version-file: go.mod
       - name: Install wails3 CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
-      - name: Install NSIS
-        run: choco install nsis -y --no-progress
-      # The choco nsis package (a silent NSIS installer run) installs makensis
-      # to C:\Program Files (x86)\NSIS but never adds it to PATH — the runner
-      # needs it explicitly for `wails3 task windows:package`.
-      - name: Add NSIS to PATH
-        shell: bash
-        run: echo "C:\Program Files (x86)\NSIS" >> "$GITHUB_PATH"
+      # The choco nsis package installs makensis silently, without touching
+      # PATH, and its location has drifted across runner images — don't
+      # hardcode it. Find the binary and put its dir on PATH explicitly.
+      - name: Install NSIS and add makensis to PATH
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          $dir = @(
+            'C:\Program Files\NSIS',
+            'C:\Program Files (x86)\NSIS',
+            'C:\ProgramData\chocolatey\bin',
+            'C:\ProgramData\chocolatey\lib\nsis\tools\NSIS'
+          ) | Where-Object { Test-Path (Join-Path $_ 'makensis.exe') } | Select-Object -First 1
+          if (-not $dir) {
+            Write-Host '::error::makensis.exe not found after choco install nsis — no candidate dir contains it'
+            Get-ChildItem 'C:\Program Files','C:\Program Files (x86)','C:\ProgramData\chocolatey' -Filter 'makensis.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+            exit 1
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+          Write-Host "makensis via PATH: $dir"
       - name: Package (exe + NSIS installer)
         shell: bash
         run: |

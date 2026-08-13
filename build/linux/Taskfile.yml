@@ -111,13 +111,22 @@ tasks:
 
   package:gtk3:
     summary: Packages GTK3 + WebKit2GTK 4.1 deb/rpm (Ubuntu 24.04 LTS)
-    cmds:
-      - task: build
-        vars:
-          EXTRA_TAGS: gtk3
+    # Static build chain instead of `task: build` + EXTRA_TAGS: the var never
+    # survived the nested `task:` dispatch (go-task call vars don't propagate
+    # through the dynamically-templated task name in `build`), so the runner
+    # silently compiled the GTK4 stack and failed pkg-config on 24.04.
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+      - task: common:generate:icons
       - task: generate:dotdesktop
+    cmds:
+      - 'go build -tags production,gtk3 -trimpath -buildvcs=false -ldflags="-w -s -X main.appVersion=0.8.0" -o {{.BIN_DIR}}/{{.APP_NAME}}'
       - wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm-gtk3.yaml -out {{.ROOT_DIR}}/bin
       - wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm-gtk3.yaml -out {{.ROOT_DIR}}/bin
+    env:
+      GOOS: linux
+      CGO_ENABLED: 1
 
   create:appimage:
     summary: Creates an AppImage
