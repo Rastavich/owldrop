@@ -173,6 +173,38 @@ func isMCPNotification(req mcpReq) bool {
 	return req.JSONRPC == "2.0" && req.Method != "" && req.ID == nil
 }
 
+func isValidMCPID(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return false
+	}
+	switch trimmed[0] {
+	case '"':
+		var s string
+		return json.Unmarshal(raw, &s) == nil
+	case 'n':
+		return string(trimmed) == "null"
+	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		var n json.Number
+		return json.Unmarshal(raw, &n) == nil
+	default:
+		return false
+	}
+}
+
+func isValidMCPParams(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return false
+	}
+	switch trimmed[0] {
+	case '{', '[':
+		return true
+	default:
+		return false
+	}
+}
+
 func parseMCPRequest(raw json.RawMessage) (mcpReq, *mcpRPCError) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || trimmed[0] != '{' {
@@ -194,9 +226,15 @@ func parseMCPRequest(raw json.RawMessage) (mcpReq, *mcpRPCError) {
 		}
 	}
 	if v, ok := fields["id"]; ok {
+		if !isValidMCPID(v) {
+			return mcpReq{}, &mcpRPCError{Code: -32600, Message: "Invalid Request"}
+		}
 		req.ID = v
 	}
 	if v, ok := fields["params"]; ok {
+		if !isValidMCPParams(v) {
+			return mcpReq{ID: req.ID}, &mcpRPCError{Code: -32600, Message: "Invalid Request"}
+		}
 		req.Params = v
 	}
 	return req, nil
@@ -246,7 +284,7 @@ func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
 	}
 	req, rpcErr := parseMCPRequest(raw)
 	if rpcErr != nil {
-		writeRPC(w, nil, nil, rpcErr)
+		writeRPC(w, req.ID, nil, rpcErr)
 		return
 	}
 	if isMCPNotification(req) {

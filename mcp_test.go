@@ -216,6 +216,49 @@ func TestMcpTrailingGarbage(t *testing.T) {
 	}
 }
 
+func TestMcpRequestFieldTypes(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	s.port = 8976
+	h := s.mcpGuard(s.handleMCP)
+
+	post := func(body string) (int, string) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "http://100.64.0.1:8976/mcp", strings.NewReader(body))
+		r.Host = "100.64.0.1:8976"
+		r.RemoteAddr = "100.1.2.3:9"
+		r.Header.Set("Authorization", "Bearer tok")
+		r.Header.Set("Content-Type", "application/json")
+		h(w, r)
+		return w.Code, w.Body.String()
+	}
+
+	code, resp := post(`{"jsonrpc":"2.0","id":true,"method":"ping"}`)
+	if code != http.StatusOK || !strings.Contains(resp, "-32600") {
+		t.Fatalf("boolean id: %d %s", code, resp)
+	}
+	if strings.Contains(resp, `"id":true`) {
+		t.Fatalf("boolean id echoed in response: %s", resp)
+	}
+
+	code, resp = post(`{"jsonrpc":"2.0","id":1,"method":"ping","params":"nope"}`)
+	if code != http.StatusOK || !strings.Contains(resp, "-32600") {
+		t.Fatalf("primitive params: %d %s", code, resp)
+	}
+	if !strings.Contains(resp, `"id":1`) {
+		t.Fatalf("valid id not echoed for invalid params: %s", resp)
+	}
+
+	code, resp = post(`{"jsonrpc":"2.0","id":1,"method":"ping"}`)
+	if code != http.StatusOK || !strings.Contains(resp, `"id":1`) || !strings.Contains(resp, `"result"`) {
+		t.Fatalf("numeric id ping: %d %s", code, resp)
+	}
+
+	code, resp = post(`{"jsonrpc":"2.0","id":"req-1","method":"ping"}`)
+	if code != http.StatusOK || !strings.Contains(resp, `"id":"req-1"`) || !strings.Contains(resp, `"result"`) {
+		t.Fatalf("string id ping: %d %s", code, resp)
+	}
+}
+
 func TestMcpNotifications(t *testing.T) {
 	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
 	s.port = 8976
