@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -227,8 +228,19 @@ func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeRPC(w, nil, nil, &mcpRPCError{Code: -32700, Message: "parse error"})
+		return
+	}
+	body = bytes.TrimSpace(body)
+	dec := json.NewDecoder(bytes.NewReader(body))
 	var raw json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+	if err := dec.Decode(&raw); err != nil {
+		writeRPC(w, nil, nil, &mcpRPCError{Code: -32700, Message: "parse error"})
+		return
+	}
+	if dec.More() || len(bytes.TrimSpace(body[dec.InputOffset():])) > 0 {
 		writeRPC(w, nil, nil, &mcpRPCError{Code: -32700, Message: "parse error"})
 		return
 	}
