@@ -14,6 +14,41 @@ import (
 	"time"
 )
 
+func TestMcpSendDenyReason(t *testing.T) {
+	if got := mcpSendDenyReason("owned by another user"); !strings.Contains(got, "tagged") {
+		t.Fatalf("got %q", got)
+	}
+	if mcpSendDenyReason("available") != "" {
+		t.Fatal("available should send")
+	}
+	if mcpSendDenyReason("offline") == "" {
+		t.Fatal("offline should deny")
+	}
+	if mcpSendDenyReason("") == "" {
+		t.Fatal("missing availability should deny")
+	}
+}
+
+func TestMcpPeerArgsAcceptsOptionalPeers(t *testing.T) {
+	got, err := mcpPeerArgs(map[string]any{
+		"peer":  "node-1",
+		"peers": []string{"node-2", "node-3"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(got) != "[node-1 node-2 node-3]" {
+		t.Fatalf("peers = %v", got)
+	}
+}
+
+func TestMcpDecodeSendDataEnforcesDecodedLimit(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString(make([]byte, mcpSendFileMax+1))
+	if _, err := mcpDecodeSendData(encoded); err == nil || !strings.Contains(err.Error(), "too_large") {
+		t.Fatalf("oversize decoded payload error = %v", err)
+	}
+}
+
 func TestMcpGetFileTooLarge(t *testing.T) {
 	if mcpGetFileMax != 1<<20 {
 		t.Fatalf("cap %d", mcpGetFileMax)

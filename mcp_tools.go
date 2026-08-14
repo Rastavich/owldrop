@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
+
+	"tailscale.com/tailcfg"
 )
 
 const mcpGetFileMax = 1 << 20
@@ -13,6 +16,30 @@ const mcpSendFileMax = 32 << 20
 
 func mcpTooLarge(size int64) error {
 	return fmt.Errorf("too_large: size %d; use save_file", size)
+}
+
+func mcpSendDenyReason(reason string) string {
+	if isTaggedTaildropBlock(reason) {
+		return "tagged peers cannot receive Taildrop files"
+	}
+	if reason == "available" {
+		return ""
+	}
+	if reason == "" {
+		return "peer availability is unknown"
+	}
+	return "peer unavailable: " + reason
+}
+
+func mcpDecodeSendData(encoded string) ([]byte, error) {
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("data must be valid base64: %w", err)
+	}
+	if len(data) > mcpSendFileMax {
+		return nil, fmt.Errorf("too_large: decoded payload size %d exceeds %d", len(data), mcpSendFileMax)
+	}
+	return data, nil
 }
 
 func mcpStringArg(args map[string]any, name string, required bool) (string, error) {
@@ -49,6 +76,41 @@ func mcpFileArgs(args map[string]any, withDir bool) (name, dir, source string, e
 		return "", "", "", err
 	}
 	return name, dir, source, nil
+}
+
+func mcpPeerArgs(args map[string]any) ([]tailcfg.StableNodeID, error) {
+	peer, err := mcpStringArg(args, "peer", true)
+	if err != nil {
+		return nil, err
+	}
+	peers := []tailcfg.StableNodeID{tailcfg.StableNodeID(peer)}
+	extra, ok := args["peers"]
+	if !ok {
+		return peers, nil
+	}
+	var values []string
+	switch extra := extra.(type) {
+	case []string:
+		values = extra
+	case []any:
+		values = make([]string, 0, len(extra))
+		for _, value := range extra {
+			peer, ok := value.(string)
+			if !ok {
+				return nil, fmt.Errorf("peers must be an array of strings")
+			}
+			values = append(values, peer)
+		}
+	default:
+		return nil, fmt.Errorf("peers must be an array of strings")
+	}
+	for _, peer := range values {
+		if peer == "" {
+			return nil, fmt.Errorf("peers must be an array of strings")
+		}
+		peers = append(peers, tailcfg.StableNodeID(peer))
+	}
+	return peers, nil
 }
 
 func (s *server) mcpGetFile(ctx context.Context, name, source string) (map[string]any, error) {
@@ -111,6 +173,71 @@ func (s *server) mcpGetFile(ctx context.Context, name, source string) (map[strin
 
 func (s *server) mcpCallTool(ctx context.Context, name string, args map[string]any) (any, error) {
 	switch name {
+	case "list_devices":
+		devices, err := s.tsDevicesVisible(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]map[string]any, 0, len(devices))
+		for _, d := range devices {
+			out = append(out, map[string]any{
+				"id":       d.ID,
+				"name":     d.Name,
+				"os":       d.OS,
+				"online":   d.Online,
+				"taildrop": d.Taildrop,
+				"tagged":   isTaggedTaildropBlock(d.Taildrop),
+			})
+		}
+		return map[string]any{"devices": out}, nil
+	case "send_file":
+		peers, err := mcpPeerArgs(args)
+		if err != nil {
+			return nil, err
+		}
+		fileName, err := mcpStringArg(args, "name", true)
+		if err != nil {
+			return nil, err
+		}
+		if !validBaseName(fileName) {
+			return nil, fmt.Errorf("bad file name")
+		}
+		encoded, ok := args["data"]
+		if !ok {
+			return nil, fmt.Errorf("data required")
+		}
+		encodedData, ok := encoded.(string)
+		if !ok {
+			return nil, fmt.Errorf("data must be a string")
+		}
+		data, err := mcpDecodeSendData(encodedData)
+		if err != nil {
+			return nil, err
+		}
+
+		devices, err := s.tsDevicesVisible(ctx)
+		if err != nil {
+			return nil, err
+		}
+		byID := make(map[tailcfg.StableNodeID]device, len(devices))
+		for _, d := range devices {
+			byID[d.ID] = d
+		}
+		for _, peer := range peers {
+			d, ok := byID[peer]
+			if !ok {
+				return nil, fmt.Errorf("peer %q is not available", peer)
+			}
+			if reason := mcpSendDenyReason(d.Taildrop); reason != "" {
+				return nil, fmt.Errorf("peer %q: %s", peer, reason)
+			}
+		}
+		for _, peer := range peers {
+			if err := s.sendOne(ctx, "mcp-"+newToken(), peer, fileName, int64(len(data)), bytes.NewReader(data), nil); err != nil {
+				return nil, err
+			}
+		}
+		return map[string]any{"ok": true}, nil
 	case "list_inbox":
 		files, err := s.combinedInbox(ctx)
 		if err != nil {
