@@ -379,7 +379,11 @@ func (s *server) mcpCallTool(ctx context.Context, name string, args map[string]a
 		maxUses := 0
 		if value, ok := args["max_uses"]; ok {
 			number, valid := value.(float64)
-			if !valid || number < 0 || number != math.Trunc(number) || number > float64(^uint(0)>>1) {
+			if !valid ||
+				math.IsNaN(number) || math.IsInf(number, 0) ||
+				number < 0 ||
+				number != math.Trunc(number) ||
+				number >= 1<<63 {
 				return nil, fmt.Errorf("max_uses must be a non-negative integer")
 			}
 			maxUses = int(number)

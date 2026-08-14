@@ -97,6 +97,21 @@ func TestMcpCreateDropLinkDoesNotEnableFunnel(t *testing.T) {
 	}
 }
 
+func TestMcpCreateDropLinkMaxUsesOverflow(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	before := len(s.drops.list())
+	_, err := s.mcpCallTool(t.Context(), "create_drop_link", map[string]any{
+		"name":     "overflow",
+		"max_uses": 9.223372036854776e+18, // 2^63; int() would overflow negative on amd64
+	})
+	if err == nil {
+		t.Fatal("expected error for overflowing max_uses")
+	}
+	if len(s.drops.list()) != before {
+		t.Fatal("overflowing max_uses created a link")
+	}
+}
+
 func TestMcpCreateDropLinkOptionsAndExistingFunnel(t *testing.T) {
 	s := newServerDir(&config{}, t.TempDir())
 	s.port = 8976
