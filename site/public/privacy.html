@@ -66,7 +66,7 @@
       <li>A local history of received and sent files.</li>
       <li>A small config file: your save folder, notification preferences, an <strong>anonymous install identifier</strong>, and your telemetry on/off choice.</li>
       <li>Your ntfy topic and server, <em>only if</em> you enable phone notifications in Settings.</li>
-      <li>An optional <strong>agent access token</strong>, <em>only if</em> you enable Agent access in Settings — Owldrop stores the token locally and never sends it to owldrop.app. Tailnet agents you configure must be given the token to authenticate. This is not a cloud service.</li>
+      <li>An optional <strong>agent access token</strong>, <em>only if</em> you enable Agent access in Settings — Owldrop stores the optional MCP agent token locally and never sends it to owldrop.app. If you enable Agent access, tailnet agents you give that token can send and receive files.</li>
     </ul>
     <p>Files transfer <strong>directly between your devices over your own Tailscale tailnet</strong>, through the <code>tailscaled</code> running on your machine. Owldrop has no servers that route, host, or inspect file contents — we never see what you send. The transfer is subject to Tailscale's encryption and your tailnet's access controls; see Tailscale's own policies for how their service handles traffic.</p>
 
