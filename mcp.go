@@ -363,6 +363,7 @@ func writeRPC(w http.ResponseWriter, id json.RawMessage, result any, rpcErr *mcp
 }
 
 func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 48<<20)
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

@@ -512,20 +512,23 @@ func TestMcpGuard(t *testing.T) {
 	s.port = 8976
 	ok := s.mcpGuard(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 
-	hit := func(enabled bool, token, host, remote, path string) int {
+	hit := func(enabled bool, header, token, host, remote, path string) int {
 		s.cfg.McpEnabled = enabled
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodPost, "http://"+host+path, nil)
 		r.Host = host
 		r.RemoteAddr = remote
 		if token != "" {
-			r.Header.Set("Authorization", "Bearer "+token)
+			if header == "Authorization" {
+				token = "Bearer " + token
+			}
+			r.Header.Set(header, token)
 		}
 		ok(w, r)
 		return w.Code
 	}
 
-	if code := hit(false, "aabbcc", "100.64.0.1:8976", "100.1.2.3:9", "/mcp"); code != http.StatusNotFound {
+	if code := hit(false, "Authorization", "aabbcc", "100.64.0.1:8976", "100.1.2.3:9", "/mcp"); code != http.StatusNotFound {
 		t.Errorf("disabled: got %d, want 404", code)
 	}
 	s.cfg.McpEnabled = true
@@ -534,15 +537,25 @@ func TestMcpGuard(t *testing.T) {
 	s.serving = newServingManager(&fakeServeStore{cfg: &serveConfigWire{
 		AllowFunnel: map[string]bool{"desktop.taila4569.ts.net:443": true},
 	}})
-	if code := hit(true, "aabbcc", "desktop.taila4569.ts.net", "127.0.0.1:1", "/mcp"); code != http.StatusNotFound {
+	if code := hit(true, "Authorization", "aabbcc", "desktop.taila4569.ts.net", "127.0.0.1:1", "/mcp"); code != http.StatusNotFound {
 		t.Errorf("funnel /mcp: got %d, want 404", code)
 	}
-	s.cfg.McpEnabled = true
-	if code := hit(true, "wrong", "100.64.0.1:8976", "100.1.2.3:9", "/mcp"); code != http.StatusUnauthorized {
+	if code := hit(true, "Authorization", "aabbcc", "example.com", "100.1.2.3:9", "/mcp"); code != http.StatusForbidden {
+		t.Errorf("invalid host: got %d, want 403", code)
+	}
+	s.cfg.McpToken = ""
+	if code := hit(true, "", "", "100.64.0.1:8976", "100.1.2.3:9", "/mcp"); code != http.StatusNotFound {
+		t.Errorf("empty configured token: got %d, want 404", code)
+	}
+	s.cfg.McpToken = "aabbcc"
+	if code := hit(true, "Authorization", "wrong", "100.64.0.1:8976", "100.1.2.3:9", "/mcp"); code != http.StatusUnauthorized {
 		t.Errorf("bad token: got %d, want 401", code)
 	}
-	if code := hit(true, "aabbcc", "100.64.0.1:8976", "100.1.2.3:9", "/mcp"); code != http.StatusOK {
+	if code := hit(true, "Authorization", "aabbcc", "100.64.0.1:8976", "100.1.2.3:9", "/mcp"); code != http.StatusOK {
 		t.Errorf("good: got %d, want 200", code)
+	}
+	if code := hit(true, "X-Owldrop-Token", "aabbcc", "100.64.0.1:8976", "100.1.2.3:9", "/mcp"); code != http.StatusOK {
+		t.Errorf("X-Owldrop-Token: got %d, want 200", code)
 	}
 }
 
@@ -673,6 +686,26 @@ func TestMcpParseErrorVsInvalidRequest(t *testing.T) {
 		if strings.Contains(resp, "-32700") {
 			t.Fatalf("invalid request %q returned parse error: %s", tc.body, resp)
 		}
+	}
+}
+
+func TestMcpRejectsOversizedRequestBody(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	s.port = 8976
+	h := s.mcpGuard(s.handleMCP)
+	body := `{"jsonrpc":"2.0","id":1,"method":"ping","padding":"` +
+		strings.Repeat("x", 48<<20) + `"}`
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "http://100.64.0.1:8976/mcp", strings.NewReader(body))
+	r.Host = "100.64.0.1:8976"
+	r.RemoteAddr = "100.1.2.3:9"
+	r.Header.Set("Authorization", "Bearer tok")
+	r.Header.Set("Content-Type", "application/json")
+	h(w, r)
+
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "-32700") {
+		t.Fatalf("oversized request: %d %s", w.Code, w.Body.String())
 	}
 }
 
