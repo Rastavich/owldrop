@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
@@ -171,6 +172,35 @@ func isMCPNotification(req mcpReq) bool {
 	return req.JSONRPC == "2.0" && req.Method != "" && req.ID == nil
 }
 
+func parseMCPRequest(raw json.RawMessage) (mcpReq, *mcpRPCError) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return mcpReq{}, &mcpRPCError{Code: -32600, Message: "Invalid Request"}
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &fields); err != nil {
+		return mcpReq{}, &mcpRPCError{Code: -32600, Message: "Invalid Request"}
+	}
+	var req mcpReq
+	if v, ok := fields["jsonrpc"]; ok {
+		if err := json.Unmarshal(v, &req.JSONRPC); err != nil {
+			return mcpReq{}, &mcpRPCError{Code: -32600, Message: "Invalid Request"}
+		}
+	}
+	if v, ok := fields["method"]; ok {
+		if err := json.Unmarshal(v, &req.Method); err != nil {
+			return mcpReq{}, &mcpRPCError{Code: -32600, Message: "Invalid Request"}
+		}
+	}
+	if v, ok := fields["id"]; ok {
+		req.ID = v
+	}
+	if v, ok := fields["params"]; ok {
+		req.Params = v
+	}
+	return req, nil
+}
+
 func writeRPC(w http.ResponseWriter, id json.RawMessage, result any, rpcErr *mcpRPCError) {
 	w.Header().Set("Content-Type", "application/json")
 	if rpcErr != nil {
@@ -197,9 +227,14 @@ func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var req mcpReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var raw json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		writeRPC(w, nil, nil, &mcpRPCError{Code: -32700, Message: "parse error"})
+		return
+	}
+	req, rpcErr := parseMCPRequest(raw)
+	if rpcErr != nil {
+		writeRPC(w, nil, nil, rpcErr)
 		return
 	}
 	if isMCPNotification(req) {

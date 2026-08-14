@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -148,6 +149,44 @@ func TestMcpMalformedWithoutID(t *testing.T) {
 		}
 		if strings.Contains(resp, `"id":1`) {
 			t.Fatalf("malformed without id %q: spurious id in response: %s", body, resp)
+		}
+	}
+}
+
+func TestMcpParseErrorVsInvalidRequest(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	s.port = 8976
+	h := s.mcpGuard(s.handleMCP)
+
+	post := func(body string) (int, string) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "http://100.64.0.1:8976/mcp", strings.NewReader(body))
+		r.Host = "100.64.0.1:8976"
+		r.RemoteAddr = "100.1.2.3:9"
+		r.Header.Set("Authorization", "Bearer tok")
+		r.Header.Set("Content-Type", "application/json")
+		h(w, r)
+		return w.Code, w.Body.String()
+	}
+
+	code, resp := post("{")
+	if code != http.StatusOK || !strings.Contains(resp, "-32700") {
+		t.Fatalf("invalid JSON: %d %s", code, resp)
+	}
+
+	for _, tc := range []struct {
+		body string
+		code int
+	}{
+		{body: "[]", code: -32600},
+		{body: `{"jsonrpc":"2.0","method":1}`, code: -32600},
+	} {
+		code, resp := post(tc.body)
+		if code != http.StatusOK || !strings.Contains(resp, fmt.Sprintf("%d", tc.code)) {
+			t.Fatalf("invalid request %q: %d %s", tc.body, code, resp)
+		}
+		if strings.Contains(resp, "-32700") {
+			t.Fatalf("invalid request %q returned parse error: %s", tc.body, resp)
 		}
 	}
 }
