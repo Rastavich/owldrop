@@ -59,3 +59,35 @@ func TestMcpGuard(t *testing.T) {
 		t.Errorf("good: got %d, want 200", code)
 	}
 }
+
+func TestMcpInitializeAndListTools(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	s.port = 8976
+	h := s.mcpGuard(s.handleMCP)
+
+	post := func(body string) (int, string) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "http://100.64.0.1:8976/mcp", strings.NewReader(body))
+		r.Host = "100.64.0.1:8976"
+		r.RemoteAddr = "100.1.2.3:9"
+		r.Header.Set("Authorization", "Bearer tok")
+		r.Header.Set("Content-Type", "application/json")
+		h(w, r)
+		return w.Code, w.Body.String()
+	}
+
+	code, body := post(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}`)
+	if code != 200 || !strings.Contains(body, `"protocolVersion":"2025-03-26"`) || !strings.Contains(body, `"owldrop"`) {
+		t.Fatalf("initialize: %d %s", code, body)
+	}
+	_, body = post(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
+	for _, name := range []string{
+		"list_inbox", "save_file", "delete_file", "get_file",
+		"list_devices", "send_file", "list_sync", "post_sync",
+		"create_drop_link", "list_drop_links",
+	} {
+		if !strings.Contains(body, `"`+name+`"`) {
+			t.Errorf("tools/list missing %s: %s", name, body)
+		}
+	}
+}

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -54,5 +56,184 @@ func (s *server) mcpGuard(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		next(w, r)
+	}
+}
+
+type mcpReq struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+}
+
+type mcpTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	InputSchema any    `json:"inputSchema"`
+}
+
+type mcpRPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+func mcpObjectSchema(properties map[string]any, required ...string) map[string]any {
+	s := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+	if len(required) > 0 {
+		s["required"] = required
+	}
+	return s
+}
+
+var mcpToolList = []mcpTool{
+	{
+		Name:        "list_inbox",
+		Description: "List files waiting in the inbox (Taildrop and drop links).",
+		InputSchema: mcpObjectSchema(map[string]any{}),
+	},
+	{
+		Name:        "save_file",
+		Description: "Save an inbox file to disk on this machine.",
+		InputSchema: mcpObjectSchema(map[string]any{
+			"name":   map[string]any{"type": "string", "description": "File name in the inbox"},
+			"dir":    map[string]any{"type": "string", "description": "Optional directory to save into"},
+			"source": map[string]any{"type": "string", "enum": []string{"", "link"}, "description": "Inbox source: taildrop (default) or link"},
+		}, "name"),
+	},
+	{
+		Name:        "delete_file",
+		Description: "Delete a file from the inbox without saving.",
+		InputSchema: mcpObjectSchema(map[string]any{
+			"name":   map[string]any{"type": "string", "description": "File name in the inbox"},
+			"source": map[string]any{"type": "string", "enum": []string{"", "link"}, "description": "Inbox source: taildrop (default) or link"},
+		}, "name"),
+	},
+	{
+		Name:        "get_file",
+		Description: "Read a small inbox file (≤1 MiB) as base64. Use save_file for larger files.",
+		InputSchema: mcpObjectSchema(map[string]any{
+			"name":   map[string]any{"type": "string", "description": "File name in the inbox"},
+			"source": map[string]any{"type": "string", "enum": []string{"", "link"}, "description": "Inbox source: taildrop (default) or link"},
+		}, "name"),
+	},
+	{
+		Name: "list_devices",
+		Description: "List tailnet devices visible in the send picker. " +
+			"Do not send_file to tagged peers — install Owldrop on that box and mint a drop link there instead.",
+		InputSchema: mcpObjectSchema(map[string]any{}),
+	},
+	{
+		Name: "send_file",
+		Description: "Send a file to a tailnet device via Taildrop. " +
+			"Tagged peers are rejected — mint a drop link on that box instead.",
+		InputSchema: mcpObjectSchema(map[string]any{
+			"peer":  map[string]any{"type": "string", "description": "Target device ID"},
+			"name":  map[string]any{"type": "string", "description": "File name"},
+			"data":  map[string]any{"type": "string", "description": "File contents (base64)"},
+			"peers": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Optional extra device IDs"},
+		}, "peer", "name", "data"),
+	},
+	{
+		Name:        "list_sync",
+		Description: "List Sync clipboard items on this machine.",
+		InputSchema: mcpObjectSchema(map[string]any{}),
+	},
+	{
+		Name:        "post_sync",
+		Description: "Post text or a small file to Sync.",
+		InputSchema: mcpObjectSchema(map[string]any{
+			"text": map[string]any{"type": "string", "description": "Text to post (≤64 KiB)"},
+			"name": map[string]any{"type": "string", "description": "Optional file name when posting a file"},
+			"data": map[string]any{"type": "string", "description": "Optional file contents (base64, ≤4 MiB)"},
+		}),
+	},
+	{
+		Name:        "create_drop_link",
+		Description: "Create a drop link for uploading a file to this machine. Does not enable Public access.",
+		InputSchema: mcpObjectSchema(map[string]any{
+			"name":        map[string]any{"type": "string", "description": "Link label / expected file name"},
+			"ttl_minutes": map[string]any{"type": "number", "description": "Lifetime in minutes (default 60, max 7 days)"},
+			"max_uses":    map[string]any{"type": "integer", "description": "Maximum uploads (0 = unlimited)"},
+			"single":      map[string]any{"type": "boolean", "description": "Single-use link (max_uses=1)"},
+		}, "name"),
+	},
+	{
+		Name:        "list_drop_links",
+		Description: "List active drop links on this machine.",
+		InputSchema: mcpObjectSchema(map[string]any{}),
+	},
+}
+
+func writeRPC(w http.ResponseWriter, id json.RawMessage, result any, rpcErr *mcpRPCError) {
+	w.Header().Set("Content-Type", "application/json")
+	if rpcErr != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      id,
+			"error":   rpcErr,
+		})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"result":  result,
+	})
+}
+
+func (s *server) mcpCallTool(_ context.Context, _ string, _ map[string]any) (any, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req mcpReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeRPC(w, nil, nil, &mcpRPCError{Code: -32700, Message: "parse error"})
+		return
+	}
+	switch req.Method {
+	case "initialize":
+		writeRPC(w, req.ID, map[string]any{
+			"protocolVersion": "2025-03-26",
+			"capabilities": map[string]any{
+				"tools": map[string]any{},
+			},
+			"serverInfo": map[string]any{
+				"name":    "owldrop",
+				"version": appVersion,
+			},
+		}, nil)
+	case "notifications/initialized":
+		w.WriteHeader(http.StatusNoContent)
+	case "ping":
+		writeRPC(w, req.ID, map[string]any{}, nil)
+	case "tools/list":
+		writeRPC(w, req.ID, map[string]any{"tools": mcpToolList}, nil)
+	case "tools/call":
+		var params struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			writeRPC(w, req.ID, nil, &mcpRPCError{Code: -32602, Message: "invalid params"})
+			return
+		}
+		if params.Arguments == nil {
+			params.Arguments = map[string]any{}
+		}
+		if _, err := s.mcpCallTool(r.Context(), params.Name, params.Arguments); err != nil {
+			writeRPC(w, req.ID, nil, &mcpRPCError{Code: -32000, Message: err.Error()})
+			return
+		}
+		writeRPC(w, req.ID, map[string]any{}, nil)
+	default:
+		writeRPC(w, req.ID, nil, &mcpRPCError{Code: -32601, Message: "Method not found"})
 	}
 }
