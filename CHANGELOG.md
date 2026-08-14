@@ -8,6 +8,14 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [Unreleased]
+
+### Added
+
+- **Agent MCP (tailnet)** — Streamable HTTP MCP on `/mcp` for tailnet agents:
+  inbox, send, Sync, and drop links via a dedicated bearer token (off by
+  default). Public Funnel URLs do not expose MCP.
+
 ## [0.8.0]
 
 ### Added

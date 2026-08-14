@@ -80,6 +80,30 @@ hostname where nothing else is reachable.)
   text ≤ 64 KiB, files ≤ 4 GiB). Never exposed through Funnel
 - **History export** — one click dumps the full log as JSON
 
+## Agent MCP (tailnet)
+
+Agents on your tailnet (Hermes, a CI tsnet node, a coding agent on another
+device) can send and receive files through Owldrop without opening the GTK
+window. Enable **Agent access** in Settings (requires LAN or HTTPS Serve) and
+copy the MCP URL and bearer token from the card.
+
+Example Cursor `mcp.json` (or any MCP client that supports Streamable HTTP):
+
+```json
+{
+  "mcpServers": {
+    "owldrop": {
+      "url": "http://100.x.x.x:8976/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+Use your tailnet IP from Settings — not the public `*.ts.net` hostname. Public
+access (Funnel) exposes drop links only; `https://<machine>.ts.net/mcp` returns
+404 even with a valid token.
+
 ## Docker / NAS (Unraid, Synology, …)
 
 Taildrop cannot send to tagged devices
