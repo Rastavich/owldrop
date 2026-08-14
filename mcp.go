@@ -101,16 +101,20 @@ func (s *server) handleMcpStatus(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.cfgMu.Lock()
-		s.cfg.McpEnabled = req.Enabled
-		if req.Enabled && s.cfg.McpToken == "" {
-			s.cfg.McpToken = newToken()
-		}
 		c := *s.cfg
+		c.McpEnabled = req.Enabled
+		if req.Enabled && c.McpToken == "" {
+			c.McpToken = newToken()
+		}
 		s.cfgMu.Unlock()
 		if err := c.save(); err != nil {
 			writeErr(w, err)
 			return
 		}
+		s.cfgMu.Lock()
+		s.cfg.McpEnabled = c.McpEnabled
+		s.cfg.McpToken = c.McpToken
+		s.cfgMu.Unlock()
 		writeJSON(w, s.mcpStatusResponse())
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -141,16 +145,20 @@ func (s *server) handleMcpRotate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.cfgMu.Lock()
-	s.cfg.McpToken = newToken()
-	if req.Enabled != nil {
-		s.cfg.McpEnabled = *req.Enabled
-	}
 	c := *s.cfg
+	c.McpToken = newToken()
+	if req.Enabled != nil {
+		c.McpEnabled = *req.Enabled
+	}
 	s.cfgMu.Unlock()
 	if err := c.save(); err != nil {
 		writeErr(w, err)
 		return
 	}
+	s.cfgMu.Lock()
+	s.cfg.McpToken = c.McpToken
+	s.cfg.McpEnabled = c.McpEnabled
+	s.cfgMu.Unlock()
 	writeJSON(w, map[string]any{
 		"mcpToken":   c.McpToken,
 		"mcpUrl":     s.mcpURL(),

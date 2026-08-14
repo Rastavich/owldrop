@@ -943,17 +943,23 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if req.TrustedDomains != nil {
 			s.cfg.TrustedDomains = normalizeDomains(*req.TrustedDomains)
 		}
+		c := *s.cfg
 		if req.McpEnabled != nil {
-			s.cfg.McpEnabled = *req.McpEnabled
-			if *req.McpEnabled && s.cfg.McpToken == "" {
-				s.cfg.McpToken = newToken()
+			c.McpEnabled = *req.McpEnabled
+			if *req.McpEnabled && c.McpToken == "" {
+				c.McpToken = newToken()
 			}
 		}
-		c := *s.cfg
 		s.cfgMu.Unlock()
-		if err := s.cfg.save(); err != nil {
+		if err := c.save(); err != nil {
 			writeErr(w, err)
 			return
+		}
+		if req.McpEnabled != nil {
+			s.cfgMu.Lock()
+			s.cfg.McpEnabled = c.McpEnabled
+			s.cfg.McpToken = c.McpToken
+			s.cfgMu.Unlock()
 		}
 		writeJSON(w, s.configResponse(c))
 		if restart {
