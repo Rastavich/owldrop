@@ -118,6 +118,8 @@ type config struct {
 	// operator lists the hostname the proxy serves). A trusted domain and
 	// all of its subdomains pass the host check.
 	TrustedDomains []string `json:"trusted_domains"`
+	McpEnabled     bool     `json:"mcp_enabled"`
+	McpToken       string   `json:"mcp_token"`
 }
 
 func configPath() string {
@@ -166,6 +168,8 @@ func loadConfig() *config {
 		Token          string            `json:"token"`
 		HiddenDevices  map[string]bool   `json:"hidden_devices"`
 		TrustedDomains []string          `json:"trusted_domains"`
+		McpEnabled     bool              `json:"mcp_enabled"`
+		McpToken       string            `json:"mcp_token"`
 	}
 	if b, err := os.ReadFile(configPath()); err == nil {
 		json.Unmarshal(b, &f)
@@ -178,6 +182,8 @@ func loadConfig() *config {
 		Token:          f.Token,
 		HiddenDevices:  f.HiddenDevices,
 		TrustedDomains: normalizeDomains(f.TrustedDomains),
+		McpEnabled:     f.McpEnabled,
+		McpToken:       f.McpToken,
 		NotifyArrival:  true,
 		NotifySave:     true,
 		NotifySend:     true,
