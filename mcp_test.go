@@ -75,6 +75,88 @@ func TestMcpCallListInboxEmpty(t *testing.T) {
 	}
 }
 
+func TestMcpCreateDropLinkDoesNotEnableFunnel(t *testing.T) {
+	s := newServerDir(&config{McpEnabled: true, McpToken: "tok", LAN: true}, t.TempDir())
+	s.selfDNSName()
+	s.selfDNS = "desk.tail.ts.net"
+	fs := &fakeServeStore{cfg: &serveConfigWire{}}
+	s.serving = newServingManager(fs)
+	out, err := s.mcpCallTool(context.Background(), "create_drop_link", map[string]any{"name": "agent", "ttl_minutes": 60.0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := out.(map[string]any)
+	if _, ok := m["share_url"].(string); !ok {
+		t.Fatalf("missing share_url: %#v", out)
+	}
+	if s.funnelActive() {
+		t.Fatal("create_drop_link enabled Funnel")
+	}
+	if m["public_url"] != nil && m["public_url"] != "" {
+		t.Fatal("public_url set without Funnel")
+	}
+}
+
+func TestMcpCreateDropLinkOptionsAndExistingFunnel(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	s.port = 8976
+	s.selfDNSName()
+	s.selfDNS = "desk.tail.ts.net"
+	s.serving = newServingManager(&fakeServeStore{cfg: &serveConfigWire{
+		AllowFunnel: map[string]bool{"desk.tail.ts.net:443": true},
+	}})
+
+	before := time.Now()
+	out, err := s.mcpCallTool(t.Context(), "create_drop_link", map[string]any{
+		"name":        "single",
+		"ttl_minutes": float64(8 * 24 * 60),
+		"max_uses":    4.0,
+		"single":      true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.(map[string]any)
+	link := got["link"].(*dropLink)
+	if link.MaxUses != 1 {
+		t.Fatalf("max uses = %d, want 1", link.MaxUses)
+	}
+	wantExpiry := before.Add(7 * 24 * time.Hour)
+	if link.Expires.Before(wantExpiry) || link.Expires.After(wantExpiry.Add(time.Second)) {
+		t.Fatalf("expiry = %v, want about %v", link.Expires, wantExpiry)
+	}
+	wantPublic := "https://desk.tail.ts.net/drop/" + link.Token
+	if got["public_url"] != wantPublic || got["share_url"] != wantPublic {
+		t.Fatalf("drop-link URLs = %#v, want public %q", got, wantPublic)
+	}
+	if !s.funnelActive() {
+		t.Fatal("create_drop_link disabled existing Funnel")
+	}
+}
+
+func TestMcpListDropLinksSkipsRevokedAndExpired(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	active := s.drops.create("active", time.Hour, 0, 0)
+	revoked := s.drops.create("revoked", time.Hour, 0, 0)
+	s.drops.revoke(revoked.Token)
+	s.drops.create("expired", -time.Minute, 0, 0)
+
+	out, err := s.mcpCallTool(t.Context(), "list_drop_links", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	links := out.(map[string]any)["links"].([]map[string]any)
+	if len(links) != 1 {
+		t.Fatalf("links = %#v, want only active link", links)
+	}
+	if links[0]["link"].(*dropLink).Token != active.Token {
+		t.Fatalf("active link = %#v, want token %q", links[0], active.Token)
+	}
+	if links[0]["share_url"] == "" {
+		t.Fatalf("missing share_url: %#v", links[0])
+	}
+}
+
 func TestMcpCallPostAndListSyncText(t *testing.T) {
 	s := newServerDir(&config{}, t.TempDir())
 	if _, err := s.mcpCallTool(t.Context(), "post_sync", map[string]any{"text": "hello"}); err != nil {

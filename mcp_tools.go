@@ -6,8 +6,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"time"
 
 	"tailscale.com/tailcfg"
 )
@@ -355,6 +357,85 @@ func (s *server) mcpCallTool(ctx context.Context, name string, args map[string]a
 		tele.event("sync_item_added")
 		s.syncChanged()
 		return item, nil
+	case "create_drop_link":
+		linkName, err := mcpStringArg(args, "name", true)
+		if err != nil {
+			return nil, err
+		}
+		ttlMinutes := 60.0
+		if value, ok := args["ttl_minutes"]; ok {
+			var valid bool
+			ttlMinutes, valid = value.(float64)
+			if !valid || math.IsNaN(ttlMinutes) || math.IsInf(ttlMinutes, 0) {
+				return nil, fmt.Errorf("ttl_minutes must be a number")
+			}
+		}
+		if ttlMinutes <= 0 {
+			ttlMinutes = 60
+		}
+		if ttlMinutes > 7*24*60 {
+			ttlMinutes = 7 * 24 * 60
+		}
+		maxUses := 0
+		if value, ok := args["max_uses"]; ok {
+			number, valid := value.(float64)
+			if !valid || number < 0 || number != math.Trunc(number) || number > float64(^uint(0)>>1) {
+				return nil, fmt.Errorf("max_uses must be a non-negative integer")
+			}
+			maxUses = int(number)
+		}
+		if value, ok := args["single"]; ok {
+			single, valid := value.(bool)
+			if !valid {
+				return nil, fmt.Errorf("single must be a boolean")
+			}
+			if single {
+				maxUses = 1
+			}
+		}
+		link := s.drops.create(linkName, time.Duration(ttlMinutes*float64(time.Minute)), maxUses, 0)
+		localURL := s.dropBaseURL() + "drop/" + link.Token
+		publicURL := ""
+		if s.funnelEnabled() {
+			publicURL = s.funnelPublicURL() + "drop/" + link.Token
+		}
+		result := map[string]any{
+			"link":      link,
+			"local_url": localURL,
+			"share_url": shareableDropURL(localURL, publicURL),
+		}
+		if publicURL != "" {
+			result["public_url"] = publicURL
+		}
+		return result, nil
+	case "list_drop_links":
+		publicBaseURL := ""
+		if s.funnelEnabled() {
+			publicBaseURL = s.funnelPublicURL()
+		}
+		localBaseURL := s.dropBaseURL()
+		now := time.Now()
+		links := make([]map[string]any, 0)
+		for _, link := range s.drops.list() {
+			if link.Revoked || now.After(link.Expires) {
+				continue
+			}
+			localURL := localBaseURL + "drop/" + link.Token
+			publicURL := ""
+			if publicBaseURL != "" {
+				publicURL = publicBaseURL + "drop/" + link.Token
+			}
+			row := map[string]any{
+				"link":      link,
+				"local_url": localURL,
+				"share_url": shareableDropURL(localURL, publicURL),
+			}
+			if publicURL != "" {
+				row["public_url"] = publicURL
+			}
+			links = append(links, row)
+		}
+		return map[string]any{"links": links}, nil
 	default:
 		return nil, fmt.Errorf("unknown tool")
 	}
