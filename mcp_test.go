@@ -119,6 +119,39 @@ func TestMcpInvalidJSONRPC(t *testing.T) {
 	}
 }
 
+func TestMcpMalformedWithoutID(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	s.port = 8976
+	h := s.mcpGuard(s.handleMCP)
+
+	post := func(body string) (int, string) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "http://100.64.0.1:8976/mcp", strings.NewReader(body))
+		r.Host = "100.64.0.1:8976"
+		r.RemoteAddr = "100.1.2.3:9"
+		r.Header.Set("Authorization", "Bearer tok")
+		r.Header.Set("Content-Type", "application/json")
+		h(w, r)
+		return w.Code, w.Body.String()
+	}
+
+	for _, body := range []string{
+		`{"jsonrpc":"1.0","method":"ping"}`,
+		`{"jsonrpc":"2.0"}`,
+	} {
+		code, resp := post(body)
+		if code != http.StatusOK {
+			t.Fatalf("malformed without id %q: got HTTP %d, want 200", body, code)
+		}
+		if !strings.Contains(resp, "-32600") {
+			t.Fatalf("malformed without id %q: missing -32600: %s", body, resp)
+		}
+		if strings.Contains(resp, `"id":1`) {
+			t.Fatalf("malformed without id %q: spurious id in response: %s", body, resp)
+		}
+	}
+}
+
 func TestMcpNotifications(t *testing.T) {
 	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
 	s.port = 8976
