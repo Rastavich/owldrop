@@ -75,6 +75,81 @@ func TestMcpCallListInboxEmpty(t *testing.T) {
 	}
 }
 
+func TestMcpCallPostAndListSyncText(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	if _, err := s.mcpCallTool(t.Context(), "post_sync", map[string]any{"text": "hello"}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := s.mcpCallTool(t.Context(), "list_sync", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := out.(map[string]any)["items"].([]syncItem)
+	if len(items) != 1 || items[0].Text != "hello" {
+		t.Fatalf("list_sync items = %+v", items)
+	}
+}
+
+func TestMcpCallListSyncTruncatesTextByRunes(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	text := strings.Repeat("界", 2049)
+	if _, err := s.sync.addText(text); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := s.mcpCallTool(t.Context(), "list_sync", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := out.(map[string]any)["items"].([]syncItem)[0]
+	if got := len([]rune(item.Text)); got != 2048 {
+		t.Fatalf("list_sync text runes = %d, want 2048", got)
+	}
+}
+
+func TestMcpCallPostSyncFile(t *testing.T) {
+	dir := t.TempDir()
+	s := newServerDir(&config{}, dir)
+	payload := []byte("sync file payload")
+	out, err := s.mcpCallTool(t.Context(), "post_sync", map[string]any{
+		"name": "note.txt",
+		"data": base64.StdEncoding.EncodeToString(payload),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	item := out.(syncItem)
+	if item.Kind != "file" || item.Name != "note.txt" || item.Size != int64(len(payload)) {
+		t.Fatalf("post_sync item = %+v", item)
+	}
+	path := filepath.Join(dir, syncDirName, item.ID+"-"+item.Name)
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(payload) {
+		t.Fatalf("stored data = %q, err = %v", got, err)
+	}
+}
+
+func TestMcpCallPostSyncFileLimitAndArguments(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	oversized := base64.StdEncoding.EncodeToString(make([]byte, (4<<20)+1))
+	for _, args := range []map[string]any{
+		{},
+		{"name": "note.txt"},
+		{"data": base64.StdEncoding.EncodeToString([]byte("data"))},
+		{"name": "../note.txt", "data": base64.StdEncoding.EncodeToString([]byte("data"))},
+		{"name": "large.bin", "data": oversized},
+	} {
+		if _, err := s.mcpCallTool(t.Context(), "post_sync", args); err == nil {
+			t.Errorf("post_sync(%#v) succeeded", args)
+		}
+	}
+	if len(s.sync.list()) != 0 {
+		t.Fatal("invalid post_sync added an item")
+	}
+}
+
 func mcpStoreLinkFile(t *testing.T, s *server, name, content string) {
 	t.Helper()
 	link := s.drops.create("test sender", time.Hour, 0, 0)

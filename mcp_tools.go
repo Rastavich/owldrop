@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"tailscale.com/tailcfg"
 )
 
 const mcpGetFileMax = 1 << 20
 const mcpSendFileMax = 32 << 20
+const mcpSyncFileMax = 4 << 20
+const mcpSyncTextRunes = 2048
 
 func mcpTooLarge(size int64) error {
 	return fmt.Errorf("too_large: size %d; use save_file", size)
@@ -38,6 +41,20 @@ func mcpDecodeSendData(encoded string) ([]byte, error) {
 	}
 	if len(data) > mcpSendFileMax {
 		return nil, fmt.Errorf("too_large: decoded payload size %d exceeds %d", len(data), mcpSendFileMax)
+	}
+	return data, nil
+}
+
+func mcpDecodeSyncData(encoded string) ([]byte, error) {
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("data must be valid base64: %w", err)
+	}
+	if len(data) > mcpSyncFileMax {
+		return nil, fmt.Errorf("too_large: decoded payload size %d exceeds %d", len(data), mcpSyncFileMax)
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty file")
 	}
 	return data, nil
 }
@@ -285,6 +302,59 @@ func (s *server) mcpCallTool(ctx context.Context, name string, args map[string]a
 			return nil, err
 		}
 		return s.mcpGetFile(ctx, fileName, source)
+	case "list_sync":
+		items := s.sync.list()
+		for i := range items {
+			runes := []rune(items[i].Text)
+			if len(runes) > mcpSyncTextRunes {
+				items[i].Text = string(runes[:mcpSyncTextRunes])
+			}
+		}
+		return map[string]any{"items": items}, nil
+	case "post_sync":
+		_, hasName := args["name"]
+		_, hasData := args["data"]
+		if hasName || hasData {
+			fileName, err := mcpStringArg(args, "name", true)
+			if err != nil {
+				return nil, err
+			}
+			if !validBaseName(fileName) {
+				return nil, fmt.Errorf("bad file name")
+			}
+			encoded, err := mcpStringArg(args, "data", true)
+			if err != nil {
+				return nil, err
+			}
+			data, err := mcpDecodeSyncData(encoded)
+			if err != nil {
+				return nil, err
+			}
+			id := newSyncID()
+			dir := filepath.Join(s.sync.dir, syncDirName)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, fmt.Errorf("cannot store file: %w", err)
+			}
+			path := filepath.Join(dir, id+"-"+fileName)
+			if err := os.WriteFile(path, data, 0o600); err != nil {
+				return nil, fmt.Errorf("cannot store file: %w", err)
+			}
+			item := s.sync.addFile(id, fileName, int64(len(data)))
+			tele.event("sync_item_added")
+			s.syncChanged()
+			return item, nil
+		}
+		text, err := mcpStringArg(args, "text", true)
+		if err != nil {
+			return nil, err
+		}
+		item, err := s.sync.addText(text)
+		if err != nil {
+			return nil, err
+		}
+		tele.event("sync_item_added")
+		s.syncChanged()
+		return item, nil
 	default:
 		return nil, fmt.Errorf("unknown tool")
 	}
