@@ -91,3 +91,60 @@ func TestMcpInitializeAndListTools(t *testing.T) {
 		}
 	}
 }
+
+func TestMcpInvalidJSONRPC(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	s.port = 8976
+	h := s.mcpGuard(s.handleMCP)
+
+	post := func(body string) (int, string) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "http://100.64.0.1:8976/mcp", strings.NewReader(body))
+		r.Host = "100.64.0.1:8976"
+		r.RemoteAddr = "100.1.2.3:9"
+		r.Header.Set("Authorization", "Bearer tok")
+		r.Header.Set("Content-Type", "application/json")
+		h(w, r)
+		return w.Code, w.Body.String()
+	}
+
+	for _, body := range []string{
+		`{"jsonrpc":"1.0","id":1,"method":"ping"}`,
+		`{"id":1,"method":"ping"}`,
+	} {
+		code, resp := post(body)
+		if code != http.StatusOK || !strings.Contains(resp, "-32600") {
+			t.Fatalf("invalid jsonrpc %q: %d %s", body, code, resp)
+		}
+	}
+}
+
+func TestMcpNotifications(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	s.port = 8976
+	h := s.mcpGuard(s.handleMCP)
+
+	post := func(body string) (int, string) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "http://100.64.0.1:8976/mcp", strings.NewReader(body))
+		r.Host = "100.64.0.1:8976"
+		r.RemoteAddr = "100.1.2.3:9"
+		r.Header.Set("Authorization", "Bearer tok")
+		r.Header.Set("Content-Type", "application/json")
+		h(w, r)
+		return w.Code, w.Body.String()
+	}
+
+	code, body := post(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	if code != http.StatusNoContent || body != "" {
+		t.Fatalf("notifications/initialized: %d %q", code, body)
+	}
+
+	code, body = post(`{"jsonrpc":"2.0","method":"ping"}`)
+	if code != http.StatusAccepted || body != "" {
+		t.Fatalf("ping notification: %d %q", code, body)
+	}
+	if strings.Contains(body, `"jsonrpc"`) || strings.Contains(body, `"result"`) || strings.Contains(body, `"error"`) {
+		t.Fatalf("ping notification returned JSON-RPC body: %s", body)
+	}
+}

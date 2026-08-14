@@ -167,6 +167,10 @@ var mcpToolList = []mcpTool{
 	},
 }
 
+func isMCPNotification(id json.RawMessage) bool {
+	return id == nil
+}
+
 func writeRPC(w http.ResponseWriter, id json.RawMessage, result any, rpcErr *mcpRPCError) {
 	w.Header().Set("Content-Type", "application/json")
 	if rpcErr != nil {
@@ -198,6 +202,23 @@ func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		writeRPC(w, nil, nil, &mcpRPCError{Code: -32700, Message: "parse error"})
 		return
 	}
+	if req.JSONRPC != "2.0" {
+		if isMCPNotification(req.ID) {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		writeRPC(w, req.ID, nil, &mcpRPCError{Code: -32600, Message: "Invalid Request"})
+		return
+	}
+	if isMCPNotification(req.ID) {
+		switch req.Method {
+		case "notifications/initialized":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusAccepted)
+		}
+		return
+	}
 	switch req.Method {
 	case "initialize":
 		writeRPC(w, req.ID, map[string]any{
@@ -210,8 +231,6 @@ func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
 				"version": appVersion,
 			},
 		}, nil)
-	case "notifications/initialized":
-		w.WriteHeader(http.StatusNoContent)
 	case "ping":
 		writeRPC(w, req.ID, map[string]any{}, nil)
 	case "tools/list":
