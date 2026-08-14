@@ -1021,15 +1021,14 @@ func (s *server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Source == "link" {
-		lf := s.drops.file(req.Name)
-		if lf == nil {
-			http.Error(w, "no such file", http.StatusNotFound)
+		if err := s.deleteLinkFile(req.Name); err != nil {
+			if errors.Is(err, errNoSuchLinkFile) {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			writeErr(w, err)
 			return
 		}
-		os.Remove(lf.Path)
-		s.drops.removeFile(req.Name)
-		s.history.recordDeleted(req.Name)
-		s.broadcastInboxNow()
 		writeJSON(w, map[string]any{"ok": true})
 		return
 	}

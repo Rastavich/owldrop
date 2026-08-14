@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -257,10 +256,6 @@ func writeRPC(w http.ResponseWriter, id json.RawMessage, result any, rpcErr *mcp
 	})
 }
 
-func (s *server) mcpCallTool(_ context.Context, _ string, _ map[string]any) (any, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
 func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -328,11 +323,25 @@ func (s *server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		if params.Arguments == nil {
 			params.Arguments = map[string]any{}
 		}
-		if _, err := s.mcpCallTool(r.Context(), params.Name, params.Arguments); err != nil {
-			writeRPC(w, req.ID, nil, &mcpRPCError{Code: -32000, Message: err.Error()})
+		out, err := s.mcpCallTool(r.Context(), params.Name, params.Arguments)
+		if err != nil {
+			writeRPC(w, req.ID, map[string]any{
+				"isError": true,
+				"content": []any{map[string]any{"type": "text", "text": err.Error()}},
+			}, nil)
 			return
 		}
-		writeRPC(w, req.ID, map[string]any{}, nil)
+		text, err := json.Marshal(out)
+		if err != nil {
+			writeRPC(w, req.ID, map[string]any{
+				"isError": true,
+				"content": []any{map[string]any{"type": "text", "text": err.Error()}},
+			}, nil)
+			return
+		}
+		writeRPC(w, req.ID, map[string]any{
+			"content": []any{map[string]any{"type": "text", "text": string(text)}},
+		}, nil)
 	default:
 		writeRPC(w, req.ID, nil, &mcpRPCError{Code: -32601, Message: "Method not found"})
 	}

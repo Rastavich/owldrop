@@ -29,6 +29,8 @@ import (
 
 const maxDropUploadSize = 4 << 30 // 4 GiB, matching Taildrop's cap
 
+var errNoSuchLinkFile = errors.New("no such file")
+
 type dropLink struct {
        Token   string    `json:"token"`
        Name    string    `json:"name"` // optional sender label
@@ -668,6 +670,20 @@ func (s *server) linkSave(name, dir string) (string, error) {
 	s.drops.removeFile(name)
 	s.history.recordSaved(name, target)
 	return target, nil
+}
+
+func (s *server) deleteLinkFile(name string) error {
+	lf := s.drops.file(name)
+	if lf == nil {
+		return errNoSuchLinkFile
+	}
+	if err := os.Remove(lf.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	s.drops.removeFile(name)
+	s.history.recordDeleted(name)
+	s.broadcastInboxNow()
+	return nil
 }
 
 // dropPageHTML is the minimal public upload page served at /drop/<token>.

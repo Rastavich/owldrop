@@ -1,12 +1,172 @@
 package main
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestMcpGetFileTooLarge(t *testing.T) {
+	if mcpGetFileMax != 1<<20 {
+		t.Fatalf("cap %d", mcpGetFileMax)
+	}
+	err := mcpTooLarge(mcpGetFileMax + 1)
+	if err == nil || !strings.Contains(err.Error(), "too_large") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestMcpCallListInboxEmpty(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	out, err := s.mcpCallTool(context.Background(), "list_inbox", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := out.(map[string]any)
+	files, _ := m["files"].([]any)
+	if files == nil {
+		// also accept []waitingFile encoded later — require a files key
+		if _, ok := m["files"]; !ok {
+			t.Fatalf("no files key: %#v", out)
+		}
+	}
+}
+
+func mcpStoreLinkFile(t *testing.T, s *server, name, content string) {
+	t.Helper()
+	link := s.drops.create("test sender", time.Hour, 0, 0)
+	if _, err := s.drops.storeFile(link.Token, name, int64(len(content)), strings.NewReader(content), func(string) bool { return false }); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMcpCallGetLinkFile(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	mcpStoreLinkFile(t, s, "hello.txt", "hello")
+
+	out, err := s.mcpCallTool(t.Context(), "get_file", map[string]any{"name": "hello.txt", "source": "link"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.(map[string]any)
+	if got["name"] != "hello.txt" || got["size"] != int64(5) || got["data"] != base64.StdEncoding.EncodeToString([]byte("hello")) {
+		t.Fatalf("get_file = %#v", out)
+	}
+	if s.drops.file("hello.txt") == nil {
+		t.Fatal("get_file removed inbox file")
+	}
+}
+
+func TestMcpCallGetLinkFileTooLarge(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	mcpStoreLinkFile(t, s, "large.bin", strings.Repeat("x", mcpGetFileMax+1))
+
+	if _, err := s.mcpCallTool(t.Context(), "get_file", map[string]any{"name": "large.bin", "source": "link"}); err == nil || !strings.Contains(err.Error(), "too_large") {
+		t.Fatalf("get_file error = %v", err)
+	}
+}
+
+func TestMcpCallSaveLinkFile(t *testing.T) {
+	saveDir := t.TempDir()
+	s := newServerDir(&config{SaveDir: saveDir}, t.TempDir())
+	mcpStoreLinkFile(t, s, "save.txt", "saved")
+
+	out, err := s.mcpCallTool(t.Context(), "save_file", map[string]any{"name": "save.txt", "source": "link"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := out.(map[string]any)["path"]
+	if path != filepath.Join(saveDir, "save.txt") {
+		t.Fatalf("path = %#v", path)
+	}
+	data, err := os.ReadFile(path.(string))
+	if err != nil || string(data) != "saved" {
+		t.Fatalf("saved data = %q, err = %v", data, err)
+	}
+	if s.drops.file("save.txt") != nil {
+		t.Fatal("save_file left inbox file")
+	}
+}
+
+func TestMcpCallDeleteLinkFile(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	mcpStoreLinkFile(t, s, "delete.txt", "delete me")
+	path := s.drops.file("delete.txt").Path
+
+	out, err := s.mcpCallTool(t.Context(), "delete_file", map[string]any{"name": "delete.txt", "source": "link"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.(map[string]any)["ok"] != true {
+		t.Fatalf("delete_file = %#v", out)
+	}
+	if s.drops.file("delete.txt") != nil {
+		t.Fatal("delete_file left inbox file")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("deleted path still exists: %v", err)
+	}
+}
+
+func TestMcpCallToolValidatesArguments(t *testing.T) {
+	s := newServerDir(&config{}, t.TempDir())
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+	}{
+		{name: "save_file", args: map[string]any{}},
+		{name: "delete_file", args: map[string]any{"name": "../bad"}},
+		{name: "get_file", args: map[string]any{"name": 12}},
+	} {
+		if _, err := s.mcpCallTool(t.Context(), tc.name, tc.args); err == nil {
+			t.Errorf("%s(%#v) succeeded", tc.name, tc.args)
+		}
+	}
+}
+
+func TestMcpToolsCallContentResult(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "tok"}, t.TempDir())
+	s.port = 8976
+	mcpStoreLinkFile(t, s, "rpc.txt", "rpc")
+	h := s.mcpGuard(s.handleMCP)
+
+	post := func(body string) map[string]any {
+		t.Helper()
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "http://100.64.0.1:8976/mcp", strings.NewReader(body))
+		r.Host = "100.64.0.1:8976"
+		r.RemoteAddr = "100.1.2.3:9"
+		r.Header.Set("Authorization", "Bearer tok")
+		h(w, r)
+		var response map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+
+	response := post(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_file","arguments":{"name":"rpc.txt","source":"link"}}}`)
+	result := response["result"].(map[string]any)
+	content := result["content"].([]any)
+	text := content[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, base64.StdEncoding.EncodeToString([]byte("rpc"))) {
+		t.Fatalf("tools/call result = %#v", response)
+	}
+
+	response = post(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"send_file","arguments":{}}}`)
+	result = response["result"].(map[string]any)
+	if result["isError"] != true {
+		t.Fatalf("tools/call error = %#v", response)
+	}
+}
 
 func TestMcpURLNeverFunnelHost(t *testing.T) {
 	serve := "https://desktop.taila4569.ts.net/"
