@@ -14,6 +14,124 @@ import (
 	"time"
 )
 
+func TestConfigHidesMcpToken(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "secret"}, t.TempDir())
+	s.port = 8976
+	s.serving = newServingManager(&fakeServeStore{cfg: &serveConfigWire{}})
+
+	resp := s.configResponse(*s.cfg)
+	if _, ok := resp["mcpToken"]; ok {
+		t.Fatal("token leaked in config GET")
+	}
+	if resp["mcpEnabled"] != true {
+		t.Fatal("mcpEnabled missing")
+	}
+	if _, ok := resp["mcpUrl"]; !ok {
+		t.Fatal("mcpUrl missing")
+	}
+}
+
+func TestMcpRotateRouteMintsTokenAndEnables(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	s := newServerDir(&config{LAN: true}, t.TempDir())
+	s.port = 8976
+	s.serving = newServingManager(&fakeServeStore{cfg: &serveConfigWire{}})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "http://localhost/api/mcp/rotate", strings.NewReader(`{"enabled":true}`))
+	r.Header.Set("X-Owldrop-Token", s.token)
+	s.routes().ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("rotate status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	token, _ := resp["mcpToken"].(string)
+	if token == "" || token != s.cfg.McpToken {
+		t.Fatalf("mcpToken = %q, config token = %q", token, s.cfg.McpToken)
+	}
+	if resp["mcpEnabled"] != true || !s.cfg.McpEnabled {
+		t.Fatalf("MCP not enabled: response = %#v, config = %#v", resp, s.cfg)
+	}
+	if _, ok := resp["mcpUrl"]; !ok {
+		t.Fatalf("mcpUrl missing: %#v", resp)
+	}
+}
+
+func TestMcpStatusRouteEnablesAndMintsToken(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	s := newServerDir(&config{LAN: true}, t.TempDir())
+	s.port = 8976
+	s.serving = newServingManager(&fakeServeStore{cfg: &serveConfigWire{}})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "http://localhost/api/mcp", strings.NewReader(`{"enabled":true}`))
+	r.Header.Set("X-Owldrop-Token", s.token)
+	s.routes().ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status POST = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["enabled"] != true || resp["token"] == "" || resp["token"] != s.cfg.McpToken {
+		t.Fatalf("status response = %#v, config = %#v", resp, s.cfg)
+	}
+	if _, ok := resp["url"]; !ok {
+		t.Fatalf("url missing: %#v", resp)
+	}
+}
+
+func TestMcpEnableRequiresLANOrServe(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	s := newServerDir(&config{}, t.TempDir())
+	s.serving = newServingManager(&fakeServeStore{cfg: &serveConfigWire{}})
+
+	for _, path := range []string{"/api/mcp", "/api/config"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "http://localhost"+path, strings.NewReader(`{"enabled":true,"mcpEnabled":true}`))
+		r.Header.Set("X-Owldrop-Token", s.token)
+		s.routes().ServeHTTP(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s status = %d, body = %s", path, w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "turn on LAN mode or HTTPS access first") {
+			t.Errorf("%s body = %q", path, w.Body.String())
+		}
+	}
+	if s.cfg.McpEnabled || s.cfg.McpToken != "" {
+		t.Fatalf("rejected enable changed config: %#v", s.cfg)
+	}
+}
+
+func TestMcpRouteUsesMcpTokenNotSessionToken(t *testing.T) {
+	s := newServerDir(&config{LAN: true, McpEnabled: true, McpToken: "agent-token"}, t.TempDir())
+	s.port = 8976
+	h := s.routes()
+	body := `{"jsonrpc":"2.0","id":1,"method":"ping"}`
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "http://localhost/mcp", strings.NewReader(body))
+	r.Header.Set("X-Owldrop-Token", s.token)
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("session token status = %d, want 401", w.Code)
+	}
+
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest(http.MethodPost, "http://localhost/mcp", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer agent-token")
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"result"`) {
+		t.Fatalf("MCP token response = %d %s", w.Code, w.Body.String())
+	}
+}
+
 func TestMcpSendDenyReason(t *testing.T) {
 	if got := mcpSendDenyReason("owned by another user"); !strings.Contains(got, "tagged") {
 		t.Fatalf("got %q", got)

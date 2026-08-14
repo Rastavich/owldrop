@@ -60,6 +60,104 @@ func (s *server) mcpGuard(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func (s *server) canEnableMCP(ctx context.Context, lan bool) bool {
+	if lan {
+		return true
+	}
+	on, _ := s.serveState(ctx)
+	return on
+}
+
+func (s *server) mcpStatusResponse() map[string]any {
+	s.cfgMu.Lock()
+	enabled, token := s.cfg.McpEnabled, s.cfg.McpToken
+	s.cfgMu.Unlock()
+	return map[string]any{
+		"enabled": enabled,
+		"url":     s.mcpURL(),
+		"token":   token,
+	}
+}
+
+func (s *server) handleMcpStatus(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, s.mcpStatusResponse())
+	case http.MethodPost:
+		var req struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := decodeJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		s.cfgMu.Lock()
+		lan := s.cfg.LAN
+		s.cfgMu.Unlock()
+		if req.Enabled && !s.canEnableMCP(r.Context(), lan) {
+			http.Error(w, "turn on LAN mode or HTTPS access first", http.StatusBadRequest)
+			return
+		}
+
+		s.cfgMu.Lock()
+		s.cfg.McpEnabled = req.Enabled
+		if req.Enabled && s.cfg.McpToken == "" {
+			s.cfg.McpToken = newToken()
+		}
+		c := *s.cfg
+		s.cfgMu.Unlock()
+		if err := c.save(); err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, s.mcpStatusResponse())
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *server) handleMcpRotate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if r.Body != nil && r.Body != http.NoBody {
+		if err := decodeJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	s.cfgMu.Lock()
+	lan := s.cfg.LAN
+	s.cfgMu.Unlock()
+	if req.Enabled != nil && *req.Enabled && !s.canEnableMCP(r.Context(), lan) {
+		http.Error(w, "turn on LAN mode or HTTPS access first", http.StatusBadRequest)
+		return
+	}
+
+	s.cfgMu.Lock()
+	s.cfg.McpToken = newToken()
+	if req.Enabled != nil {
+		s.cfg.McpEnabled = *req.Enabled
+	}
+	c := *s.cfg
+	s.cfgMu.Unlock()
+	if err := c.save(); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{
+		"mcpToken":   c.McpToken,
+		"mcpUrl":     s.mcpURL(),
+		"mcpEnabled": c.McpEnabled,
+	})
+}
+
 type mcpReq struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`

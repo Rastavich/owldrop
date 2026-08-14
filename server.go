@@ -346,6 +346,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/devices/hidden", s.guard(s.handleDeviceHidden))
 	mux.HandleFunc("/api/browse", s.guard(s.handleBrowse))
 	mux.HandleFunc("/api/config", s.guard(s.handleConfig))
+	mux.HandleFunc("/mcp", s.mcpGuard(s.handleMCP))
+	mux.HandleFunc("/api/mcp", s.guard(s.handleMcpStatus))
+	mux.HandleFunc("/api/mcp/rotate", s.guard(s.handleMcpRotate))
 	mux.HandleFunc("/api/mkdir", s.guard(s.handleMkdir))
 	mux.HandleFunc("/api/save", s.guard(s.handleSave))
 	mux.HandleFunc("/api/delete", s.guard(s.handleDelete))
@@ -871,10 +874,23 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			NtfyTopic      *string   `json:"ntfyTopic"`
 			NtfyServer     *string   `json:"ntfyServer"`
 			TrustedDomains *[]string `json:"trustedDomains"`
+			McpEnabled     *bool     `json:"mcpEnabled"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+		if req.McpEnabled != nil && *req.McpEnabled {
+			s.cfgMu.Lock()
+			lan := s.cfg.LAN
+			s.cfgMu.Unlock()
+			if req.Lan != nil {
+				lan = *req.Lan
+			}
+			if !s.canEnableMCP(r.Context(), lan) {
+				http.Error(w, "turn on LAN mode or HTTPS access first", http.StatusBadRequest)
+				return
+			}
 		}
 		restart := false
 		s.cfgMu.Lock()
@@ -927,6 +943,12 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if req.TrustedDomains != nil {
 			s.cfg.TrustedDomains = normalizeDomains(*req.TrustedDomains)
 		}
+		if req.McpEnabled != nil {
+			s.cfg.McpEnabled = *req.McpEnabled
+			if *req.McpEnabled && s.cfg.McpToken == "" {
+				s.cfg.McpToken = newToken()
+			}
+		}
 		c := *s.cfg
 		s.cfgMu.Unlock()
 		if err := s.cfg.save(); err != nil {
@@ -958,6 +980,8 @@ func (s *server) configResponse(c config) map[string]any {
 		"notifySend":    c.NotifySend,
 		"notifyError":   c.NotifyError,
 		"telemetry":     c.Telemetry,
+		"mcpEnabled":    c.McpEnabled,
+		"mcpUrl":        s.mcpURL(),
 	}
 	if c.LAN {
 		if urls := s.lanURLs(); len(urls) > 0 {
