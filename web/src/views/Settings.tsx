@@ -4,21 +4,26 @@ import {
   checkUpdate,
   getConfig,
   getDevicesAll,
+  getMcp,
   getServe,
   getUpdateState,
   installUpdate,
   openExternal,
   patchConfig,
+  rotateMcp,
   setDeviceHidden,
+  setMcpEnabled,
   setServe,
   testNtfy,
 } from '../api';
 import { toast } from '../store';
 import type { AppConfig, Device } from '../types';
+import { copyText } from '../utils';
 
 export default function Settings() {
   const qc = useQueryClient();
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: getConfig });
+  const { data: mcp } = useQuery({ queryKey: ['mcp'], queryFn: getMcp });
   const { data: update } = useQuery({ queryKey: ['update'], queryFn: getUpdateState });
   const { data: serve } = useQuery({ queryKey: ['serve'], queryFn: getServe });
   // Includes hidden devices (each flagged) so the visibility list can unhide.
@@ -27,6 +32,7 @@ export default function Settings() {
   const [updateBusy, setUpdateBusy] = useState(false);
   const [ntfyBusy, setNtfyBusy] = useState(false);
   const [serveBusy, setServeBusy] = useState(false);
+  const [mcpBusy, setMcpBusy] = useState(false);
 
   const toggleServe = async (want: boolean) => {
     setServeBusy(true);
@@ -40,6 +46,39 @@ export default function Settings() {
     }
     setServeBusy(false);
   };
+
+  const toggleMcp = async (enabled: boolean) => {
+    setMcpBusy(true);
+    try {
+      const res = await setMcpEnabled(enabled);
+      qc.setQueryData(['mcp'], res);
+      qc.setQueryData<AppConfig>(['config'], (current) =>
+        current ? { ...current, mcpEnabled: res.enabled, mcpUrl: res.url } : current,
+      );
+    } catch (e) {
+      qc.invalidateQueries({ queryKey: ['mcp'] });
+      toast(e instanceof Error ? e.message : String(e), undefined, 'err');
+    } finally {
+      setMcpBusy(false);
+    }
+  };
+
+  const rotateMcpToken = async () => {
+    setMcpBusy(true);
+    try {
+      const res = await rotateMcp();
+      qc.setQueryData(['mcp'], { enabled: res.mcpEnabled, url: res.mcpUrl, token: res.mcpToken });
+      qc.setQueryData<AppConfig>(['config'], (current) =>
+        current ? { ...current, mcpEnabled: res.mcpEnabled, mcpUrl: res.mcpUrl } : current,
+      );
+      toast('Token rotated — update your agent config');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), undefined, 'err');
+    } finally {
+      setMcpBusy(false);
+    }
+  };
+
   const [ntfyTopicEdit, setNtfyTopicEdit] = useState<string | null>(null);
   const [domainsEdit, setDomainsEdit] = useState<string | null>(null);
 
@@ -202,6 +241,42 @@ export default function Settings() {
         </p>
       )}
       <p className="sub2">Opening this app from another device is as powerful as being at this machine — only enable it if you trust your tailnet.</p>
+
+      </div>
+
+      <div className="set-card">
+      <h3>Agent access</h3>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={mcp?.enabled ?? !!config?.mcpEnabled}
+          disabled={mcpBusy}
+          onChange={(e) => toggleMcp(e.target.checked)}
+        />
+        Allow agents on my tailnet to send and receive via MCP
+      </label>
+      {(mcp?.enabled ?? config?.mcpEnabled) && (
+        <>
+          <p className="sub2">
+            <code>{mcp?.url ?? config?.mcpUrl}</code>{' '}
+            <button className="linkbtn" onClick={() => copyText(mcp?.url ?? config?.mcpUrl ?? '')}>
+              Copy URL
+            </button>
+          </p>
+          <p className="sub2">
+            Token: <code>{mcp?.token}</code>{' '}
+            <button className="linkbtn" disabled={!mcp?.token} onClick={() => copyText(mcp?.token ?? '')}>
+              Copy
+            </button>
+          </p>
+          <div className="updrow">
+            <button className="btn ghost" disabled={mcpBusy} onClick={rotateMcpToken}>
+              Rotate
+            </button>
+          </div>
+        </>
+      )}
+      <p className="sub2">Agents POST to this URL with the bearer token. Public *.ts.net is drop links only.</p>
 
       </div>
 

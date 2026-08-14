@@ -20,6 +20,8 @@ export interface AppConfig {
   notifyError: boolean;
   telemetry: boolean; // anonymous usage stats (opt-out)
   trustedDomains?: string[]; // reverse-proxy hostnames approved in Settings
+  mcpEnabled?: boolean;
+  mcpUrl?: string;
 }
 
 export interface Device {

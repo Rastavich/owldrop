@@ -59,6 +59,11 @@ export const getInbox = () => api<{ files: WaitingFile[] }>('/api/inbox').then((
 export const getConfig = () => api<AppConfig>('/api/config');
 export const patchConfig = (patch: Partial<AppConfig>) =>
   api<AppConfig>('/api/config', { method: 'POST', json: patch });
+export const getMcp = () => api<{ enabled: boolean; url: string; token: string }>('/api/mcp');
+export const setMcpEnabled = (enabled: boolean) =>
+  api<{ enabled: boolean; url: string; token: string }>('/api/mcp', { method: 'POST', json: { enabled } });
+export const rotateMcp = () =>
+  api<{ mcpEnabled: boolean; mcpUrl: string; mcpToken: string }>('/api/mcp/rotate', { method: 'POST', json: {} });
 export const getDevices = () => api<{ devices: Device[] }>('/api/devices').then((r) => r.devices);
 // Settings visibility list — includes hidden devices, each flagged.
 export const getDevicesAll = () => api<{ devices: Device[] }>('/api/devices/all').then((r) => r.devices);
