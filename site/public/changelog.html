@@ -162,6 +162,10 @@
       if (tri.indexOf('## ') === 0) {
         closeList();
         flushPara();
+        // Drop an empty section: a heading (e.g. "## [Unreleased]") with no
+        // content before the next heading renders as a confusing empty stub.
+        var last = out[out.length - 1];
+        if (last && last.indexOf('<h2 class="cl-ver">') === 0) out.pop();
         out.push('<h2 class="cl-ver">' + inline(tri.slice(3)) + '</h2>');
         continue;
       }

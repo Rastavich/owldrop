@@ -4,10 +4,10 @@
 #   ./scripts/deploy.sh          resolve latest tag, bake, deploy
 #   ./scripts/deploy.sh -n       dry run: print the version, change nothing
 #
-# The app repo (Rastavich/owldrop) is private, so the version cannot be
-# fetched from a public API at runtime; git ls-remote uses your local
-# gh/git credentials. The version only changes via scripts/bump-release.sh
-# in the app repo, so resolving it at deploy time is exact.
+# The latest release tag is resolved from the public app repo
+# (github.com/Rastavich/owldrop) via git ls-remote. The version only changes
+# via scripts/bump-release.sh in the app repo, so resolving it at deploy
+# time is exact.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
