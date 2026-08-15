@@ -10,6 +10,14 @@ notes and publishes this file to the public install repository, where
 
 ## [Unreleased]
 
+## [0.9.0]
+
+### Added
+
+- **Agent MCP (tailnet)** — Streamable HTTP MCP on `/mcp` for tailnet agents:
+  inbox, send, Sync, and drop links via a dedicated bearer token (off by
+  default). Public Funnel URLs do not expose MCP.
+
 ### Fixed
 
 - **Global shortcut no longer hijacks Ctrl+Shift+T** — every browser uses
@@ -18,14 +26,10 @@ notes and publishes this file to the public install repository, where
   opened Owldrop instead). The default is now **Ctrl+Alt+O**, and the
   shortcut is configurable in Settings → Shortcuts — it re-registers live,
   no restart needed.
-
-## [0.9.0]
-
-### Added
-
-- **Agent MCP (tailnet)** — Streamable HTTP MCP on `/mcp` for tailnet agents:
-  inbox, send, Sync, and drop links via a dedicated bearer token (off by
-  default). Public Funnel URLs do not expose MCP.
+- **Release pipeline on Go 1.26.6** — govulncheck-clean builds (stdlib
+  security fixes + `x/net` bump); server/Docker builds no longer link the
+  desktop updater; the Nix package and Docker image build with the fixed
+  toolchain.
 
 ## [0.8.0]
 
