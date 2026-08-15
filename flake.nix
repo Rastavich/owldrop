@@ -13,6 +13,18 @@
       # time (pkg-config) and at runtime.
       guiLibs = with pkgs; [ gtk4 webkitgtk_6_0 ];
 
+      # nixpkgs still ships Go 1.26.5; go.mod pins 1.26.6 for the stdlib
+      # security fixes (govulncheck gates the release). Override the version
+      # and source so nix builds use the fixed toolchain — GOTOOLCHAIN=local
+      # means nix never auto-downloads one.
+      go1266 = pkgs.go_1_26.overrideAttrs (old: {
+        version = "1.26.6";
+        src = pkgs.fetchurl {
+          url = "https://go.dev/dl/go1.26.6.src.tar.gz";
+          hash = "sha256-oHIcVMaIkBRI13rZs+x+p8R0cwdV/4kTgukuy5P/LLE=";
+        };
+      });
+
       # Version from build/config.yml — single source of truth for the
       # updater's CurrentVersion (injected via ldflags).
       appVersion = builtins.head (builtins.match
@@ -27,7 +39,10 @@
         src = ./web;
         npmDepsHash = "sha256-2uGD7LBkSIdGiSQ1ffg8jTgg8hEu7s2GJhCpp1XEIb4=";
       };
-      sidecar = pkgs.buildGoModule {
+      # .override (not an attrset `go =`) so the goModules download phase
+      # uses the same fixed toolchain — an attrset arg does not win over
+      # callPackage's baked-in go_1_26 there.
+      sidecar = (pkgs.buildGoModule.override { go = go1266; }) {
         pname = "owldrop";
         version = appVersion;
         src = pkgs.runCommand "owldrop-src" { } ''
@@ -41,7 +56,7 @@
         # proxyVendor downloads the module cache instead — same result, no
         # embed resolution at fetch time.
         proxyVendor = true;
-        vendorHash = "sha256-546+mOzJhHQ4tA91Og7EWo431TlLcXqeJ8zpDcmgFvs=";
+        vendorHash = "sha256-tA2Dix6JITMRC74RxNimDb9MRp4UQbewbVah8vrUz08=";
         subPackages = [ "." ];
         # drops_test.go talks to a live tailscaled daemon; not available in
         # the build sandbox (they run fine on a machine with tailscaled).
@@ -56,7 +71,7 @@
     in
     {
       devShells.x86_64-linux.default = pkgs.mkShell {
-        packages = with pkgs; [ go nodejs pkg-config gcc ] ++ guiLibs;
+        packages = [ go1266 pkgs.nodejs pkgs.pkg-config pkgs.gcc ] ++ guiLibs;
       };
 
       packages.x86_64-linux.default =
