@@ -206,8 +206,8 @@ server for LAN use) is available as `wails3 task build:server`
 ## Install / package
 
 - **End users (NixOS)**: `nix profile install github:Rastavich/owldrop-install`
-  — a public binary-only repo (the source stays private). CI pushes the
-  built binary there on every release.
+  — a public binary-only repo (source lives here, in the public repo). CI
+  pushes the built binary there on every release.
 - Developers: `nix profile install .#default` (or `nix run .#default`)
   builds from this repo against nixpkgs' webkitgtk_6_0 and wraps it in an
   FHS environment so the dynamic libs resolve.

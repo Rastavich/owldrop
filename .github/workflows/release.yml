@@ -454,7 +454,7 @@ jobs:
             ${{ steps.img.outputs.name }}:latest
             ${{ steps.img.outputs.name }}:${{ needs.preflight.outputs.version }}
 
-  # Publishes to the public owldrop-install repo (source stays private):
+  # Publishes to the public owldrop-install repo:
   # the nix-built linux binary (for `nix profile install`), the .deb/.rpm
   # packages (for the website's Linux download section), plus the Wails
   # update manifest and per-platform update artifacts (Windows exe, macOS

@@ -10,6 +10,8 @@ notes and publishes this file to the public install repository, where
 
 ## [Unreleased]
 
+## [0.9.0]
+
 ### Added
 
 - **Agent MCP (tailnet)** — Streamable HTTP MCP on `/mcp` for tailnet agents:
