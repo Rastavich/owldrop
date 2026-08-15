@@ -81,6 +81,7 @@ export default function Settings() {
 
   const [ntfyTopicEdit, setNtfyTopicEdit] = useState<string | null>(null);
   const [domainsEdit, setDomainsEdit] = useState<string | null>(null);
+  const [shortcutEdit, setShortcutEdit] = useState<string | null>(null);
 
   const patch = async (body: Partial<AppConfig>, okMsg?: string) => {
     try {
@@ -394,6 +395,30 @@ export default function Settings() {
       <p className="sub2">
         <code>/</code> filter · <code>j</code>/<code>k</code> select · <code>s</code> save · <code>d</code> delete ·{' '}
         <code>Ctrl+V</code> paste to send
+      </p>
+      <div className="row" style={{ gap: 8, display: 'flex', alignItems: 'center' }}>
+        <input
+          className="search"
+          type="text"
+          placeholder="CmdOrCtrl+Alt+O (default)"
+          value={shortcutEdit ?? config?.shortcut ?? ''}
+          onChange={(e) => setShortcutEdit(e.target.value)}
+          onBlur={() => {
+            if (shortcutEdit !== null && shortcutEdit !== (config?.shortcut ?? '')) patch({ shortcut: shortcutEdit });
+            setShortcutEdit(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          }}
+          spellCheck={false}
+          autoComplete="off"
+          style={{ flex: 1, maxWidth: 320 }}
+        />
+      </div>
+      <p className="sub2">
+        Global shortcut to show the window from anywhere (Wails accelerator syntax, e.g.{' '}
+        <code>CmdOrCtrl+Shift+Space</code>). Empty restores the default <code>Ctrl+Alt+O</code>. Applies within ~15
+        seconds — no restart.
       </p>
       </div>
 

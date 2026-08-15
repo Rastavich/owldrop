@@ -18,7 +18,8 @@ One Go binary, two halves:
   the same process: a native window (WebKitGTK / WKWebView / WebView2)
   pointed at the local UI, a system tray with quick-send, native
   notifications driven by the server's event stream, a global shortcut
-  (Ctrl+Shift+T) and close-to-tray. Everything talks in-process — there is
+  (Ctrl+Alt+O by default, configurable in Settings) and close-to-tray.
+  Everything talks in-process — there is
   no separate sidecar binary and no session-token plumbing.
 
 The UI is a **Vite + React + TanStack** app (`web/`) built to static assets
@@ -70,7 +71,8 @@ hostname where nothing else is reachable.)
 - **Tray quick-send** — right-click the tray icon → Send file to… → pick a
   device → native file dialog
 - **Safety** — opening executable/script files asks for confirmation first
-- **Global shortcut** — Ctrl+Shift+T brings the window to the front
+- **Global shortcut** — Ctrl+Alt+O (default) brings the window to the front;
+  configurable in Settings → Shortcuts, applies live
 - **Public drop links** — flip on Tailscale Funnel in Settings and anyone on
   the internet can drop a file into your inbox at your public `*.ts.net`
   URL — free, served from your own machine (only `/drop/*` is exposed)

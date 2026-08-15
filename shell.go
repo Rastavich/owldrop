@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -145,13 +146,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	sh := &shell{app: app, win: win, tray: tray, srv: srv, notif: ns}
 	sh.rebuildTrayMenu()
 	srv.enqueueShare(fileArgs(os.Args[1:]))
-
-	if err := app.GlobalShortcut.Register("CmdOrCtrl+Shift+T", func() {
-		win.Show()
-		win.Focus()
-	}); err != nil {
-		log.Printf("global shortcut Ctrl+Shift+T: %v", err)
-	}
+	sh.applyShortcut()
 
 	go sh.notifyLoop(serverCtx)
 	go func() {
@@ -163,6 +158,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 				return
 			case <-t.C:
 				sh.rebuildTrayMenu()
+				sh.applyShortcut()
 			}
 		}
 	}()
@@ -182,11 +178,41 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 
 // shell bundles the Wails objects the tray/notifications logic needs.
 type shell struct {
-	app   *application.App
-	win   *application.WebviewWindow
-	tray  *application.SystemTray
-	srv   *server
-	notif *notifications.NotificationService
+	app      *application.App
+	win      *application.WebviewWindow
+	tray     *application.SystemTray
+	srv      *server
+	notif    *notifications.NotificationService
+	shortcut string // currently registered global shortcut accelerator
+}
+
+// applyShortcut registers (or re-registers) the global show-window shortcut
+// from Settings. Empty means the default. Called at startup and from the 15s
+// tray refresh, so changing the shortcut in Settings applies without a
+// restart. The default is deliberately not Ctrl+Shift+T — every browser
+// uses that to reopen a closed tab, and a global grab steals it everywhere.
+func (sh *shell) applyShortcut() {
+	accel := strings.TrimSpace(sh.srv.cfgShortcut())
+	if accel == "" {
+		accel = "CmdOrCtrl+Alt+O"
+	}
+	if sh.shortcut == accel {
+		return
+	}
+	if sh.shortcut != "" {
+		if err := sh.app.GlobalShortcut.Unregister(sh.shortcut); err != nil {
+			log.Printf("global shortcut unregister %s: %v", sh.shortcut, err)
+		}
+	}
+	if err := sh.app.GlobalShortcut.Register(accel, func() {
+		sh.win.Show()
+		sh.win.Focus()
+	}); err != nil {
+		log.Printf("global shortcut %s: %v", accel, err)
+		return
+	}
+	sh.shortcut = accel
+	log.Printf("global shortcut: %s", accel)
 }
 
 // rebuildTrayMenu regenerates the tray menu with the current device list

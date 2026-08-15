@@ -10,6 +10,15 @@ notes and publishes this file to the public install repository, where
 
 ## [Unreleased]
 
+### Fixed
+
+- **Global shortcut no longer hijacks Ctrl+Shift+T** — every browser uses
+  Ctrl+Shift+T to reopen a closed tab, and Owldrop registering it globally
+  stole that key system-wide (reported on Linux Mint: Vivaldi and Edge both
+  opened Owldrop instead). The default is now **Ctrl+Alt+O**, and the
+  shortcut is configurable in Settings → Shortcuts — it re-registers live,
+  no restart needed.
+
 ## [0.9.0]
 
 ### Added

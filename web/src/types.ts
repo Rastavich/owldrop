@@ -22,6 +22,7 @@ export interface AppConfig {
   trustedDomains?: string[]; // reverse-proxy hostnames approved in Settings
   mcpEnabled?: boolean;
   mcpUrl?: string;
+  shortcut?: string; // global show-window shortcut ("" = default Ctrl+Alt+O)
 }
 
 export interface Device {

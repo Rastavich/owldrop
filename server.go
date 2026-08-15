@@ -54,25 +54,26 @@ func (h *hub) unsubscribeWeb(c chan []byte) {
 }
 
 func (h *hub) broadcast(v any) {
-       b, err := json.Marshal(v)
-       if err != nil {
-               return
-       }
-       h.mu.Lock()
-       defer h.mu.Unlock()
-       switch v.(type) {
-       case inboxEvent:
-               h.lastInbox = b
-       case devicesEvent:
-               h.lastDevices = b
-       }
-       for c := range h.webClients {
-               select {
-               case c <- b:
-               default: // drop for slow consumers
-               }
-       }
+	b, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	switch v.(type) {
+	case inboxEvent:
+		h.lastInbox = b
+	case devicesEvent:
+		h.lastDevices = b
+	}
+	for c := range h.webClients {
+		select {
+		case c <- b:
+		default: // drop for slow consumers
+		}
+	}
 }
+
 type inboxEvent struct {
 	Type  string        `json:"type"`
 	Files []waitingFile `json:"files"`
@@ -121,18 +122,18 @@ var distFS fs.FS = func() fs.FS {
 // --- server ---------------------------------------------------------------
 
 type server struct {
-	cfg         *config
-	cfgMu       sync.Mutex
-	token       string
-	hub         *hub
-	history     *history
-       drops       *dropManager
-       sync        *syncStore
-       serving     *servingManager
-       update      *updateManager
-       version     *versionCheck  // server-side version poll (all builds)
-       tsnet       any    // *tsnet.Server, set by tsnetmode.go (server build only)
-	tsnetHost   string // the tsnet node's MagicDNS name, when active
+	cfg       *config
+	cfgMu     sync.Mutex
+	token     string
+	hub       *hub
+	history   *history
+	drops     *dropManager
+	sync      *syncStore
+	serving   *servingManager
+	update    *updateManager
+	version   *versionCheck // server-side version poll (all builds)
+	tsnet     any           // *tsnet.Server, set by tsnetmode.go (server build only)
+	tsnetHost string        // the tsnet node's MagicDNS name, when active
 
 	port        int
 	lan         bool
@@ -310,6 +311,13 @@ func (s *server) rebindHTTP(addr string) {
 	log.Printf("listener moved to %s", addr)
 }
 
+// cfgShortcut returns the configured global shortcut accelerator ("" = default).
+func (s *server) cfgShortcut() string {
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
+	return s.cfg.Shortcut
+}
+
 // hostForLAN returns the bind host for the current LAN mode.
 func hostForLAN(lan bool) string {
 	if lan {
@@ -459,36 +467,36 @@ func (s *server) handleDropLinks(w http.ResponseWriter, r *http.Request) {
 				r.PublicURL = pub + "drop/" + l.Token
 			}
 			rows = append(rows, r)
-               }
-               writeJSON(w, map[string]any{"links": rows, "baseUrl": base, "publicUrl": pub})
-       case http.MethodPost:
-               var req struct {
-                       Name       string `json:"name"`
-                       TTLMin     int    `json:"ttlMinutes"`
-                       MaxUses    int    `json:"maxUses"`    // 0 = unlimited
-                       RatePerMin int    `json:"ratePerMin"` // 0 = unlimited
-               }
-               if err := decodeJSON(r, &req); err != nil {
-                       http.Error(w, err.Error(), http.StatusBadRequest)
-                       return
-               }
-               if req.TTLMin <= 0 {
-                       req.TTLMin = 60
-               }
-               if req.TTLMin > 7*24*60 {
-                       req.TTLMin = 7 * 24 * 60
-               }
-               l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses, req.RatePerMin)
-               local := s.dropBaseURL() + "drop/" + l.Token
-               var pub string
-               if base := s.funnelPublicURL(); s.funnelEnabled() && base != "" {
-                       pub = base + "drop/" + l.Token
-               }
-               resp := map[string]any{"link": l, "url": local, "shareUrl": shareableDropURL(local, pub)}
-               if pub != "" {
-                       resp["publicUrl"] = pub
-               }
-               writeJSON(w, resp)
+		}
+		writeJSON(w, map[string]any{"links": rows, "baseUrl": base, "publicUrl": pub})
+	case http.MethodPost:
+		var req struct {
+			Name       string `json:"name"`
+			TTLMin     int    `json:"ttlMinutes"`
+			MaxUses    int    `json:"maxUses"`    // 0 = unlimited
+			RatePerMin int    `json:"ratePerMin"` // 0 = unlimited
+		}
+		if err := decodeJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.TTLMin <= 0 {
+			req.TTLMin = 60
+		}
+		if req.TTLMin > 7*24*60 {
+			req.TTLMin = 7 * 24 * 60
+		}
+		l := s.drops.create(req.Name, time.Duration(req.TTLMin)*time.Minute, req.MaxUses, req.RatePerMin)
+		local := s.dropBaseURL() + "drop/" + l.Token
+		var pub string
+		if base := s.funnelPublicURL(); s.funnelEnabled() && base != "" {
+			pub = base + "drop/" + l.Token
+		}
+		resp := map[string]any{"link": l, "url": local, "shareUrl": shareableDropURL(local, pub)}
+		if pub != "" {
+			resp["publicUrl"] = pub
+		}
+		writeJSON(w, resp)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -875,6 +883,7 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			NtfyServer     *string   `json:"ntfyServer"`
 			TrustedDomains *[]string `json:"trustedDomains"`
 			McpEnabled     *bool     `json:"mcpEnabled"`
+			Shortcut       *string   `json:"shortcut"`
 		}
 		if err := decodeJSON(r, &req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -943,6 +952,9 @@ func (s *server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if req.TrustedDomains != nil {
 			s.cfg.TrustedDomains = normalizeDomains(*req.TrustedDomains)
 		}
+		if req.Shortcut != nil {
+			s.cfg.Shortcut = strings.TrimSpace(*req.Shortcut)
+		}
 		c := *s.cfg
 		if req.McpEnabled != nil {
 			c.McpEnabled = *req.McpEnabled
@@ -998,6 +1010,7 @@ func (s *server) configResponse(c config) map[string]any {
 	resp["ntfyTopic"] = c.NtfyTopic
 	resp["ntfyServer"] = ntfyServer(&c)
 	resp["trustedDomains"] = c.TrustedDomains
+	resp["shortcut"] = c.Shortcut
 	return resp
 }
 

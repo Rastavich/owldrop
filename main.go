@@ -63,7 +63,7 @@ func main() {
 
 	srv := newServer(cfg)
 
-       go srv.startVersionCheck(ctx)
+	go srv.startVersionCheck(ctx)
 
 	httpSrv := &http.Server{
 		Handler:           srv.routes(),
@@ -120,6 +120,10 @@ type config struct {
 	TrustedDomains []string `json:"trusted_domains"`
 	McpEnabled     bool     `json:"mcp_enabled"`
 	McpToken       string   `json:"mcp_token"`
+	// Global show-window shortcut (Wails accelerator syntax, e.g.
+	// "CmdOrCtrl+Alt+O"). Empty = default. Applies without restart — the
+	// shell re-registers when the 15s tray refresh sees a change.
+	Shortcut string `json:"shortcut"`
 }
 
 func configPath() string {
@@ -154,22 +158,22 @@ func loadConfig() *config {
 	// Notify prefs default ON; pointers distinguish "unset" from "false" so
 	// configs written before they existed keep the defaults.
 	var f struct {
-		SaveDir        string            `json:"save_dir"`
-		AutoSave       *bool             `json:"auto_save"`
-		LAN            *bool             `json:"lan"`
-		NotifyArrival  *bool             `json:"notify_arrival"`
-		NotifySave     *bool             `json:"notify_save"`
-		NotifySend     *bool             `json:"notify_send"`
-		NotifyError    *bool             `json:"notify_error"`
-		Telemetry      *bool             `json:"telemetry"`
-		InstallID      string            `json:"install_id"`
-		NtfyTopic      string            `json:"ntfy_topic"`
-		NtfyServer     string            `json:"ntfy_server"`
-		Token          string            `json:"token"`
-		HiddenDevices  map[string]bool   `json:"hidden_devices"`
-		TrustedDomains []string          `json:"trusted_domains"`
-		McpEnabled     bool              `json:"mcp_enabled"`
-		McpToken       string            `json:"mcp_token"`
+		SaveDir        string          `json:"save_dir"`
+		AutoSave       *bool           `json:"auto_save"`
+		LAN            *bool           `json:"lan"`
+		NotifyArrival  *bool           `json:"notify_arrival"`
+		NotifySave     *bool           `json:"notify_save"`
+		NotifySend     *bool           `json:"notify_send"`
+		NotifyError    *bool           `json:"notify_error"`
+		Telemetry      *bool           `json:"telemetry"`
+		InstallID      string          `json:"install_id"`
+		NtfyTopic      string          `json:"ntfy_topic"`
+		NtfyServer     string          `json:"ntfy_server"`
+		Token          string          `json:"token"`
+		HiddenDevices  map[string]bool `json:"hidden_devices"`
+		TrustedDomains []string        `json:"trusted_domains"`
+		McpEnabled     bool            `json:"mcp_enabled"`
+		McpToken       string          `json:"mcp_token"`
 	}
 	if b, err := os.ReadFile(configPath()); err == nil {
 		json.Unmarshal(b, &f)
