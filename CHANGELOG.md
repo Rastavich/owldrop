@@ -10,6 +10,20 @@ notes and publishes this file to the public install repository, where
 
 ## [Unreleased]
 
+## [0.9.1]
+
+### Security
+
+- **Dependency & security refresh** — `tailscale.com` v1.98.9 → v1.102.3,
+  `golang.org/x/mod` v0.37 → v0.40 (fixes GO-2026-6179 / GO-2026-6180:
+  `x/mod/sumdb` transparency-log tile verification bypass and unauthenticated
+  hash handling in Lookup), `golang.org/x/crypto` v0.53 → v0.55,
+  `golang.org/x/net` v0.56 → v0.58, plus `x/sys`, `x/text`, `x/sync`,
+  `x/term`, `x/time` and transitive bumps (wireguard-go, klauspost/compress,
+  rtnetlink). `govulncheck` reports no reachable vulnerabilities on both the
+  server (`-tags server`) and Windows desktop builds; npm audits for `web/`
+  and `site/` are clean.
+
 ## [0.9.0]
 
 ### Added
