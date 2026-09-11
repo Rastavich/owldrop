@@ -100,6 +100,29 @@ export interface TailscaleState {
   hint?: string;
 }
 
+// One Mullvad VPN server (an exit-node peer carrying location metadata).
+export interface MullvadNode {
+  id: string;
+  ip: string;
+  host: string; // short server name, e.g. "au-syd-wg-001"
+  country: string;
+  countryCode: string;
+  city: string;
+  cityCode: string;
+  online: boolean;
+  current: boolean;
+}
+
+export interface MullvadState {
+  reachable: boolean;
+  hint?: string;
+  connected: boolean; // an exit node is selected
+  exitOnline: boolean; // the selected exit node is alive
+  allowLan: boolean;
+  current?: MullvadNode;
+  nodes: MullvadNode[];
+}
+
 export interface BrowseResult {
   path: string;
   parent?: string;

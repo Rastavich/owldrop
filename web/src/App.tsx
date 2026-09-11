@@ -71,6 +71,9 @@ export default function App() {
         <Link to="/sync" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
           Sync
         </Link>
+        <Link to="/mullvad" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
+          Mullvad
+        </Link>
         <Link to="/settings" className={TAB_CLASS} activeProps={{ className: TAB_CLASS + ' active' }}>
           Settings
         </Link>

@@ -9,6 +9,7 @@ import type {
   FunnelState,
   HistoryEvent,
   HistoryStats,
+  MullvadState,
   PageConfig,
   ServeState,
   SyncItem,
@@ -107,6 +108,12 @@ export const downloadTailscale = () => api('/api/tailscale/download', { method: 
 export const testNtfy = () => api('/api/ntfy/test', { method: 'POST' });
 export const openExternal = (url: string) => api('/api/open-external', { method: 'POST', json: { url } });
 export const tailscaleUp = () => api('/api/tailscale/up', { method: 'POST', json: {} });
+export const getMullvad = () => api<MullvadState>('/api/mullvad');
+export const connectMullvad = (id: string) =>
+  api('/api/mullvad/connect', { method: 'POST', json: { id } });
+export const disconnectMullvad = () => api('/api/mullvad/disconnect', { method: 'POST', json: {} });
+export const setMullvadLan = (allow: boolean) =>
+  api('/api/mullvad/lan', { method: 'POST', json: { allow } });
 export const getSync = () => api<{ items: SyncItem[] }>('/api/sync').then((r) => r.items);
 export const addSyncText = (text: string) =>
   api<SyncItem>('/api/sync', { method: 'POST', json: { text } });

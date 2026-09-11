@@ -226,9 +226,11 @@ async function stats(url: URL, env: Env): Promise<Response> {
       `SELECT COUNT(DISTINCT install_id) AS n FROM events WHERE install_id != 'site'`,
     ).first<Count>(),
     env.DB.prepare(
-      `SELECT version, COUNT(DISTINCT install_id) AS n FROM events
-       WHERE install_id != 'site' AND version != '' GROUP BY version ORDER BY n DESC LIMIT 8`,
-    ).all<Count & { version: string }>(),
+      `SELECT version, COUNT(DISTINCT install_id) AS n,
+              date(MAX(ts), 'unixepoch') AS last
+       FROM events WHERE install_id != 'site' AND version != ''
+       GROUP BY version ORDER BY n DESC, version DESC LIMIT 20`,
+    ).all<Count & { version: string; last: string }>(),
     env.DB.prepare(
       `SELECT
          (SELECT COUNT(*) FROM events WHERE name = 'download' AND ts >= unixepoch('now', '-30 days')) AS downloads_30d,
@@ -315,7 +317,7 @@ function statsPage(d: {
   daySeries: DayRow[];
   downloads: { platform: string; n: number }[];
   installs: number;
-  versions: { version: string; n: number }[];
+  versions: { version: string; n: number; last: string }[];
   funnel: { downloads_30d: number; heartbeat_installs: number; activated: number; repeat_14d: number };
   jobs: { sync_n: number; drop_used_n: number; files_n: number };
   days: number;
@@ -323,7 +325,7 @@ function statsPage(d: {
 }): string {
   const dayRows = d.daySeries.map((r) => [r.d, r.dau, r.active, r.received, r.sent, r.sync, r.drop_used, r.drop_created, r.downloads, r.new_installs]);
   const dlRows = d.downloads.map((r) => [r.platform, r.n]);
-  const verRows = d.versions.map((r) => [r.version, r.n]);
+  const verRows = d.versions.map((r) => [r.version, r.n, r.last]);
   const range = `<p class="muted">Range: ${[7, 14, 30, 60, 90]
     .map((n) => `<a class="${n === d.days ? 'sel' : ''}" href="/stats?days=${n}&amp;token=${esc(d.token)}">${n}d</a>`)
     .join(' · ')}</p>`;
@@ -366,7 +368,7 @@ function statsPage(d: {
 ${range}
 ${table(`Day by day (last ${d.days} days)`, ['date', 'DAU', 'active', 'received', 'sent', 'sync', 'drop uploads', 'drop links created', 'downloads', 'new installs'], dayRows)}
 ${table(`Downloads by platform (last ${d.days} days)`, ['platform', 'count'], dlRows)}
-${table('Versions in the wild', ['version', 'installs'], verRows)}
+${table('Versions in the wild', ['version', 'installs', 'last seen (UTC)'], verRows)}
 </body></html>`;
 }
 

@@ -4,6 +4,13 @@
 /result
 *.exe
 .task
+# Agent/tooling state (local task lists, harness output)
+/.pi
+# WIP mobile app: node_modules + Gradle/Expo output alone are >2 GB and would
+# be swept into the release commit by bump-release.sh's `git add -A`.
+/mobile
+# Scratch design notes, not release material
+/docs/ideation
 web/node_modules
 web/dist
 site/node_modules

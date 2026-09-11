@@ -4,6 +4,17 @@
 # bindings.
 version: '3'
 
+vars:
+  # appVersion baked into the binary (reported by telemetry and fed to the
+  # self-updater). Read from build/config.yml — the single source of truth —
+  # so it can't drift from the release tag: a stale hardcoded literal once
+  # shipped every 0.9.x build reporting itself as 0.8.0.
+  APP_VERSION:
+    sh: >-
+      v=$(sed -n "s/^[[:space:]]*version: \"\([^\"]*\)\"/\1/p" "{{.ROOT_DIR}}/build/config.yml" | head -1);
+      test -n "$v" || { echo "APP_VERSION: cannot read version from build/config.yml" >&2; exit 1; };
+      echo "$v"
+
 tasks:
   go:mod:tidy:
     summary: Runs `go mod tidy`
@@ -71,7 +82,7 @@ tasks:
     cmds:
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}"'
     vars:
-      BUILD_FLAGS: '-tags server{{if eq .DEV "true"}},dev{{end}}{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -buildvcs=false -trimpath -ldflags="-w -s"'
+      BUILD_FLAGS: '-tags server{{if eq .DEV "true"}},dev{{end}}{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -buildvcs=false -trimpath -ldflags="-w -s -X main.appVersion={{.APP_VERSION}}"'
 
   run:server:
     summary: Builds and runs the headless server binary

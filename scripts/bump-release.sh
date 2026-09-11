@@ -7,10 +7,11 @@
 #   scripts/bump-release.sh 0.6.0 "note"   commit message: "release 0.6.0: note"
 #   scripts/bump-release.sh -n          dry run: print the plan, change nothing
 #
-# Touched files: build/config.yml (source of truth), the three
-# build/*/Taskfile.yml appVersion ldflags, web/package.json, and the
+# Touched files: build/config.yml (source of truth), web/package.json, and the
 # wails3-generated platform assets (regenerated via common:update:build-assets;
-# flake.nix reads the version out of config.yml on its own).
+# flake.nix reads the version out of config.yml on its own, and the platform
+# Taskfiles derive appVersion from config.yml at build time — nothing to bump
+# there).
 #
 # Safety: refuses to run on a dirty tree (the commit sweeps everything) or if
 # the tag already exists locally or on origin. Tags are bare X.Y.Z, matching
@@ -70,10 +71,9 @@ echo "bump: $CUR -> $NEW"
 # --- versioned files --------------------------------------------------------
 if (( ! DRY_RUN )); then
   sed -i "s/version: \"$CUR\"/version: \"$NEW\"/" build/config.yml
-  sed -i "s/main.appVersion=$CUR/main.appVersion=$NEW/" build/darwin/Taskfile.yml build/linux/Taskfile.yml build/windows/Taskfile.yml
   sed -i "s/\"version\": \".*\"/\"version\": \"$NEW\"/" web/package.json
 else
-  echo "  would: sed version in build/config.yml, build/*/Taskfile.yml, web/package.json"
+  echo "  would: sed version in build/config.yml, web/package.json"
 fi
 
 run "wails3 task common:update:build-assets (regenerate platform assets)" wails3 task common:update:build-assets

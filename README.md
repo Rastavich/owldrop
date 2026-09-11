@@ -81,6 +81,10 @@ hostname where nothing else is reachable.)
   page sees it instantly over SSE. Items persist on the host (capped at 100,
   text ≤ 64 KiB, files ≤ 4 GiB). Never exposed through Funnel
 - **History export** — one click dumps the full log as JSON
+- **Mullvad VPN** — a Mullvad tab lists every Mullvad exit node your tailnet
+  offers (grouped by country), connects with one click, and shows live
+  connection status. Requires the Mullvad add-on on your tailnet. Never
+  exposed through Funnel
 
 ## Agent MCP (tailnet)
 

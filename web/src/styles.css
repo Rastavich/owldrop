@@ -213,3 +213,12 @@ footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size
 .sync-pre{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word;margin:0;font-size:13px;line-height:1.55;max-height:220px;overflow-y:auto}
 .sync-file{flex:1;min-width:0;display:flex;align-items:center;gap:12px}
 .sync-file .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* --- Mullvad exit nodes --- */
+.mullvad-status{flex-wrap:wrap}
+.mullvad-country{display:flex;flex-direction:column;gap:6px}
+.mullvad-country-name{margin:8px 0 0;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.mullvad-city{display:flex;align-items:center;gap:14px;padding:10px 14px}
+.mullvad-city-name{flex:0 0 120px;font-size:13.5px;font-weight:600}
+.mullvad-servers{display:flex;flex-wrap:wrap;gap:6px;flex:1}
+.chip-btn:disabled{opacity:.6}

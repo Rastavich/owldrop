@@ -12,6 +12,13 @@ vars:
 
   # Docker image for cross-compilation (used when building on non-Linux or no CC available)
   CROSS_IMAGE: wails-cross
+  # appVersion baked into the binary (telemetry + self-updater); read from
+  # build/config.yml so a release tag can never ship a stale literal.
+  APP_VERSION:
+    sh: >-
+      v=$(sed -n "s/^[[:space:]]*version: \"\([^\"]*\)\"/\1/p" "{{.ROOT_DIR}}/build/config.yml" | head -1);
+      test -n "$v" || { echo "APP_VERSION: cannot read version from build/config.yml" >&2; exit 1; };
+      echo "$v"
 
 tasks:
   build:
@@ -59,7 +66,7 @@ tasks:
     cmds:
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o {{.OUTPUT}}'
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -X main.appVersion=0.8.0"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -X main.appVersion={{.APP_VERSION}}"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
     env:
@@ -121,7 +128,7 @@ tasks:
       - task: common:generate:icons
       - task: generate:dotdesktop
     cmds:
-      - 'go build -tags production,gtk3 -trimpath -buildvcs=false -ldflags="-w -s -X main.appVersion=0.8.0" -o {{.BIN_DIR}}/{{.APP_NAME}}'
+      - 'go build -tags production,gtk3 -trimpath -buildvcs=false -ldflags="-w -s -X main.appVersion={{.APP_VERSION}}" -o {{.BIN_DIR}}/{{.APP_NAME}}'
       - wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm-gtk3.yaml -out {{.ROOT_DIR}}/bin
       - wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm-gtk3.yaml -out {{.ROOT_DIR}}/bin
     env:

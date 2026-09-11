@@ -10,6 +10,32 @@ notes and publishes this file to the public install repository, where
 
 ## [Unreleased]
 
+## [0.10.0]
+
+### Added
+
+- **Mullvad VPN tab** — manage your Mullvad VPN connection straight from the
+  UI: every Mullvad exit node your tailnet offers, grouped by country with a
+  filter, one-click connect, live connection status and an allow-LAN-access
+  toggle. Mullvad servers are exit-node peers in the tailnet, so switching
+  goes through the same LocalAPI machinery as `tailscale set --exit-node` —
+  no shell-outs, works in tsnet mode too. Requires the Mullvad add-on enabled
+  on your tailnet; the tab shows setup guidance when no Mullvad nodes are
+  available.
+
+### Fixed
+
+- **Release builds reported the wrong version** — the platform build
+  Taskfiles hardcoded `appVersion=0.8.0`, so 0.9.0 and 0.9.1 shipped claiming
+  to be 0.8.0: usage stats never saw a 0.9 install, and the in-app updater
+  kept offering an update that was already installed. The version is now read
+  from `build/config.yml` (the single source of truth) at build time, and the
+  release preflight fails if a Taskfile hardcodes it again.
+- **Stats page hid newly shipped versions** — the "Versions in the wild"
+  table listed only the eight most-installed versions, so a fresh release
+  with a single early adopter was invisible; it now lists every version with
+  a last-seen date.
+
 ## [0.9.1]
 
 ### Security

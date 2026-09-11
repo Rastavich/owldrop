@@ -26,6 +26,15 @@ jobs:
         run: |
           V="$(sed -n 's/^[[:space:]]*version: "\([^"]*\)"/\1/p' build/config.yml)"
           echo "version=$V" >> "$GITHUB_OUTPUT"
+          # The build Taskfiles derive appVersion from build/config.yml (the
+          # single source of truth). A hardcoded literal is how 0.9.0/0.9.1
+          # shipped reporting themselves as 0.8.0 — invisible in telemetry and
+          # permanently "behind" to the self-updater.
+          if grep -rn 'main[.]appVersion=[0-9]' \
+              build/Taskfile.yml build/darwin/Taskfile.yml build/linux/Taskfile.yml build/windows/Taskfile.yml; then
+            echo "::error::appVersion is hardcoded in a build Taskfile — use the derived {{.APP_VERSION}} var (build/config.yml)."
+            exit 1
+          fi
           # Accept both v0.4.0 and 0.4.0 tags; anything else is a mismatch.
           # REF_* come from env (not inline interpolation) so a crafted tag
           # name can't inject shell.
