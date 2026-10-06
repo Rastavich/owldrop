@@ -39,13 +39,13 @@ audit_npm web
 audit_npm site
 
 # --- Go / Wails ----------------------------------------------------------
-# Install a pinned govulncheck into the module cache when missing so CI and
-# local shells behave the same without committing a tool binary.
-if ! command -v govulncheck >/dev/null; then
-  section "install govulncheck"
-  go install golang.org/x/vuln/cmd/govulncheck@latest
-  export PATH="$(go env GOPATH)/bin:$PATH"
-fi
+# Always install a current govulncheck: an older ambient one (built with an
+# older Go) refuses to load a module whose go directive is newer than the
+# analyzer's toolchain, and runs GOTOOLCHAIN=local so the fix isn't a
+# toolchain download. CI has none installed either way.
+section "install govulncheck"
+go install golang.org/x/vuln/cmd/govulncheck@latest
+export PATH="$(go env GOPATH)/bin:$PATH"
 need govulncheck
 
 # Headless server build (Docker/NAS/`-tags server`) — no CGO needed.

@@ -19,9 +19,9 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-# Pin the Go minor: go.mod requires 1.26.6 for the stdlib security fixes
-# (govulncheck gates the release), and the floating golang:alpine tag lags.
-FROM golang:1.26.6-alpine AS builder
+# Pin the Go minor: go.mod requires >= 1.27.1 (tailscale v1.104.0), and the
+# floating golang:alpine tag lags.
+FROM golang:1.27.1-alpine AS builder
 ARG VERSION=dev
 RUN apk add --no-cache git
 WORKDIR /src

@@ -10,6 +10,33 @@ notes and publishes this file to the public install repository, where
 
 ## [Unreleased]
 
+## [0.10.1]
+
+### Security
+
+- **Dependency & security refresh** — `tailscale.com` v1.102.3 → v1.104.0,
+  `golang.org/x/crypto` v0.55 → v0.57, `x/net` v0.58 → v0.59, `x/mod` v0.40 →
+  v0.41, plus `x/sys`, `x/text`, `x/sync`, `x/term`, `x/time`, `x/oauth2` and
+  transitive bumps (wireguard-go, gvisor, klauspost/compress, mdlayher/netlink,
+  pires/go-proxyproto). `govulncheck` reports no reachable vulnerabilities on
+  both the server (`-tags server`) and Windows desktop builds.
+- **npm advisories fixed** — `web/` had picked up a critical `seroval`
+  advisory (via `@tanstack/router-core`) and a high `source-map-js` one (via
+  `postcss`); `site/` moves to `wrangler` 4.147.0, dropping the vulnerable
+  `undici`/`miniflare` pair. Both npm audits are clean.
+
+### Changed
+
+- **Go 1.27.1 toolchain** — required by tailscale v1.104.0. `go.mod`, the Nix
+  package, and both Dockerfiles build with Go 1.27.1 (nixpkgs only ships
+  1.26.5/1.27rc2, so the flake keeps its pinned from-source toolchain).
+- **Frontend dependencies refreshed** — React 19.2.8 → 19.3.0, TanStack
+  Router 1.170.18 → 1.170.41 and Query 5.101.4 → 5.104.1 within the pinned
+  majors.
+- **`scripts/vulncheck.sh` always installs a current `govulncheck`** — an older
+  ambient analyzer refuses a module whose `go` directive is newer than its
+  toolchain, failing the release preflight for the wrong reason.
+
 ## [0.10.0]
 
 ### Added

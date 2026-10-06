@@ -16,7 +16,7 @@
 # Wails v3's GTK4 backend needs GTK >= 4.10 (GtkFileDialog); Debian 12
 # bookworm ships 4.8, so the image is based on trixie (GTK 4.16 +
 # WebKitGTK 6.0).
-FROM golang:1.26-trixie
+FROM golang:1.27-trixie
 
 ARG TARGETARCH
 ARG GARBLE_VERSION=v0.16.0

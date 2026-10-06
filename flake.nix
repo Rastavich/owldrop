@@ -13,15 +13,15 @@
       # time (pkg-config) and at runtime.
       guiLibs = with pkgs; [ gtk4 webkitgtk_6_0 ];
 
-      # nixpkgs still ships Go 1.26.5; go.mod pins 1.26.6 for the stdlib
-      # security fixes (govulncheck gates the release). Override the version
+      # nixpkgs ships Go 1.26.5 (go_1_27 is still a release candidate);
+      # go.mod requires >= 1.27.1 (tailscale v1.104.0). Override the version
       # and source so nix builds use the fixed toolchain — GOTOOLCHAIN=local
       # means nix never auto-downloads one.
-      go1266 = pkgs.go_1_26.overrideAttrs (old: {
-        version = "1.26.6";
+      go1271 = pkgs.go_1_27.overrideAttrs (old: {
+        version = "1.27.1";
         src = pkgs.fetchurl {
-          url = "https://go.dev/dl/go1.26.6.src.tar.gz";
-          hash = "sha256-oHIcVMaIkBRI13rZs+x+p8R0cwdV/4kTgukuy5P/LLE=";
+          url = "https://go.dev/dl/go1.27.1.src.tar.gz";
+          hash = "sha256-TkCKuuEm2Ra2FkYnGT8sVPDjyhMS1pO4bbRfhiqyOLE=";
         };
       });
 
@@ -37,12 +37,12 @@
         pname = "owldrop-web";
         version = appVersion;
         src = ./web;
-        npmDepsHash = "sha256-2uGD7LBkSIdGiSQ1ffg8jTgg8hEu7s2GJhCpp1XEIb4=";
+        npmDepsHash = "sha256-Fbw1lnBSY+D2dVZHUUj8uGSwZR5X1mr4iIDID1l5r9I=";
       };
       # .override (not an attrset `go =`) so the goModules download phase
       # uses the same fixed toolchain — an attrset arg does not win over
-      # callPackage's baked-in go_1_26 there.
-      sidecar = (pkgs.buildGoModule.override { go = go1266; }) {
+      # callPackage's baked-in go_1_27 there.
+      sidecar = (pkgs.buildGoModule.override { go = go1271; }) {
         pname = "owldrop";
         version = appVersion;
         src = pkgs.runCommand "owldrop-src" { } ''
@@ -56,7 +56,7 @@
         # proxyVendor downloads the module cache instead — same result, no
         # embed resolution at fetch time.
         proxyVendor = true;
-        vendorHash = "sha256-rM7lEFvNy0VFfPms1G/NeGsrTn7OMyxXE+IpXWMP78k=";
+        vendorHash = "sha256-RK3l47Ig+OXcJdDACMQPDVX46HyEzIgfRldDSprNTH0=";
         subPackages = [ "." ];
         # drops_test.go talks to a live tailscaled daemon; not available in
         # the build sandbox (they run fine on a machine with tailscaled).
@@ -71,7 +71,7 @@
     in
     {
       devShells.x86_64-linux.default = pkgs.mkShell {
-        packages = [ go1266 pkgs.nodejs pkgs.pkg-config pkgs.gcc ] ++ guiLibs;
+        packages = [ go1271 pkgs.nodejs pkgs.pkg-config pkgs.gcc ] ++ guiLibs;
       };
 
       packages.x86_64-linux.default =
