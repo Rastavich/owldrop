@@ -10,6 +10,21 @@ notes and publishes this file to the public install repository, where
 
 ## [Unreleased]
 
+### Fixed
+
+- **Blank window on Linux with mesa 26.2.4** — WebKitGTK 2.52.5, the version
+  the Nix package was built against, aborts in its sandboxed web process when
+  the host's EGL vendor is mesa 26.2.4 (`Could not create default EGL display:
+  EGL_BAD_PARAMETER. Aborting...`), leaving the desktop window empty. The
+  flake's nixpkgs input moves from 2026-07-30 to 2026-10-06 (WebKitGTK 2.54.1,
+  GTK 4.22.4, mesa 26.2.4), which renders correctly against the current driver
+  stack.
+
+### Changed
+
+- **Nix package builds with nixpkgs' Go 1.27.1** — nixpkgs now ships `go_1_27`
+  at 1.27.1, so the flake no longer pins a from-source toolchain override.
+
 ## [0.10.1]
 
 ### Security

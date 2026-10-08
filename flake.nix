@@ -13,17 +13,10 @@
       # time (pkg-config) and at runtime.
       guiLibs = with pkgs; [ gtk4 webkitgtk_6_0 ];
 
-      # nixpkgs ships Go 1.26.5 (go_1_27 is still a release candidate);
-      # go.mod requires >= 1.27.1 (tailscale v1.104.0). Override the version
-      # and source so nix builds use the fixed toolchain — GOTOOLCHAIN=local
-      # means nix never auto-downloads one.
-      go1271 = pkgs.go_1_27.overrideAttrs (old: {
-        version = "1.27.1";
-        src = pkgs.fetchurl {
-          url = "https://go.dev/dl/go1.27.1.src.tar.gz";
-          hash = "sha256-TkCKuuEm2Ra2FkYnGT8sVPDjyhMS1pO4bbRfhiqyOLE=";
-        };
-      });
+      # go.mod requires >= 1.27.1 (tailscale v1.104.0); nixpkgs' default go
+      # is 1.26.8, so build with go_1_27 (1.27.1). GOTOOLCHAIN=local means nix
+      # never auto-downloads a toolchain.
+      go = pkgs.go_1_27;
 
       # Version from build/config.yml — single source of truth for the
       # updater's CurrentVersion (injected via ldflags).
@@ -40,9 +33,9 @@
         npmDepsHash = "sha256-Fbw1lnBSY+D2dVZHUUj8uGSwZR5X1mr4iIDID1l5r9I=";
       };
       # .override (not an attrset `go =`) so the goModules download phase
-      # uses the same fixed toolchain — an attrset arg does not win over
-      # callPackage's baked-in go_1_27 there.
-      sidecar = (pkgs.buildGoModule.override { go = go1271; }) {
+      # uses the same toolchain — an attrset arg does not win over
+      # callPackage's baked-in `go` there.
+      sidecar = (pkgs.buildGoModule.override { go = go; }) {
         pname = "owldrop";
         version = appVersion;
         src = pkgs.runCommand "owldrop-src" { } ''
@@ -71,7 +64,7 @@
     in
     {
       devShells.x86_64-linux.default = pkgs.mkShell {
-        packages = [ go1271 pkgs.nodejs pkgs.pkg-config pkgs.gcc ] ++ guiLibs;
+        packages = [ go pkgs.nodejs pkgs.pkg-config pkgs.gcc ] ++ guiLibs;
       };
 
       packages.x86_64-linux.default =
