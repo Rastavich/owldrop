@@ -266,7 +266,7 @@ history.go     local event log (arrivals, saves, deletes, sends)
 server.go      event hub, API, security guards, inbox watcher + auto-save
 web/         Vite + React + TanStack frontend (built to web/dist, embedded)
 build/         wails3 taskfiles + packaging assets (AppImage/deb/rpm/NSIS/dmg)
-tools/genicon  regenerates the icon PNG
+tools/genicon  regenerates the icon PNGs (app icon + macOS menu-bar template)
 flake.nix      NixOS dev shell + package
 install.sh     installs a systemd user service
 docs/wails3-evaluation.md  why Wails v3 replaced Electron (evaluation)
