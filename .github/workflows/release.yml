@@ -576,11 +576,13 @@ jobs:
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           # Tag runs (v0.4.0 or 0.4.0) publish under the actual tag name;
           # branch dispatch publishes under v<version>.
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            TAG="${{ github.ref_name }}"
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            TAG="$REF_NAME"
           else
             TAG="v${{ needs.preflight.outputs.version }}"
           fi

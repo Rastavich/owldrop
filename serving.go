@@ -228,17 +228,37 @@ func (s *server) serveState(ctx context.Context) (enabled bool, url string) {
 	return true, "https://" + s.selfDNSName() + "/"
 }
 
-// funnelActive reports whether public Funnel exposure is on for this app.
-// Cache-safe for per-request use by the HTTP guard.
-func (s *server) funnelActive() bool {
+// funnelState reports whether public Funnel exposure is on for this app, and
+// whether the daemon's serve-config could be read to tell. known is false only
+// when no serve-config has ever been read successfully.
+func (s *server) funnelState() (active, known bool) {
 	hp := s.hostPort()
 	if hp == "" {
-		return false
+		return false, true
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	cfg := s.serving.get(ctx)
-	return cfg != nil && cfg.AllowFunnel[hp]
+	if cfg == nil {
+		return false, false
+	}
+	return cfg.AllowFunnel[hp], true
+}
+
+// funnelActive reports whether public Funnel exposure is on for this app.
+// Cache-safe for per-request use by the HTTP guard.
+func (s *server) funnelActive() bool {
+	active, _ := s.funnelState()
+	return active
+}
+
+// funnelGate reports whether MagicDNS-hostname traffic from the local
+// tailscaled must be limited to /drop/*. An unreadable serve-config counts as
+// Funnel on: failing open would hand the full app, and the session token
+// embedded in /, to public visitors.
+func (s *server) funnelGate() bool {
+	active, known := s.funnelState()
+	return active || !known
 }
 
 // buildAppConfig builds the serve config for this app: HTTPS root proxy on

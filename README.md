@@ -42,9 +42,10 @@ hostname where nothing else is reachable.)
   picker, or drag & drop onto the window; **send to several devices at
   once** via the checklist popover; Save all / Save all to… for batch
   receiving
-- **LAN mode** — Settings toggle (or `--lan`): other devices on your
-  tailnet can open the app at `http://<tailnet-ip>:8976/` (token-
-  protected, hostnames blocked against DNS rebinding).
+- **LAN mode** — Settings toggle (or `--lan`): devices on your LAN or
+  tailnet can open the app at `http://<ip>:8976/`. Peers are trusted, not
+  authenticated: they receive the session token (see Notes). Hostnames are
+  still checked against DNS rebinding.
 - **Hidden devices** — hide a device from the Send picker and the tray's
   quick-send menu (Settings → Hidden devices). Hidden devices can still
   *receive* files — this only removes them as a send target.
@@ -244,11 +245,15 @@ server for LAN use) is available as `wails3 task build:server`
   for waiting files — no sender identity — so auto-save applies to
   everything. A per-host trust list needs a daemon API that doesn't exist
   yet.
-- The server binds `127.0.0.1:8976` with a session token + Origin and Host
-  checks on mutating calls; LAN mode exposes it to your tailnet only, and
-  Funnel exposes only the `/drop/*` pages. The token is persisted in the
-  config file (mode 0600) so it survives restarts and container updates —
-  the config directory is the trust boundary, same as the LocalAPI socket.
+- The server binds `127.0.0.1:8976`. Mutating calls need the session token
+  plus Origin and Host checks. The token is served on `GET /` (embedded in
+  the page), so the trust boundary is the network path: any peer that can
+  reach the app — this machine, LAN peers in LAN mode, tailnet peers when
+  HTTPS access is on — can read it and save files, open paths, change
+  Tailscale settings, or rotate the MCP token. Funnel exposes only the
+  `/drop/*` pages. The token is persisted in the config file (mode 0600) so
+  it survives restarts and container updates; the config directory is
+  protected the same way as the LocalAPI socket.
 - A domain you add under
   Settings → Trusted domains is treated like LAN access: any page served on
   that hostname can drive the app, and the session token is embedded in the

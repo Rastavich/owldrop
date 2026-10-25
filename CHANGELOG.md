@@ -8,7 +8,25 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
-## [Unreleased]
+## [0.10.2]
+
+### Security
+
+- **Mutating routes require POST** — the session-token check only ran on
+  non-GET requests, so a GET carrying a JSON body could reach `/api/open`,
+  `/api/save`, `/api/delete`, `/api/mkdir` and `/api/devices/hidden` without
+  the token. Those routes now accept POST only.
+- **`GET /api/mcp` requires the session token** — it returned the MCP bearer
+  token to any peer that could reach the app.
+- **Funnel gate fails closed** — when the daemon's serve-config had never been
+  read, the gate assumed Funnel was off and let public Funnel traffic reach
+  the full app. An unknown state now gates the same as an active Funnel.
+- **Release workflow passes `github.ref_name` through an environment
+  variable** instead of interpolating it into the shell script.
+- **Dependency advisories** — Go stdlib findings fixed in Go 1.27.3 and
+  `golang.org/x/net` v0.60.0 (both reachable from this code per govulncheck);
+  `web/` vite 7.3.7 (high advisory in 7.0.0–7.3.6); `site/` wrangler 4.152.0
+  (up from 4.147.0, which npm audit flagged).
 
 ### Fixed
 
@@ -20,10 +38,15 @@ notes and publishes this file to the public install repository, where
   GTK 4.22.4, mesa 26.2.4), which renders correctly against the current driver
   stack.
 
+- **Infinite loop on unreadable save targets** — `conflictFreeName` retried
+  forever on any `os.Stat` error other than not-exist (e.g. permission
+  denied in the target folder); it now returns the error.
+
 ### Changed
 
-- **Nix package builds with nixpkgs' Go 1.27.1** — nixpkgs now ships `go_1_27`
-  at 1.27.1, so the flake no longer pins a from-source toolchain override.
+- **Go 1.27.3 toolchain** — `go.mod`, the Dockerfile and the Nix package build
+  with Go 1.27.3. nixpkgs' `go_1_27` still ships 1.27.1, so the flake
+  overrides its version and source.
 
 ## [0.10.1]
 

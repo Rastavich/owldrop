@@ -13,10 +13,17 @@
       # time (pkg-config) and at runtime.
       guiLibs = with pkgs; [ gtk4 webkitgtk_6_0 ];
 
-      # go.mod requires >= 1.27.1 (tailscale v1.104.0); nixpkgs' default go
-      # is 1.26.8, so build with go_1_27 (1.27.1). GOTOOLCHAIN=local means nix
-      # never auto-downloads a toolchain.
-      go = pkgs.go_1_27;
+      # go.mod requires >= 1.27.3; nixpkgs' go_1_27 still ships an older
+      # 1.27.x, so override the version and source (same pattern as the
+      # 1.26.6 override in 2b16f30). GOTOOLCHAIN=local means nix never
+      # auto-downloads a toolchain.
+      go = pkgs.go_1_27.overrideAttrs (old: {
+        version = "1.27.3";
+        src = pkgs.fetchurl {
+          url = "https://go.dev/dl/go1.27.3.src.tar.gz";
+          hash = "sha256-bndJA1zzYPBrJXXRYup535/ajvZxiJ5cN1+OUHd/Jrs=";
+        };
+      });
 
       # Version from build/config.yml — single source of truth for the
       # updater's CurrentVersion (injected via ldflags).
@@ -30,7 +37,7 @@
         pname = "owldrop-web";
         version = appVersion;
         src = ./web;
-        npmDepsHash = "sha256-Fbw1lnBSY+D2dVZHUUj8uGSwZR5X1mr4iIDID1l5r9I=";
+        npmDepsHash = "sha256-3nPfOTTJGXenluRqYnuiGBLQ/qSkBWNS9tfvG8GzkvM=";
       };
       # .override (not an attrset `go =`) so the goModules download phase
       # uses the same toolchain — an attrset arg does not win over
@@ -49,7 +56,7 @@
         # proxyVendor downloads the module cache instead — same result, no
         # embed resolution at fetch time.
         proxyVendor = true;
-        vendorHash = "sha256-RK3l47Ig+OXcJdDACMQPDVX46HyEzIgfRldDSprNTH0=";
+        vendorHash = "sha256-EruTrYYElWlzDjY0lm53Mv4HsuN/X0+tJF/6H11zKh4=";
         subPackages = [ "." ];
         # drops_test.go talks to a live tailscaled daemon; not available in
         # the build sandbox (they run fine on a machine with tailscaled).

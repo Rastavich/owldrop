@@ -351,17 +351,17 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/inbox", s.guard(s.handleInbox))
 	mux.HandleFunc("/api/devices", s.guard(s.handleDevices))
 	mux.HandleFunc("/api/devices/all", s.guard(s.handleDevicesAll))
-	mux.HandleFunc("/api/devices/hidden", s.guard(s.handleDeviceHidden))
+	mux.HandleFunc("/api/devices/hidden", s.guardPOST(s.handleDeviceHidden))
 	mux.HandleFunc("/api/browse", s.guard(s.handleBrowse))
 	mux.HandleFunc("/api/config", s.guard(s.handleConfig))
 	mux.HandleFunc("/mcp", s.mcpGuard(s.handleMCP))
-	mux.HandleFunc("/api/mcp", s.guard(s.handleMcpStatus))
+	mux.HandleFunc("/api/mcp", s.guardToken(s.handleMcpStatus))
 	mux.HandleFunc("/api/mcp/rotate", s.guard(s.handleMcpRotate))
-	mux.HandleFunc("/api/mkdir", s.guard(s.handleMkdir))
-	mux.HandleFunc("/api/save", s.guard(s.handleSave))
-	mux.HandleFunc("/api/delete", s.guard(s.handleDelete))
+	mux.HandleFunc("/api/mkdir", s.guardPOST(s.handleMkdir))
+	mux.HandleFunc("/api/save", s.guardPOST(s.handleSave))
+	mux.HandleFunc("/api/delete", s.guardPOST(s.handleDelete))
 	mux.HandleFunc("/api/send", s.guard(s.handleSend))
-	mux.HandleFunc("/api/open", s.guard(s.handleOpen))
+	mux.HandleFunc("/api/open", s.guardPOST(s.handleOpen))
 	mux.HandleFunc("/api/history", s.guard(s.handleHistory))
 	mux.HandleFunc("/api/droplinks", s.guard(s.handleDropLinks))
 	mux.HandleFunc("/api/droplinks/", s.guard(s.handleDropLinks))
@@ -527,19 +527,46 @@ func (s *server) guard(next http.HandlerFunc) http.HandlerFunc {
 		// peer). With tailnet-only Serve (no Funnel), tailscaled has already
 		// authenticated the peer, so the full app is fine. LAN peers
 		// (non-loopback) always get the full app.
-		if s.funnelHost(r.Host) && s.funnelActive() && peerIsLoopback(r) && !strings.HasPrefix(r.URL.Path, "/drop/") {
+		if s.funnelHost(r.Host) && s.funnelGate() && peerIsLoopback(r) && !strings.HasPrefix(r.URL.Path, "/drop/") {
 			http.NotFound(w, r)
 			return
 		}
-		if r.Method != http.MethodGet {
-			tok := r.Header.Get("X-Owldrop-Token")
-			if subtle.ConstantTimeCompare([]byte(tok), []byte(s.token)) != 1 {
-				http.Error(w, "forbidden", http.StatusForbidden)
-				return
-			}
+		if r.Method != http.MethodGet && !s.hasSessionToken(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
 		}
 		next(w, r)
 	}
+}
+
+// guardToken is guard plus the session token on every method. Use it for GET
+// endpoints whose response carries a secret: /api/mcp returns the MCP bearer.
+func (s *server) guardToken(next http.HandlerFunc) http.HandlerFunc {
+	return s.guard(func(w http.ResponseWriter, r *http.Request) {
+		if !s.hasSessionToken(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	})
+}
+
+// hasSessionToken reports whether the request carries the session token.
+func (s *server) hasSessionToken(r *http.Request) bool {
+	tok := r.Header.Get("X-Owldrop-Token")
+	return subtle.ConstantTimeCompare([]byte(tok), []byte(s.token)) == 1
+}
+
+// guardPOST is guard for state-changing endpoints. Accepting only POST keeps
+// a request body on a GET from mutating state.
+func (s *server) guardPOST(next http.HandlerFunc) http.HandlerFunc {
+	return s.guard(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		next(w, r)
+	})
 }
 
 // hostAllowed: loopback always; this machine's own MagicDNS name (so Tailscale

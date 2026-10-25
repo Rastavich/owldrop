@@ -6,6 +6,9 @@
     "audit": "npm audit --audit-level=high"
   },
   "devDependencies": {
-    "wrangler": "4.147.0"
+    "wrangler": "4.152.0"
+  },
+  "overrides": {
+    "undici": "7.30.1"
   }
 }

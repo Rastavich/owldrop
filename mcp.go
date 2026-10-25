@@ -35,7 +35,7 @@ func (s *server) mcpGuard(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "bad host", http.StatusForbidden)
 			return
 		}
-		if s.funnelHost(r.Host) && s.funnelActive() && peerIsLoopback(r) {
+		if s.funnelHost(r.Host) && s.funnelGate() && peerIsLoopback(r) {
 			http.NotFound(w, r)
 			return
 		}

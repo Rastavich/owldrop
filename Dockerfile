@@ -19,9 +19,9 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-# Pin the Go minor: go.mod requires >= 1.27.1 (tailscale v1.104.0), and the
+# Pin the Go minor: go.mod requires >= 1.27.3, and the
 # floating golang:alpine tag lags.
-FROM golang:1.27.1-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 ARG VERSION=dev
 RUN apk add --no-cache git
 WORKDIR /src

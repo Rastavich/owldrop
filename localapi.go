@@ -114,7 +114,10 @@ func tsSaveFile(ctx context.Context, name, dir string, onProgress func(written, 
 		return "", 0, err
 	}
 
-	target := conflictFreeName(dir, name)
+	target, err := conflictFreeName(dir, name)
+	if err != nil {
+		return "", 0, err
+	}
 	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return "", 0, err
@@ -151,14 +154,20 @@ func tsSaveFile(ctx context.Context, name, dir string, onProgress func(written, 
 }
 
 // conflictFreeName returns a path in dir that doesn't exist yet, appending
-// " (1)", " (2)", ... before the extension as needed.
-func conflictFreeName(dir, name string) string {
+// " (1)", " (2)", ... before the extension as needed. Any Stat error other
+// than "not exist" (permissions, a non-directory dir, an over-long name) is
+// returned: such errors don't clear on retry, so looping on them would hang.
+func conflictFreeName(dir, name string) (string, error) {
 	target := filepath.Join(dir, filepath.Base(name))
 	ext := filepath.Ext(target)
 	base := strings.TrimSuffix(target, ext)
 	for i := 1; ; i++ {
-		if _, err := os.Stat(target); errors.Is(err, os.ErrNotExist) {
-			return target
+		_, err := os.Stat(target)
+		if errors.Is(err, os.ErrNotExist) {
+			return target, nil
+		}
+		if err != nil {
+			return "", err
 		}
 		target = fmt.Sprintf("%s (%d)%s", base, i, ext)
 	}

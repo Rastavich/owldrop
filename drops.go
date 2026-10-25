@@ -646,7 +646,10 @@ func (s *server) linkSave(name, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	target := conflictFreeName(dir, name)
+	target, err := conflictFreeName(dir, name)
+	if err != nil {
+		return "", err
+	}
 	src, err := os.Open(lf.Path)
 	if err != nil {
 		return "", err
