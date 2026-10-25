@@ -8,6 +8,16 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.10.3]
+
+### Security
+
+- **LAN mode docs no longer say tailnet-only** — the Settings checkbox said
+  LAN mode let devices on your tailnet open the app. The README did not say
+  the app listens on every interface or warn about public Wi-Fi, where any
+  device that reaches the app can use it. Both now warn to
+  enable LAN mode only on a network you trust. No behavior change (#4).
+
 ## [0.10.2]
 
 ### Security

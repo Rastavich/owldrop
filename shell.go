@@ -101,7 +101,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 		for _, u := range srv.lanURLs() {
 			fmt.Printf("LAN UI: %s\n", u)
 		}
-		fmt.Println("note: anyone on your tailnet who knows the URL can control the app")
+		fmt.Println("note: LAN mode listens on every network interface; anyone who can reach the app can save or open files and change Tailscale settings. Only use it on a network you trust.")
 	}
 
 	go func() {

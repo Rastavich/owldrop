@@ -42,10 +42,12 @@ hostname where nothing else is reachable.)
   picker, or drag & drop onto the window; **send to several devices at
   once** via the checklist popover; Save all / Save all to… for batch
   receiving
-- **LAN mode** — Settings toggle (or `--lan`): devices on your LAN or
-  tailnet can open the app at `http://<ip>:8976/`. Peers are trusted, not
-  authenticated: they receive the session token (see Notes). Hostnames are
-  still checked against DNS rebinding.
+- **LAN mode** — Settings toggle (or `--lan`): the app listens on every
+  network interface, and any device that can reach this machine can open it
+  at `http://<ip>:8976/`, including other clients on public Wi-Fi. Peers are
+  trusted, not authenticated: they receive the session token (see Notes).
+  Only enable it on a network you trust. Hostnames are still checked against
+  DNS rebinding.
 - **Hidden devices** — hide a device from the Send picker and the tray's
   quick-send menu (Settings → Hidden devices). Hidden devices can still
   *receive* files — this only removes them as a send target.
@@ -245,7 +247,8 @@ server for LAN use) is available as `wails3 task build:server`
   for waiting files — no sender identity — so auto-save applies to
   everything. A per-host trust list needs a daemon API that doesn't exist
   yet.
-- The server binds `127.0.0.1:8976`. Mutating calls need the session token
+- The server binds `127.0.0.1:8976`, or `0.0.0.0:8976` (every interface) in
+  LAN mode. Mutating calls need the session token
   plus Origin and Host checks. The token is served on `GET /` (embedded in
   the page), so the trust boundary is the network path: any peer that can
   reach the app — this machine, LAN peers in LAN mode, tailnet peers when

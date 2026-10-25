@@ -84,6 +84,7 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .hint{font-size:12px;color:var(--muted);white-space:nowrap}
 .stats{font-size:12.5px;color:var(--muted);white-space:nowrap}
 .danger-text{color:var(--red)}
+.pane .sub2.warn-text{color:var(--amber)}
 .chips{display:flex;gap:6px;margin-bottom:12px}
 .chip-btn{border:1px solid var(--border);background:var(--panel);color:var(--muted);border-radius:999px;padding:5px 13px;font-size:12.5px;font-weight:600}
 .chip-btn:hover{color:var(--text)}

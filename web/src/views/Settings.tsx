@@ -228,7 +228,7 @@ export default function Settings() {
       <h3>LAN access</h3>
       <label className="check">
         <input type="checkbox" checked={!!config?.lan} onChange={(e) => patch({ lan: e.target.checked }, 'Applying LAN mode — reload the page if it disconnects')} />
-        Allow other devices on my tailnet to open this app
+        Allow other devices on my network to open this app
       </label>
       {config?.lan && config.lanUrl && (
         <p className="sub2">
@@ -241,7 +241,7 @@ export default function Settings() {
           )}
         </p>
       )}
-      <p className="sub2">Opening this app from another device is as powerful as being at this machine — only enable it if you trust your tailnet.</p>
+      <p className="sub2 warn-text"><b>Warning:</b> LAN mode listens on every network interface. Any device that can reach this machine, including others on public Wi-Fi, can open the app, save or open files, and change Tailscale settings. Only enable it on a network you trust.</p>
 
       </div>
 

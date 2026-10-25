@@ -36,11 +36,20 @@ func TestMullvadInfoListsOnlyMullvadExitNodes(t *testing.T) {
 	if len(got.Nodes) != 2 {
 		t.Fatalf("want 2 mullvad nodes (exit option + location), got %d: %+v", len(got.Nodes), got.Nodes)
 	}
-	if got.Nodes[0].ID != "n1" || got.Nodes[0].Country != "Germany" || got.Nodes[0].IP != "100.64.0.1" || got.Nodes[0].Host != "de-fra-wg-001" {
-		t.Errorf("n1 mapping wrong: %+v", got.Nodes[0])
+	find := func(id string) int {
+		for i, n := range got.Nodes {
+			if n.ID == id {
+				return i
+			}
+		}
+		t.Fatalf("node %s missing from %+v", id, got.Nodes)
+		return -1
 	}
-	if got.Nodes[1].Host != "fallback-host" {
-		t.Errorf("n2 host = %q, want fallback-host (HostName fallback)", got.Nodes[1].Host)
+	if n1 := got.Nodes[find("n1")]; n1.Country != "Germany" || n1.IP != "100.64.0.1" || n1.Host != "de-fra-wg-001" {
+		t.Errorf("n1 mapping wrong: %+v", n1)
+	}
+	if n2 := got.Nodes[find("n2")]; n2.Host != "fallback-host" {
+		t.Errorf("n2 host = %q, want fallback-host (HostName fallback)", n2.Host)
 	}
 	if got.Connected || got.Current != nil {
 		t.Errorf("no exit node selected: connected=%v current=%v", got.Connected, got.Current)
