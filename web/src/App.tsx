@@ -6,6 +6,7 @@ import { connectEvents } from './events';
 import DaemonPill from './components/DaemonPill';
 import ConnectBanner from './components/ConnectBanner';
 import UpdateBanner from './components/UpdateBanner';
+import UpdatePopup from './components/UpdatePopup';
 import ConfirmModal from './components/ConfirmModal';
 import FolderPicker from './components/FolderPicker';
 import Toasts from './components/Toasts';
@@ -89,6 +90,7 @@ export default function App() {
       <footer>Talks directly to your local tailscaled daemon — nothing leaves this machine except the files you send.</footer>
 
       <Toasts />
+      <UpdatePopup />
       <ConfirmModal />
       <FolderPicker />
     </>

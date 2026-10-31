@@ -131,7 +131,7 @@ type server struct {
 	sync      *syncStore
 	serving   *servingManager
 	update    *updateManager
-	version   *versionCheck // server-side version poll (all builds)
+	version   *versionCheck // version poll state (all builds, see startVersionCheck)
 	tsnet     any           // *tsnet.Server, set by tsnetmode.go (server build only)
 	tsnetHost string        // the tsnet node's MagicDNS name, when active
 
@@ -184,6 +184,7 @@ func newServerDir(cfg *config, dataDir string) *server {
 		drops:        newDropManager(dataDir),
 		sync:         newSyncStore(dataDir),
 		serving:      newServingManager(newRawServeClient()),
+		version:      newVersionCheck(),
 		lan:          cfg.LAN,
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},

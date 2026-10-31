@@ -30,5 +30,5 @@ func (s *server) handleUpdateInstall(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "auto-update not available — download from https://github.com/Rastavich/owldrop-install/releases"})
+	writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "auto-update not available — download from https://owldrop.app/#downloads"})
 }

@@ -194,7 +194,7 @@ type device struct {
 	OS       string               `json:"os"`
 	Online   bool                 `json:"online"`
 	LastSeen *time.Time           `json:"lastSeen,omitempty"`
-	Taildrop string               `json:"taildrop"` // "available" or a human reason
+	Taildrop string               `json:"taildrop"`          // "available" or a human reason
 	Relay    string               `json:"relay,omitempty"`   // DERP region ("syd") when relayed
 	CurAddr  string               `json:"curAddr,omitempty"` // current direct address when connected directly
 	Hidden   bool                 `json:"hidden"`            // operator hid it from the send picker (Settings)
@@ -223,7 +223,13 @@ func tsDevices(ctx context.Context) ([]device, error) {
 	if err != nil {
 		return nil, err
 	}
+	return devicesFromStatus(fts, st), nil
+}
 
+// devicesFromStatus merges the daemon's Taildrop targets with its peer map.
+// Mullvad exit-node servers are omitted: they can never receive Taildrop and
+// their hundreds of entries would swamp the send picker.
+func devicesFromStatus(fts []apitype.FileTarget, st *ipnstate.Status) []device {
 	byID := make(map[tailcfg.StableNodeID]device, len(fts)+len(st.Peer))
 	peerByID := make(map[tailcfg.StableNodeID]*ipnstate.PeerStatus, len(st.Peer))
 	for _, ps := range st.Peer {
@@ -231,8 +237,12 @@ func tsDevices(ctx context.Context) ([]device, error) {
 	}
 	for _, ft := range fts {
 		n := ft.Node
+		ps, known := peerByID[n.StableID]
+		if known && isMullvadPeer(ps) {
+			continue
+		}
 		d := device{ID: n.StableID, Name: n.ComputedName, Taildrop: "available"}
-		if ps, ok := peerByID[n.StableID]; ok {
+		if known {
 			d.OS = ps.OS
 			d.Online = ps.Online
 			d.Relay = ps.Relay
@@ -249,6 +259,9 @@ func tsDevices(ctx context.Context) ([]device, error) {
 	}
 	// Peers that can't receive Taildrop at all (show why).
 	for _, ps := range st.Peer {
+		if isMullvadPeer(ps) {
+			continue
+		}
 		id := ps.ID
 		if _, ok := byID[id]; ok {
 			continue
@@ -285,7 +298,7 @@ func tsDevices(ctx context.Context) ([]device, error) {
 		}
 		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
 	})
-	return out, nil
+	return out
 }
 
 func taildropReason(t ipnstate.TaildropTargetStatus) string {

@@ -85,10 +85,11 @@ export function handleSseEvent(ev: SseEvent) {
     case 'status':
       break;
     case 'update':
+      // The popup (and the banner, once it is dismissed) announces a release,
+      // and carries the in-progress state on its own — the query refresh does
+      // that part. Only outcomes that change what is running get a toast.
       queryClient.invalidateQueries({ queryKey: ['update'] });
-      if (ev.kind === 'available') toast('A new version is available — Settings → Updates to install');
-      else if (ev.kind === 'none') toast('You are on the latest version');
-      else if (ev.kind === 'downloading') toast('Downloading update…');
+      if (ev.kind === 'none') toast('You are on the latest version');
       else if (ev.kind === 'installed') toast('Update installed — restarting…');
       else if (ev.kind === 'error') toast('Update failed: ' + String(ev.detail ?? 'unknown error'), undefined, 'err');
       break;

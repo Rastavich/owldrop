@@ -40,10 +40,12 @@ type mullvadState struct {
 	Nodes      []mullvadNode `json:"nodes"`
 }
 
-// mullvadInfo maps a LocalAPI Status + Prefs pair onto the UI state. Peers
-// with location metadata are Mullvad servers; exit-node peers without one are
-// self-hosted and stay off this list. An unreachable daemon yields the
-// hint-carrying state the connect banner pattern uses elsewhere.
+// isMullvadPeer reports whether p is a Mullvad exit-node server: Tailscale
+// attaches Location metadata only to those. Self-hosted exit nodes carry
+// ExitNodeOption without a Location.
+func isMullvadPeer(p *ipnstate.PeerStatus) bool {
+	return p.ExitNodeOption && p.Location != nil
+}
 
 // mullvadServerName shortens a peer's DNS name to the server code Mullvad
 // nodes carry ("au-syd-wg-001.mullvad.ts.net." → "au-syd-wg-001"), the only
@@ -59,6 +61,10 @@ func mullvadServerName(p *ipnstate.PeerStatus) string {
 	return h
 }
 
+// mullvadInfo maps a LocalAPI Status + Prefs pair onto the UI state. Peers
+// with location metadata are Mullvad servers; exit-node peers without one are
+// self-hosted and stay off this list. An unreachable daemon yields the
+// hint-carrying state the connect banner pattern uses elsewhere.
 func mullvadInfo(st *ipnstate.Status, prefs *ipn.Prefs) mullvadState {
 	if st == nil {
 		return mullvadState{Hint: tailscaledHint()}
@@ -72,7 +78,7 @@ func mullvadInfo(st *ipnstate.Status, prefs *ipn.Prefs) mullvadState {
 		s.ExitOnline = es.Online
 	}
 	for _, p := range st.Peer {
-		if !p.ExitNodeOption || p.Location == nil {
+		if !isMullvadPeer(p) {
 			continue
 		}
 		n := mullvadNode{

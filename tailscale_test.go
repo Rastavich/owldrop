@@ -4,7 +4,10 @@ import (
 	"errors"
 	"testing"
 
+	"tailscale.com/client/tailscale/apitype"
 	"tailscale.com/ipn/ipnstate"
+	"tailscale.com/tailcfg"
+	"tailscale.com/types/key"
 )
 
 var errTailscaleUnreachable = errors.New("dial tailscaled: connection refused")
@@ -73,5 +76,39 @@ func TestIsInfraPeer(t *testing.T) {
 		if got := isInfraPeer(c.name); got != c.want {
 			t.Errorf("isInfraPeer(%q) = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestDevicesFromStatusSkipsMullvadPeers(t *testing.T) {
+	node := func(id, name string) *tailcfg.Node {
+		return &tailcfg.Node{StableID: tailcfg.StableNodeID(id), ComputedName: name}
+	}
+	fts := []apitype.FileTarget{
+		{Node: node("n1", "laptop")},
+		{Node: node("n2", "de-fra-wg-001")}, // should never happen, but must not leak either
+	}
+	st := &ipnstate.Status{Peer: map[key.NodePublic]*ipnstate.PeerStatus{
+		key.NewNode().Public(): {ID: "n1", HostName: "laptop", Online: true},
+		key.NewNode().Public(): {
+			ID: "n2", HostName: "de-fra-wg-001", Online: true,
+			ExitNodeOption: true, Location: &tailcfg.Location{Country: "Germany", CountryCode: "DE"},
+		},
+		key.NewNode().Public(): {
+			ID: "n4", HostName: "mullvad-exit-only", Online: true,
+			ExitNodeOption: true, Location: &tailcfg.Location{Country: "France"},
+		},
+		key.NewNode().Public(): {ID: "n3", HostName: "self-hosted-exit", Online: true, ExitNodeOption: true},
+	}}
+
+	devs := devicesFromStatus(fts, st)
+	got := map[tailcfg.StableNodeID]bool{}
+	for _, d := range devs {
+		got[d.ID] = true
+	}
+	if !got["n1"] || !got["n3"] {
+		t.Errorf("user and self-hosted exit devices must stay, got %v", got)
+	}
+	if got["n2"] || got["n4"] {
+		t.Errorf("Mullvad exit servers must be absent from the send picker, got %v", got)
 	}
 }

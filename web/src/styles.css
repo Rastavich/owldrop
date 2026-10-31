@@ -204,6 +204,12 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .modal-foot .spacer{flex:1}
 #dir-new-name{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font:inherit;font-size:12.5px;outline:none;width:150px}
 
+/* Update popup: a notice, not a form — the shared .modal-body height is sized
+   for the folder picker, so drop it here. */
+.update-popup .modal-body{min-height:0;gap:7px}
+.update-lead{margin:0;font-size:14px}
+.update-hint{margin:0;color:var(--muted);font-size:13px;line-height:1.55}
+
 footer{max-width:860px;margin:0 auto;padding:0 28px 30px;color:#5a6375;font-size:12px}
 
 /* --- Sync board --- */

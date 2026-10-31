@@ -8,6 +8,45 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.10.4]
+
+### Added
+
+- **Update popup** — when a newer release is out, Owldrop says so on startup
+  and updates from the popup itself: *Update now* replaces the app in place and
+  restarts into the new version, or *Download the latest version* opens
+  owldrop.app/#downloads for builds that cannot update themselves (Linux
+  packages, Docker, Nix, Store installs). *Later* hides it until the next
+  start — it asks again on every launch, and the banner above the tabs stays
+  up meanwhile.
+
+### Fixed
+
+- **Mullvad exit nodes no longer clutter the send picker** — the Send tab
+  dropdown listed hundreds of Mullvad VPN servers as unusable devices. They
+  can never receive Taildrop and are now omitted from the Send tab, tray
+  quick-send, MCP `list_devices`, and Settings visibility list. Self-hosted
+  exit nodes still appear.
+- **Version checks never found a new release** — the poll asked the GitHub
+  releases API, but the install repo publishes its binaries as feed files and
+  has no GitHub releases, so every check got a 404 and stayed silent. It now
+  reads the same release manifest the desktop updater installs from.
+- **Desktop builds never showed the update banner** — `/api/update` reported
+  only the Wails updater's state, which stays idle until someone opens Settings
+  and checks. It now answers from the version poll until the updater has
+  checked for itself.
+- **Linux desktop builds could not check for updates at all** — the feed has no
+  Linux artifact, so every check failed with "no artifact for linux/amd64" and
+  the popup only ever had an error to show. Linux now skips the in-place
+  updater entirely and uses the version poll, so the popup and Settings point
+  at the download page.
+- **"Download from GitHub" opened an empty releases page** — the install repo
+  has no GitHub releases. The buttons and the install error message now point
+  at owldrop.app/#downloads.
+- **"Update installed" toasted before the update was installed** — it fired
+  when the download finished, before verification and the binary swap. It now
+  fires once the update is ready to restart into.
+
 ## [0.10.3]
 
 ### Security

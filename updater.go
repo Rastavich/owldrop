@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -22,10 +23,24 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/endpoint"
 )
 
+// errUpdateNotFound is returned when an install was asked for but the feed has
+// nothing newer than the running build.
+var errUpdateNotFound = errors.New("no update available — this build is already the latest")
+
 type updateManager struct {
-	app *application.App
-	mu  sync.Mutex
-	st  updateState
+	app     *application.App
+	mu      sync.Mutex
+	st      updateState
+	checked bool // the Wails updater has given a definitive answer this session
+}
+
+// selfUpdateSupported reports whether the release feed carries an artifact this
+// platform can install over itself. The updater swaps the executable on disk
+// and relaunches it, which only holds for the Windows and macOS builds — Linux
+// installs come from a package manager or the read-only nix store, and the feed
+// has no linux/amd64 artifact to resolve.
+func selfUpdateSupported() bool {
+	return runtime.GOOS == "windows" || runtime.GOOS == "darwin"
 }
 
 // initUpdater configures the Wails updater and routes its events onto the
@@ -33,6 +48,10 @@ type updateManager struct {
 func (s *server) initUpdater(app *application.App) {
 	if !semverish.MatchString(appVersion) {
 		log.Printf("updater: skipped (appVersion %q, dev build)", appVersion)
+		return
+	}
+	if !selfUpdateSupported() {
+		log.Printf("updater: skipped (no in-place update artifact on %s — the version poll and download page handle it)", runtime.GOOS)
 		return
 	}
 	// Microsoft Store (MSIX) installs: the package directory is read-only and
@@ -45,12 +64,7 @@ func (s *server) initUpdater(app *application.App) {
 			return
 		}
 	}
-	feed := defaultUpdateFeed
-	// Only allow an https override: an http:// feed would let a local
-	// network attacker serve a malicious manifest.
-	if v := os.Getenv("OWLDROP_UPDATE_URL"); v != "" && strings.HasPrefix(v, "https://") {
-		feed = v
-	}
+	feed := updateFeedURL()
 	p, err := endpoint.New(endpoint.Config{URL: feed})
 	if err != nil {
 		log.Printf("updater: %v", err)
@@ -81,7 +95,11 @@ func (s *server) initUpdater(app *application.App) {
 		s.update.set(updateState{Current: appVersion, Latest: s.update.latest(), State: "downloading"})
 		s.broadcastUpdate("downloading", nil)
 	})
-	app.Event.On(updater.EventDownloadComplete, func(e *application.CustomEvent) {
+	// Download completed but is not installed yet: verification and the binary
+	// swap happen between now and EventUpdateReady, so report them separately
+	// rather than claiming success early.
+	app.Event.On(updater.EventUpdateReady, func(e *application.CustomEvent) {
+		s.update.set(updateState{Current: appVersion, Latest: s.update.latest(), State: "installed"})
 		s.broadcastUpdate("installed", nil)
 	})
 	app.Event.On(updater.EventError, func(e *application.CustomEvent) {
@@ -110,10 +128,25 @@ func (m *updateManager) latest() string {
 	return m.state().Latest
 }
 
+func (m *updateManager) markChecked() {
+	m.mu.Lock()
+	m.checked = true
+	m.mu.Unlock()
+}
+
+// hasChecked reports whether the Wails updater has answered "is there a newer
+// release?" itself. Until it has, the version poll is the only source.
+func (m *updateManager) hasChecked() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.checked
+}
+
 // check runs a manual update check against the feed.
 func (m *updateManager) check(ctx context.Context) error {
 	m.set(updateState{Current: appVersion, State: "checking"})
 	rel, err := m.app.Updater.Check(ctx)
+	m.markChecked()
 	if err != nil {
 		m.set(updateState{Current: appVersion, State: "error", Error: err.Error()})
 		return err
@@ -126,8 +159,16 @@ func (m *updateManager) check(ctx context.Context) error {
 	return nil
 }
 
-// install downloads the update and restarts into it.
+// install downloads the pending release and restarts into it. It checks first:
+// an install started from the update popup has had no manual check yet, and
+// DownloadAndInstall only installs what Check resolved.
 func (m *updateManager) install(ctx context.Context) error {
+	if err := m.check(ctx); err != nil {
+		return err
+	}
+	if !m.state().Available {
+		return errUpdateNotFound
+	}
 	if err := m.app.Updater.DownloadAndInstall(ctx); err != nil {
 		return err
 	}
@@ -137,14 +178,14 @@ func (m *updateManager) install(ctx context.Context) error {
 // --- HTTP handlers ----------------------------------------------------------
 
 func (s *server) handleUpdate(w http.ResponseWriter, r *http.Request) {
-	if s.update != nil {
-		st := s.update.state()
-		st.AutoInstall = true
-		writeJSON(w, st)
+	if s.update == nil {
+		// No Wails updater — the version poll is the whole answer.
+		s.writeVersionUpdateState(w)
 		return
 	}
-	// No Wails updater — return the server-side version poll result.
-	s.writeVersionUpdateState(w)
+	st := withPolledAvailability(s.update.state(), s.version.snapshot(), s.update.hasChecked())
+	st.AutoInstall = true
+	writeJSON(w, st)
 }
 
 func (s *server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
@@ -172,12 +213,18 @@ func (s *server) handleUpdateInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.update == nil {
-		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "auto-update not available — download from https://github.com/Rastavich/owldrop-install/releases"})
+		// No in-place updater on this build — Linux packages, Docker/Nix installs,
+		// MSIX/Store builds — so point at the download page.
+		writeJSONStatus(w, http.StatusBadRequest, map[string]any{"error": "auto-update not available — download from https://owldrop.app/#downloads"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 	if err := s.update.install(ctx); err != nil {
+		if errors.Is(err, errUpdateNotFound) {
+			writeJSONStatus(w, http.StatusConflict, map[string]any{"error": err.Error()})
+			return
+		}
 		writeJSONStatus(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}

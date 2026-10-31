@@ -7,7 +7,6 @@ import {
   getMcp,
   getServe,
   getUpdateState,
-  installUpdate,
   openExternal,
   patchConfig,
   rotateMcp,
@@ -18,6 +17,7 @@ import {
 } from '../api';
 import { toast } from '../store';
 import type { AppConfig, Device } from '../types';
+import { DOWNLOAD_URL, installInPlace } from '../updates';
 import { copyText } from '../utils';
 
 export default function Settings() {
@@ -132,13 +132,8 @@ export default function Settings() {
 
   const doInstallUpdate = async () => {
     setUpdateBusy(true);
-    try {
-      await installUpdate();
-      toast('Update downloaded — the app will restart to install it');
-    } catch (e) {
-      toast('Update failed: ' + (e instanceof Error ? e.message : e), undefined, 'err');
-      setUpdateBusy(false);
-    }
+    // A started install restarts the app, so only a failure re-enables the button.
+    if (!(await installInPlace())) setUpdateBusy(false);
   };
 
   return (
@@ -367,7 +362,7 @@ export default function Settings() {
             <p className="sub2">Checks the release feed and replaces this app in place (Windows/macOS).</p>
           )}
           {update?.state !== 'disabled' && !update?.autoInstall && (
-            <p className="sub2">Self-update is not available on this platform. Download the latest version from the GitHub releases page.</p>
+            <p className="sub2">Self-update is not available on this platform. Download the latest version and replace this install.</p>
           )}
         </div>
         {update?.state !== 'disabled' && (
@@ -381,8 +376,8 @@ export default function Settings() {
               </button>
             )}
             {update?.available && !update?.autoInstall && (
-              <a className="btn" href="https://github.com/Rastavich/owldrop-install/releases/latest" target="_blank" rel="noopener">
-                Download from GitHub
+              <a className="btn" href={DOWNLOAD_URL} target="_blank" rel="noopener">
+                Download the latest version
               </a>
             )}
           </div>
