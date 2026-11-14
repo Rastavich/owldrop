@@ -13,6 +13,10 @@ import type {
   PageConfig,
   ServeState,
   SyncItem,
+  TailcatInspect,
+  TailcatReceive,
+  TailcatShare,
+  TailcatState,
   TailscaleState,
   UpdateState,
   WaitingFile,
@@ -133,3 +137,28 @@ export const getSharePending = () =>
 export const clearSharePending = () => api('/api/share', { method: 'DELETE' });
 export const sendShareFile = (id: string, peers: string[]) =>
   api('/api/share/send', { method: 'POST', json: { id, peers } });
+// Carries share addresses (credentials): the server guards it with
+// guardToken, and api() always sends the session token.
+export const getTailcat = () => api<TailcatState>('/api/tailcat');
+export const createTailcatShare = (files: File[], ttlMinutes: number) => {
+  const fd = new FormData();
+  for (const f of files) fd.append('file', f, f.name);
+  return api<TailcatShare>('/api/tailcat/shares?ttl=' + ttlMinutes, { method: 'POST', body: fd });
+};
+export const shareTailcatPending = (pending: string, ttlMinutes: number) =>
+  api<TailcatShare>('/api/tailcat/shares?ttl=' + ttlMinutes, { method: 'POST', json: { pending } });
+export const stopTailcatShare = (id: string) => api('/api/tailcat/shares/' + id, { method: 'DELETE' });
+export const inspectTailcat = (input: string) =>
+  api<TailcatInspect>('/api/tailcat/inspect', { method: 'POST', json: { input } });
+// total = the size the preview showed; the server refuses a share that grew.
+export const receiveTailcat = (addr: string, dir: string, total: number) =>
+  api<TailcatReceive>('/api/tailcat/receive', { method: 'POST', json: { addr, dir, total } });
+// Cancels a running download; dismisses a finished one.
+export const dropTailcatReceive = (id: string) => api('/api/tailcat/receive/' + id, { method: 'DELETE' });
+export const dismissTailcatIncoming = () => api('/api/tailcat/incoming', { method: 'DELETE' });
+
+// Shareable link for a tailcat share. The address rides in the #fragment,
+// which browsers never send to the server: owldrop.app/r only ever sees
+// "/r". The page hands it to Owldrop (owldrop://) or shows the CLI command.
+export const tailcatLink = (addr: string, path: string) =>
+  'https://owldrop.app/r#' + addr + ':' + encodeURIComponent(path);

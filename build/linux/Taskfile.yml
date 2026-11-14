@@ -111,6 +111,7 @@ tasks:
     deps:
       - task: build
     cmds:
+      - task: build:tailcat
       - task: create:appimage
       - task: create:deb
       - task: create:rpm
@@ -129,11 +130,19 @@ tasks:
       - task: generate:dotdesktop
     cmds:
       - 'go build -tags production,gtk3 -trimpath -buildvcs=false -ldflags="-w -s -X main.appVersion={{.APP_VERSION}}" -o {{.BIN_DIR}}/{{.APP_NAME}}'
+      - task: build:tailcat
       - wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm-gtk3.yaml -out {{.ROOT_DIR}}/bin
       - wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm-gtk3.yaml -out {{.ROOT_DIR}}/bin
     env:
       GOOS: linux
       CGO_ENABLED: 1
+
+  # tailcat ships inside the deb/rpm (nfpm.yaml → /usr/local/lib/owldrop) for
+  # "Send to anyone" / "Receive via tailcat". Pinned in tools/buildtailcat.
+  build:tailcat:
+    summary: Builds the bundled tailcat CLI
+    cmds:
+      - go run ./tools/buildtailcat -o "{{.BIN_DIR}}/tailcat" -goos linux -goarch "{{.ARCH | default ARCH}}"
 
   create:appimage:
     summary: Creates an AppImage

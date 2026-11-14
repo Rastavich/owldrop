@@ -76,6 +76,25 @@ hostname where nothing else is reachable.)
 - **Safety** — opening executable/script files asks for confirmation first
 - **Global shortcut** — Ctrl+Alt+O (default) brings the window to the front;
   configurable in Settings → Shortcuts, applies live
+- **Send to anyone (tailcat)** — share files with someone *outside* your
+  tailnet: Send tab → Send to anyone → Share files…, then *Copy link*.
+  Owldrop runs a read-only [tailcat](https://github.com/tailscale/tailcat)
+  file server for just those files (fresh ephemeral key per share, WireGuard
+  PSK, confined to a private staging copy). End-to-end encrypted, usually
+  peer-to-peer, no accounts. The address is the credential: shares expire
+  (15 min / 1 h / 24 h), can be stopped, and die with the app.
+- **Receive via tailcat** — Inbox → *Receive via tailcat…*: paste a link,
+  address or `tailcat cp` command, see what's in the share, and download it
+  into a folder (with progress, never overwriting, logged in History). Share
+  links (`https://owldrop.app/r#…`) open straight in Owldrop through the
+  `owldrop://` URL scheme; people without Owldrop get the page's tailcat CLI
+  command instead. The key rides in the link's `#fragment`, which browsers
+  never send to owldrop.app.
+- **tailcat is bundled** — the macOS app, Windows installer, deb/rpm
+  packages, Docker image and Nix package ship a pinned tailcat
+  (`tools/buildtailcat`, built from source). Otherwise Owldrop looks on PATH
+  and in the usual install dirs; `OWLDROP_TAILCAT=/path/to/tailcat`
+  overrides
 - **Public drop links** — flip on Tailscale Funnel in Settings and anyone on
   the internet can drop a file into your inbox at your public `*.ts.net`
   URL — free, served from your own machine (only `/drop/*` is exposed)

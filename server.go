@@ -130,6 +130,7 @@ type server struct {
 	drops     *dropManager
 	sync      *syncStore
 	serving   *servingManager
+	tailcat   *tailcatManager // "send to anyone" shares (tailcat.go)
 	update    *updateManager
 	version   *versionCheck // version poll state (all builds, see startVersionCheck)
 	tsnet     any           // *tsnet.Server, set by tsnetmode.go (server build only)
@@ -176,7 +177,7 @@ func sessionToken(configured string) string {
 // newServerDir builds a server with an explicit data dir (tests use a temp
 // dir; production uses the user config dir).
 func newServerDir(cfg *config, dataDir string) *server {
-	return &server{
+	s := &server{
 		cfg:          cfg,
 		token:        sessionToken(cfg.Token),
 		hub:          newHub(),
@@ -188,7 +189,10 @@ func newServerDir(cfg *config, dataDir string) *server {
 		lan:          cfg.LAN,
 		autosaving:   map[string]bool{},
 		autosaveFail: map[string]time.Time{},
+		tailcat:      newTailcatManager(filepath.Join(dataDir, "tailcat-shares")),
 	}
+	s.tailcat.onChange = s.broadcastTailcat
+	return s
 }
 
 func (s *server) dropBaseURL() string {
@@ -385,6 +389,13 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/phone", s.guard(s.handlePhoneAccess))
 	mux.HandleFunc("/api/share", s.guard(s.handleSharePending))
 	mux.HandleFunc("/api/share/send", s.guard(s.handleShareSend))
+	mux.HandleFunc("/api/tailcat", s.guardToken(s.handleTailcat))
+	mux.HandleFunc("/api/tailcat/shares", s.guard(s.handleTailcatShares))
+	mux.HandleFunc("/api/tailcat/shares/", s.guard(s.handleTailcatShares))
+	mux.HandleFunc("/api/tailcat/inspect", s.guard(s.handleTailcatInspect))
+	mux.HandleFunc("/api/tailcat/receive", s.guard(s.handleTailcatReceive))
+	mux.HandleFunc("/api/tailcat/receive/", s.guard(s.handleTailcatReceive))
+	mux.HandleFunc("/api/tailcat/incoming", s.guard(s.handleTailcatReceive))
 	// Public drop-link pages: the URL token is the auth, not the session
 	// token. Host checks still apply; through the funnel hostname ONLY drop
 	// pages are reachable (everything else 404s there).

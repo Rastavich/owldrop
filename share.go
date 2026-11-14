@@ -144,7 +144,7 @@ func (s *server) handleShareSend(w http.ResponseWriter, r *http.Request) {
 func fileArgs(args []string) []string {
 	var out []string
 	for _, a := range args {
-		if a == "" || strings.HasPrefix(a, "-") {
+		if a == "" || strings.HasPrefix(a, "-") || strings.HasPrefix(strings.ToLower(a), "owldrop:") {
 			continue
 		}
 		out = append(out, a)

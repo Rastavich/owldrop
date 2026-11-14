@@ -53,6 +53,11 @@
       </uap:VisualElements>
       <Extensions>
         <desktop:Extension Category="windows.fullTrustProcess" Executable="owldrop.exe" />
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="owldrop">
+            <uap:DisplayName>Owldrop share link</uap:DisplayName>
+          </uap:Protocol>
+        </uap:Extension>
       </Extensions>
     </Application>
   </Applications>

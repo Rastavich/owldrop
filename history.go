@@ -23,7 +23,7 @@ type historyEvent struct {
 	Path   string    `json:"path,omitempty"`
 	Peer   string    `json:"peer,omitempty"`
 	PeerOS string    `json:"peerOS,omitempty"` // target device OS ("android", "ios", …)
-	Source string    `json:"source,omitempty"` // "" = taildrop, "link" = drop link
+	Source string    `json:"source,omitempty"` // "" = taildrop, "link" = drop link, "tailcat" = tailcat download
 }
 
 // history is a small append-only log of everything that happened to files.
@@ -149,6 +149,22 @@ func (h *history) recordSaved(name, path string) {
 	h.events = append(h.events, historyEvent{ID: id, Ts: time.Now(), Kind: "saved", Name: name, Path: path})
 	delete(h.active, name)
 	tele.event("file_saved")
+	h.prune()
+	h.persist()
+}
+
+// recordReceived logs a file that arrived and was saved in one step (a
+// tailcat download straight into a folder): an "arrived" plus a "saved"
+// event in the same session, so History shows it like a saved Taildrop.
+func (h *history) recordReceived(name string, size int64, path, source string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	id, now := newID(), time.Now()
+	h.events = append(h.events,
+		historyEvent{ID: id, Ts: now, Kind: "arrived", Name: name, Size: size, Source: source},
+		historyEvent{ID: id, Ts: now, Kind: "saved", Name: name, Path: path, Source: source},
+	)
+	tele.event("file_received")
 	h.prune()
 	h.persist()
 }

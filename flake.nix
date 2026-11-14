@@ -2,8 +2,15 @@
   description = "owldrop dev shell + NixOS package";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  # Bundled tailcat CLI (Send to anyone / Receive via tailcat): source only,
+  # built below with this flake's Go and the security-patched dependency set
+  # in nix/tailcat. Same tag as TailcatVersion in tools/buildtailcat.
+  inputs.tailcat = {
+    url = "github:tailscale/tailcat/v0.7.0";
+    flake = false;
+  };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, tailcat }:
     let
       pkgs = import nixpkgs {
         system = "x86_64-linux";
@@ -13,17 +20,38 @@
       # time (pkg-config) and at runtime.
       guiLibs = with pkgs; [ gtk4 webkitgtk_6_0 ];
 
-      # go.mod requires >= 1.27.3; nixpkgs' go_1_27 still ships an older
+      # go.mod requires >= 1.27.4; nixpkgs' go_1_27 still ships an older
       # 1.27.x, so override the version and source (same pattern as the
       # 1.26.6 override in 2b16f30). GOTOOLCHAIN=local means nix never
       # auto-downloads a toolchain.
       go = pkgs.go_1_27.overrideAttrs (old: {
-        version = "1.27.3";
+        version = "1.27.4";
         src = pkgs.fetchurl {
-          url = "https://go.dev/dl/go1.27.3.src.tar.gz";
-          hash = "sha256-bndJA1zzYPBrJXXRYup535/ajvZxiJ5cN1+OUHd/Jrs=";
+          url = "https://go.dev/dl/go1.27.4.src.tar.gz";
+          hash = "sha256-c8+4VxrsDAEXdofbhxY9Rqog6XeWcncokaoXZU2aYJk=";
         };
       });
+
+      # tailcat, built like its releases (CGO off, release tags) but on this
+      # flake's patched Go and with nix/tailcat/go.{mod,sum}: tailcat v0.7.0's
+      # own dependency set carries vulns fixed upstream since (see
+      # securityOverrides in tools/buildtailcat; regenerate both together).
+      tailcatPkg = (pkgs.buildGoModule.override { go = go; }) {
+        pname = "tailcat";
+        version = "0.7.0";
+        src = tailcat;
+        postPatch = ''
+          cp ${./nix/tailcat/go.mod} go.mod
+          cp ${./nix/tailcat/go.sum} go.sum
+        '';
+        proxyVendor = true;
+        vendorHash = "sha256-QaDCH/xNMqsVYdfuC55z7dx6a8ieeLX+RP2JXSCyrA0=";
+        subPackages = [ "cmd/tailcat" ];
+        tags = lib.splitString "," (lib.removeSuffix "\n" (builtins.readFile "${tailcat}/build-tags.txt"));
+        env.CGO_ENABLED = "0";
+        ldflags = [ "-s" "-w" "-X main.version=v0.7.0" ];
+        doCheck = false;
+      };
 
       # Version from build/config.yml — single source of truth for the
       # updater's CurrentVersion (injected via ldflags).
@@ -37,7 +65,7 @@
         pname = "owldrop-web";
         version = appVersion;
         src = ./web;
-        npmDepsHash = "sha256-3nPfOTTJGXenluRqYnuiGBLQ/qSkBWNS9tfvG8GzkvM=";
+        npmDepsHash = "sha256-OBgjG6cB3HITobCw55/E3cq8h0V//CnwkDiTjeDE+pM=";
       };
       # .override (not an attrset `go =`) so the goModules download phase
       # uses the same toolchain — an attrset arg does not win over
@@ -56,7 +84,7 @@
         # proxyVendor downloads the module cache instead — same result, no
         # embed resolution at fetch time.
         proxyVendor = true;
-        vendorHash = "sha256-EruTrYYElWlzDjY0lm53Mv4HsuN/X0+tJF/6H11zKh4=";
+        vendorHash = "sha256-dnc+HkbLvF5K8ebClcMhphX0zD4QkpGU+i2mQt9iTE8=";
         subPackages = [ "." ];
         # drops_test.go talks to a live tailscaled daemon; not available in
         # the build sandbox (they run fine on a machine with tailscaled).
@@ -90,6 +118,7 @@
           # so the webview picks up the bundled fonts instead of tofu-boxing.
           runScript = pkgs.writeShellScript "owldrop-run" ''
             export FONTCONFIG_FILE="${pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; }}"
+            export OWLDROP_TAILCAT="''${OWLDROP_TAILCAT:-${tailcatPkg}/bin/tailcat}"
             exec ${sidecar}/bin/owldrop "$@"
           '';
         };
@@ -103,6 +132,17 @@
           categories = [ "Utility" ];
           startupWMClass = "owldrop";
         };
+        # owldrop:// share links ("Open in Owldrop" on owldrop.app/r).
+        urlHandler = pkgs.makeDesktopItem {
+          name = "owldrop-url";
+          desktopName = "Owldrop";
+          comment = "Open Owldrop share links";
+          exec = "owldrop %u";
+          icon = "owldrop";
+          terminal = false;
+          noDisplay = true;
+          mimeTypes = [ "x-scheme-handler/owldrop" ];
+        };
         iconDir = pkgs.runCommand "owldrop-icon" { } ''
           mkdir -p $out/share/icons/hicolor/512x512/apps
           cp ${./icon.png} $out/share/icons/hicolor/512x512/apps/owldrop.png
@@ -110,7 +150,7 @@
       in
       pkgs.symlinkJoin {
         name = "owldrop";
-        paths = [ fhs desktopItem iconDir ];
+        paths = [ fhs desktopItem urlHandler iconDir ];
       };
 
       # The raw nix-built binary (RPATHs point into the nix store, so it runs

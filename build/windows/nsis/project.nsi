@@ -99,6 +99,11 @@ Section
     SetOutPath $INSTDIR
     
     !insertmacro wails.files
+    ; Bundled tailcat CLI, found next to the exe by tailcat.go
+    ; (bundledTailcatPaths). The uninstaller's RMDir /r $INSTDIR removes it.
+    !ifdef ARG_TAILCAT_BINARY
+        File "/oname=tailcat.exe" "${ARG_TAILCAT_BINARY}"
+    !endif
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

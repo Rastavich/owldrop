@@ -18,10 +18,20 @@ release: "1"
 contents:
   - src: "./bin/owldrop"
     dst: "/usr/local/bin/owldrop"
+  # Bundled tailcat CLI (Send to anyone / Receive via tailcat); found by
+  # tailcat.go bundledTailcatPaths. Built by the build:tailcat task.
+  - src: "./bin/tailcat"
+    dst: "/usr/local/lib/owldrop/tailcat"
+    file_info:
+      mode: 0755
   - src: "./build/appicon.png"
     dst: "/usr/share/icons/hicolor/128x128/apps/owldrop.png"
   - src: "./build/linux/owldrop.desktop"
     dst: "/usr/share/applications/owldrop.desktop"
+  # owldrop:// share links; a separate, hidden entry so the main launcher
+  # keeps its %F file handling.
+  - src: "./build/linux/owldrop-url.desktop"
+    dst: "/usr/share/applications/owldrop-url.desktop"
 
 depends:
   - libgtk-3-0

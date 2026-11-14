@@ -151,3 +151,21 @@ export function removeSending(id: string) {
     return { ...s, sending: next };
   });
 }
+
+// --- tailcat receive dialog --------------------------------------------------
+
+export const tailcatReceiveStore = createStore<{ open: boolean; input: string; auto: boolean }>({
+  open: false,
+  input: '',
+  auto: false,
+});
+
+// Opens the receive dialog; auto=true looks the share up immediately (used
+// when an owldrop:// link brought the address).
+export function openTailcatReceive(input = '', auto = false) {
+  tailcatReceiveStore.set({ open: true, input, auto });
+}
+
+export function closeTailcatReceive() {
+  tailcatReceiveStore.set({ open: false, input: '', auto: false });
+}

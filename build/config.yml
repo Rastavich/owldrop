@@ -12,6 +12,14 @@ info:
   comments: "See files sent to you via Tailscale's Taildrop, save or delete them with one click, and send files back."
   version: "0.10.4"
 
+# owldrop:// links ("Open in Owldrop" on owldrop.app/r) hand a tailcat share
+# to the app (tailcat_recv.go handleOpenURLs). Mirrored by hand into
+# darwin/Info*.plist, windows/nsis/wails_tools.nsh, windows/msix and
+# linux/owldrop-url.desktop; update:build-assets regenerates the first two.
+protocols:
+  - scheme: owldrop
+    description: Owldrop share link
+
 # Dev mode configuration
 dev_mode:
   root_path: .

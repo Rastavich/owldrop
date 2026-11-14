@@ -2,11 +2,11 @@
 // original UI's handleEvent, but the shell (Wails) raises native
 // notifications instead of the webview, so browser notifications are only
 // attempted when NOT running in the shell.
-import { IS_SHELL } from './api';
+import { dismissTailcatIncoming, IS_SHELL } from './api';
 import { queryClient } from './queryClient';
-import { toast, transfersStore, updateSaving, updateSending } from './store';
+import { openTailcatReceive, toast, transfersStore, updateSaving, updateSending } from './store';
 import { fmtSize, receiveHint } from './utils';
-import type { Device, SseEvent } from './types';
+import type { Device, SseEvent, TailcatState } from './types';
 
 let knownNames = new Set<string>();
 
@@ -81,6 +81,31 @@ export function handleSseEvent(ev: SseEvent) {
     case 'share':
       queryClient.invalidateQueries({ queryKey: ['share'] });
       if ((ev.n ?? 0) > 0) toast('File ready to send — pick a device on the Send tab');
+      break;
+    case 'tailcat':
+      queryClient.invalidateQueries({ queryKey: ['tailcat'] });
+      break;
+    case 'tcrecv': {
+      const { type: _t, ...rcv } = ev;
+      void _t;
+      const prev = queryClient.getQueryData<TailcatState>(['tailcat']);
+      const was = prev?.receives.find((r) => r.id === rcv.id);
+      if (prev) {
+        const receives = was ? prev.receives.map((r) => (r.id === rcv.id ? rcv : r)) : [rcv, ...prev.receives];
+        queryClient.setQueryData<TailcatState>(['tailcat'], { ...prev, receives });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['tailcat'] });
+      }
+      if (rcv.done && !was?.done) {
+        if (rcv.err && rcv.err !== 'cancelled') toast('tailcat download failed: ' + rcv.err, undefined, 'err');
+        else if (!rcv.err) toast(`Received ${rcv.files} file${rcv.files === 1 ? '' : 's'} via tailcat (${fmtSize(rcv.total)})`);
+        queryClient.invalidateQueries({ queryKey: ['history'] });
+      }
+      break;
+    }
+    case 'tcincoming':
+      openTailcatReceive(ev.addr, true);
+      dismissTailcatIncoming().catch(() => {});
       break;
     case 'status':
       break;

@@ -34,6 +34,17 @@
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
 		<string>0.10.4</string>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>wails.com.owldrop</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>owldrop</string>
+				</array>
+			</dict>
+		</array>
 		<key>CFBundleVersion</key>
 		<string>0.10.4</string>
 		<key>LSMinimumSystemVersion</key>

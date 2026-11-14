@@ -10,4 +10,4 @@ Icon=owldrop
 Categories=Utility;
 StartupWMClass=owldrop
 
- 
+MimeType=x-scheme-handler/owldrop; 

@@ -75,6 +75,7 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 					win.Show()
 					win.Focus()
 				}
+				srv.handleOpenURLs(d.Args) // owldrop:// links (Linux/Windows hand them over as args)
 				srv.enqueueShare(fileArgs(d.Args))
 			},
 		},
@@ -155,6 +156,19 @@ func runApp(ctx context.Context, srv *server, httpSrv *http.Server, addr string)
 	sh := &shell{app: app, win: win, tray: tray, srv: srv, notif: ns}
 	sh.rebuildTrayMenu()
 	srv.enqueueShare(fileArgs(os.Args[1:]))
+	// owldrop:// links: first launch passes them as args (Linux/Windows);
+	// macOS delivers them as an Apple Event, surfaced by wails as this event
+	// (it also fires for the arg case; handling is idempotent).
+	if srv.handleOpenURLs(os.Args[1:]) {
+		win.Show()
+		win.Focus()
+	}
+	app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(e *application.ApplicationEvent) {
+		if srv.handleOpenURLs([]string{e.Context().URL()}) {
+			win.Show()
+			win.Focus()
+		}
+	})
 	sh.applyShortcut()
 
 	go sh.notifyLoop(serverCtx)

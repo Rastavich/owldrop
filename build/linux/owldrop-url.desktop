@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Owldrop
+Comment=Open Owldrop share links (owldrop://)
+Exec=owldrop %u
+Icon=owldrop
+NoDisplay=true
+Terminal=false
+MimeType=x-scheme-handler/owldrop;
+StartupNotify=false

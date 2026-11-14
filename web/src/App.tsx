@@ -1,7 +1,7 @@
 import { Link, Outlet } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { getDropLinks, getInbox } from './api';
+import { dismissTailcatIncoming, getDropLinks, getInbox, getTailcat } from './api';
 import { connectEvents } from './events';
 import DaemonPill from './components/DaemonPill';
 import ConnectBanner from './components/ConnectBanner';
@@ -10,6 +10,8 @@ import UpdatePopup from './components/UpdatePopup';
 import ConfirmModal from './components/ConfirmModal';
 import FolderPicker from './components/FolderPicker';
 import Toasts from './components/Toasts';
+import { TailcatReceiveModal } from './components/TailcatReceive';
+import { openTailcatReceive } from './store';
 
 const TAB_CLASS = 'tab';
 
@@ -19,6 +21,17 @@ export default function App() {
   const activeLinks = links.filter((l) => !l.expired && !l.revoked && (l.maxUses === 0 || l.uses < l.maxUses)).length;
 
   useEffect(() => connectEvents(), []);
+  // An owldrop:// link that launched the app before this page was open.
+  useEffect(() => {
+    getTailcat()
+      .then((tc) => {
+        if (tc.incoming) {
+          openTailcatReceive(tc.incoming, true);
+          dismissTailcatIncoming().catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     document.title = inbox.length ? `(${inbox.length}) Owldrop` : 'Owldrop';
   }, [inbox.length]);
@@ -93,6 +106,7 @@ export default function App() {
       <UpdatePopup />
       <ConfirmModal />
       <FolderPicker />
+      <TailcatReceiveModal />
     </>
   );
 }

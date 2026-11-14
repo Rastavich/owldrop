@@ -19,9 +19,9 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-# Pin the Go minor: go.mod requires >= 1.27.3, and the
+# Pin the Go minor: go.mod requires >= 1.27.4, and the
 # floating golang:alpine tag lags.
-FROM golang:1.27.3-alpine AS builder
+FROM golang:1.27.4-alpine AS builder
 ARG VERSION=dev
 RUN apk add --no-cache git
 WORKDIR /src
@@ -32,10 +32,14 @@ COPY --from=web /web/dist ./web/dist
 RUN sed -i '/^replace/d' go.mod || true
 RUN CGO_ENABLED=0 go build -tags server,production -trimpath -buildvcs=false \
     -ldflags "-s -w -X main.appVersion=${VERSION}" -o /owldrop .
+# Bundled tailcat CLI (Send to anyone / Receive via tailcat), pinned in
+# tools/buildtailcat.
+RUN go run ./tools/buildtailcat -o /tailcat
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /owldrop /owldrop
+COPY --from=builder /tailcat /usr/local/bin/tailcat
 ENV HOME=/data
 EXPOSE 8976
 VOLUME /data

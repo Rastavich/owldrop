@@ -6,6 +6,8 @@ import { openDirPicker, toast, transfersStore, useStore } from '../store';
 import { chipClass, chipLabel, fileType, fmtAge, fmtSize, pct } from '../utils';
 import type { SaveProgress, WaitingFile } from '../types';
 import EmptyInbox from './EmptyInbox';
+import { TailcatReceives } from '../components/TailcatReceive';
+import { openTailcatReceive } from '../store';
 
 type InboxType = 'all' | 'img' | 'vid' | 'doc' | 'other';
 
@@ -142,6 +144,9 @@ export default function Inbox() {
           <input type="checkbox" checked={!!config?.autoSave} onChange={(e) => toggleAutoSave(e.target.checked)} />
           Auto-save incoming
         </label>
+        <button className="btn ghost" onClick={() => openTailcatReceive()} title="Download files someone shared with tailcat">
+          Receive via tailcat…
+        </button>
       </div>
       <div className="toolbar searchbar">
         <input
@@ -174,6 +179,8 @@ export default function Inbox() {
           </button>
         ))}
       </div>
+
+      <TailcatReceives />
 
       {inbox.length === 0 ? (
         <EmptyInbox />

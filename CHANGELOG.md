@@ -8,6 +8,47 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.11.0]
+
+### Added
+
+- **Send to anyone (tailcat)** — share files with people who aren't on your
+  tailnet. In the Send tab, *Send to anyone → Share files…* starts a
+  read-only [tailcat](https://github.com/tailscale/tailcat) file server for
+  just those files and copies a share link. Transfers are WireGuard-encrypted
+  end to end and usually peer-to-peer; neither side needs a Tailscale
+  account. Each share gets a fresh address and stops after 15 minutes,
+  1 hour or 24 hours, or when you press *Stop* or quit Owldrop. Files shared
+  from the OS can go out the same way (*Send via tailcat*).
+- **Receive via tailcat** — Inbox → *Receive via tailcat…*: paste the link,
+  address or `tailcat cp` command, preview the files, and download them into
+  a folder with progress. No terminal needed. Received files show up in
+  History.
+- **Share links open in Owldrop** — a share link (`owldrop.app/r#…`) has an
+  *Open in Owldrop* button that hands the share to the app (new `owldrop://`
+  URL scheme on Windows, macOS and Linux). Recipients without Owldrop see the
+  tailcat command instead. The key stays in the link's `#fragment`, which is
+  never sent to owldrop.app.
+- **tailcat comes with Owldrop** — the macOS app, Windows installer, deb/rpm
+  packages, Docker image and Nix package now include tailcat, so nothing
+  extra needs installing.
+
+### Security
+
+- **Go 1.27.4** — fixes a reachable `net/http` vulnerability
+  (GO-2026-6859) in every build: desktop, Docker, Nix.
+- **Dependency updates** — `klauspost/compress` 1.20.2 (GO-2026-6865),
+  `tailscale.com` 1.104.7, `golang.org/x/crypto` 0.59.0; web UI npm packages
+  updated within their ranges (clears a moderate `seroval` advisory); site
+  `wrangler` 4.162.0. `govulncheck` and `npm audit` report nothing.
+- **Bundled tailcat is patched** — tailcat 0.7.0 is built with its
+  vulnerable dependencies (`golang.org/x/net`, `golang.org/x/crypto`,
+  `klauspost/compress`) raised to fixed versions and on Go 1.27.4;
+  `govulncheck` on the shipped binary is clean.
+- **tailcat downloads are bounded** — a share can't send more data than it
+  listed for a file, and a download is refused if the share grew after you
+  previewed it.
+
 ## [0.10.4]
 
 ### Added

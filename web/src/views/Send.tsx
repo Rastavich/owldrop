@@ -5,8 +5,11 @@ import {
   createDropLink,
   getDevices,
   getSharePending,
+  getTailcat,
   sendShareFile,
+  shareTailcatPending,
 } from '../api';
+import TailcatPanel, { shareLink } from '../components/TailcatPanel';
 import { sendFileToDevices } from '../transfers';
 import { toast, transfersStore, useStore } from '../store';
 import { chipClass, chipLabel, copyText, fmtSize, isTaggedTaildropBlock, pct, receiveHint, stamp } from '../utils';
@@ -21,6 +24,8 @@ export default function Send() {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const [tailcatTtl, setTailcatTtl] = useState(60);
+  const { data: tailcat } = useQuery({ queryKey: ['tailcat'], queryFn: getTailcat });
   const fileRef = useRef<HTMLInputElement>(null);
   const tagged = devices.filter((d) => isTaggedTaildropBlock(d.taildrop));
 
@@ -133,6 +138,20 @@ export default function Send() {
     setShareBusy(false);
   };
 
+  const sendPendingTailcat = async (id: string) => {
+    setShareBusy(true);
+    try {
+      const sh = await shareTailcatPending(id, tailcatTtl);
+      const ok = await copyText(shareLink(sh), true);
+      toast(ok ? 'tailcat share ready — link copied' : 'tailcat share ready');
+    } catch (e) {
+      toast("Couldn't start tailcat share: " + (e instanceof Error ? e.message : e), undefined, 'err');
+    }
+    qc.invalidateQueries({ queryKey: ['share'] });
+    qc.invalidateQueries({ queryKey: ['tailcat'] });
+    setShareBusy(false);
+  };
+
   const copyBoxDropLink = async () => {
     try {
       const res = await createDropLink('This box', 60, 0, 4);
@@ -236,6 +255,16 @@ export default function Send() {
               <button className="btn mini" disabled={shareBusy} onClick={() => sendPending(f.id)}>
                 Send
               </button>
+              {tailcat?.installed && (
+                <button
+                  className="btn mini"
+                  disabled={shareBusy}
+                  onClick={() => sendPendingTailcat(f.id)}
+                  title="Share with someone outside your tailnet (see Send to anyone below)"
+                >
+                  Send via tailcat
+                </button>
+              )}
             </div>
           ))}
           <button className="btn ghost mini" disabled={shareBusy} onClick={() => clearSharePending().then(() => qc.invalidateQueries({ queryKey: ['share'] }))}>
@@ -299,6 +328,8 @@ export default function Send() {
           an image or text from the clipboard (Ctrl+V)
         </p>
       </div>
+
+      <TailcatPanel ttl={tailcatTtl} setTtl={setTailcatTtl} />
 
       {sending.size > 0 && (
         <div className="list">

@@ -181,7 +181,23 @@ tasks:
         fi
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
+      - task: build:tailcat:universal
+      - cp "{{.BIN_DIR}}/tailcat" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/tailcat"
       - task: '{{if eq OS "darwin"}}codesign:adhoc{{else}}codesign:skip{{end}}'
+
+  # tailcat ships in Contents/MacOS next to the app binary (tailcat.go
+  # bundledTailcatPaths) and is signed with the bundle (--deep). tailcat
+  # publishes no macOS binaries, so it's built from the pinned source.
+  build:tailcat:universal:
+    summary: Builds the bundled tailcat CLI (arm64 + amd64)
+    cmds:
+      - go run ./tools/buildtailcat -o "{{.BIN_DIR}}/tailcat-amd64" -goos darwin -goarch amd64
+      - go run ./tools/buildtailcat -o "{{.BIN_DIR}}/tailcat-arm64" -goos darwin -goarch arm64
+      - cmd: lipo -create -output "{{.BIN_DIR}}/tailcat" "{{.BIN_DIR}}/tailcat-amd64" "{{.BIN_DIR}}/tailcat-arm64"
+        platforms: [darwin]
+      - cmd: wails3 tool lipo -output "{{.BIN_DIR}}/tailcat" -input "{{.BIN_DIR}}/tailcat-amd64" -input "{{.BIN_DIR}}/tailcat-arm64"
+        platforms: [linux, windows]
+      - rm -f "{{.BIN_DIR}}/tailcat-amd64" "{{.BIN_DIR}}/tailcat-arm64"
 
   codesign:adhoc:
     summary: Ad-hoc signs the app bundle (macOS only)

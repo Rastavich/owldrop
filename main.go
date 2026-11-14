@@ -79,7 +79,12 @@ func main() {
 	// runApp acquires the single-instance lock first, then binds the port —
 	// a second instance (service + AppImage, two AppImages, ...) focuses the
 	// running one instead of dying with "address already in use".
-	if err := runApp(ctx, srv, httpSrv, addr); err != nil {
+	err := runApp(ctx, srv, httpSrv, addr)
+	// No tailcat share may outlive the app: its address would keep working.
+	shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	srv.tailcatShutdown(shutCtx)
+	cancel()
+	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("bye")

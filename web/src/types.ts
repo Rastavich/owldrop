@@ -172,6 +172,9 @@ export type SseEvent =
   | { type: 'status'; err?: string }
   | { type: 'sync' }
   | { type: 'share'; n?: number }
+  | { type: 'tailcat' }
+  | ({ type: 'tcrecv' } & TailcatReceive)
+  | { type: 'tcincoming'; addr: string }
   | { type: 'update'; kind: 'available' | 'none' | 'downloading' | 'installed' | 'error'; detail?: unknown };
 
 // One item on the shared Sync board (visible on every device on the tailnet).
@@ -190,4 +193,41 @@ export interface UpdateState {
   autoInstall: boolean;
   state: 'idle' | 'checking' | 'available' | 'downloading' | 'installed' | 'error' | 'disabled';
   error?: string;
+}
+
+// "Send to anyone": a running `tailcat serve` offering files read-only to
+// whoever has the address (see tailcat.go).
+export interface TailcatShare {
+  id: string;
+  addr: string;
+  files: { name: string; size: number }[];
+  folder?: string;
+  command: string;
+  createdAt: string;
+  expiresAt: string;
+}
+// An in-app download of someone's tailcat share (tailcat_recv.go).
+export interface TailcatReceive {
+  id: string;
+  dir: string;
+  files: number;
+  total: number;
+  received: number;
+  current?: string;
+  saved?: string[];
+  done: boolean;
+  err?: string;
+  started: string;
+}
+export interface TailcatState {
+  installed: boolean;
+  path: string;
+  shares: TailcatShare[];
+  receives: TailcatReceive[];
+  incoming: string; // address from an owldrop:// link, awaiting the user
+}
+export interface TailcatInspect {
+  addr: string;
+  files: { path: string; size: number }[];
+  total: number;
 }

@@ -184,6 +184,8 @@ function HistoryRow({ session }: { session: Session }) {
     if (hint) sub.push(' · ' + hint);
   } else if (session.events.some((e) => e.source === 'link')) {
     sub.push(' via drop link');
+  } else if (session.events.some((e) => e.source === 'tailcat')) {
+    sub.push(' via tailcat');
   }
   if (session.size > 0) sub.push(' · ' + fmtSize(session.size));
   sub.push(' · ' + fmtAge(session.arrived));
@@ -201,7 +203,7 @@ function HistoryRow({ session }: { session: Session }) {
           <button className="btn mini" onClick={() => openPathWithWarning(savedPath)}>
             Open
           </button>
-          <button className="btn mini" onClick={() => openPathWithWarning(savedPath.slice(0, savedPath.lastIndexOf('/')))}>
+          <button className="btn mini" onClick={() => openPathWithWarning(savedPath.slice(0, Math.max(savedPath.lastIndexOf('/'), savedPath.lastIndexOf('\\'))))}>
             Reveal
           </button>
         </div>

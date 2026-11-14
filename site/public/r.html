@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Owldrop — Someone sent you files</title>
+<meta name="description" content="Receive files shared with Owldrop over tailcat: end-to-end encrypted, peer-to-peer.">
+<!-- Share links carry a secret in the #fragment: never index them, never leak them via Referer. -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#090c13">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/appicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .recv { max-width: 640px; margin: 0 auto; padding: 40px 0 64px; }
+  .recv h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -.4px; }
+  .recv .lead { color: var(--muted); margin: 0 0 26px; }
+  .recv .file { font-weight: 650; color: var(--text); word-break: break-all; }
+  .recv .step { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+  .recv .step h2 { font-size: 15.5px; margin: 0 0 6px; }
+  .recv .step p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  .recv .step p:last-child { margin-bottom: 0; }
+  .recv .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .recv pre { margin: 0 0 12px; padding: 10px 12px; background: var(--panel2); border: 1px solid var(--border); border-radius: 9px; font-size: 12px; white-space: pre-wrap; word-break: break-all; user-select: all; }
+  .recv .note { font-size: 13px; color: var(--muted); margin-top: 22px; }
+  .recv [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="backdrop" aria-hidden="true"></div>
+
+<header>
+  <a class="brand" href="/" aria-label="Owldrop home">
+    <img src="/appicon.png" alt="" class="logo" width="38" height="38">
+    <div>
+      <h1>Owldrop</h1>
+      <p class="tag">a desktop app for Tailscale file sharing</p>
+    </div>
+  </a>
+  <div class="head-right">
+    <nav class="nav" aria-label="Sections">
+      <a href="/">Home</a>
+      <a href="/#downloads">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="recv">
+    <div id="ok" hidden>
+      <h1>Someone sent you files</h1>
+      <p class="lead">They're waiting on the sender's computer: <span class="file" id="what"></span>. The transfer is end-to-end encrypted and usually goes straight from their machine to yours.</p>
+
+      <div class="step">
+        <h2>Have Owldrop?</h2>
+        <p>Open the share in Owldrop, check what's in it, and download it with one click.</p>
+        <div class="row">
+          <a class="btn primary" id="open" href="#">Open in Owldrop <span class="arr">→</span></a>
+        </div>
+      </div>
+
+      <div class="step">
+        <h2>Don't have it yet?</h2>
+        <p>Install Owldrop (free, for Windows, macOS and Linux), then come back to this page and click <em>Open in Owldrop</em>.</p>
+        <div class="row"><a class="btn ghost" href="/#downloads">Download Owldrop</a></div>
+      </div>
+
+      <div class="step">
+        <h2>Prefer the command line?</h2>
+        <p>With <a href="https://github.com/tailscale/tailcat#install" target="_blank" rel="noopener noreferrer">tailcat</a> installed, run this in the folder you want the files in:</p>
+        <pre id="cmd"></pre>
+        <div class="row"><button class="btn ghost" id="copy" type="button">Copy command</button></div>
+      </div>
+
+      <p class="note">This page runs entirely in your browser. The part of the link after <code>#</code> is the key to the files, and browsers never send it to owldrop.app. Only open shares from people you trust. Shares expire, so if it doesn't connect, ask the sender for a new link.</p>
+    </div>
+
+    <div id="bad" hidden>
+      <h1>This link is incomplete</h1>
+      <p class="lead">An Owldrop share link ends in a long code after <code>#</code>, and it's missing here. Ask the sender to copy the link again.</p>
+      <div class="row"><a class="btn ghost" href="/">About Owldrop</a></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  // Fragment: <tailcat address>[:<url-encoded path in the share>]
+  var frag = location.hash.slice(1);
+  var i = frag.indexOf(':');
+  var addr = i < 0 ? frag : frag.slice(0, i);
+  var path = '';
+  try { path = i < 0 ? '' : decodeURIComponent(frag.slice(i + 1)); } catch (e) { path = ''; }
+  if (!/^tc[A-Za-z0-9_-]{40,}$/.test(addr)) {
+    document.getElementById('bad').hidden = false;
+    return;
+  }
+  function shq(s) { return /^[A-Za-z0-9_.:\/+@,=-]+$/.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'"; }
+
+  document.getElementById('what').textContent = path || 'a shared folder';
+  document.getElementById('open').href = 'owldrop://tailcat/' + addr;
+  var cmd = 'tailcat cp -r ' + shq(addr + ':' + (path || '.')) + ' .';
+  document.getElementById('cmd').textContent = cmd;
+  document.getElementById('copy').addEventListener('click', function () {
+    var b = this;
+    navigator.clipboard.writeText(cmd).then(function () {
+      b.textContent = 'Copied';
+      setTimeout(function () { b.textContent = 'Copy command'; }, 1500);
+    });
+  });
+  document.getElementById('ok').hidden = false;
+})();
+</script>
+</body>
+</html>

@@ -147,6 +147,26 @@ main{max-width:860px;margin:0 auto;padding:22px 28px 80px}
 .drop-zone .sub{font-size:12.5px;margin-top:4px}
 .drop-zone .link{color:var(--accent);cursor:pointer;text-decoration:underline}
 .drop-zone.over{border-color:var(--accent);background:var(--accent-soft)}
+/* Send tab: "Send to anyone" (tailcat) panel. */
+.tc-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;flex-direction:column;gap:8px}
+.tc-panel p{margin:0}
+.tc-panel .t{font-weight:600}
+.tc-panel .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.tc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.tc-actions{display:flex;align-items:center;gap:8px}
+.tc-actions select{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 6px;font-size:12px}
+.tc-share{border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.tc-share-head{display:flex;align-items:center;gap:8px;min-width:0}
+.tc-share-head .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pane code.tc-cmd{display:block;padding:6px 8px;font-size:11.5px;word-break:break-all;user-select:all;max-height:6.2em;overflow:auto}
+.tc-note{font-size:12px;color:var(--muted)}
+.tc-sub{margin:0;font-size:12.5px;color:var(--muted)}
+.tc-err{margin:0;font-size:12.5px;color:var(--red);white-space:pre-wrap;word-break:break-word}
+.tc-input{width:100%;box-sizing:border-box;resize:vertical;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+.tc-files{border:1px solid var(--border);border-radius:8px;padding:4px 10px;max-height:190px;overflow:auto}
+.tc-file{display:flex;gap:10px;padding:3px 0;font-size:12.5px;min-width:0}
+.tc-file .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-receives{margin-bottom:14px}
 /* Settings: sections as cards in a responsive two-column grid. */
 .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:start}
 .set-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:15px 17px;display:flex;flex-direction:column;gap:8px;min-width:0}

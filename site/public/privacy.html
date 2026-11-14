@@ -70,12 +70,14 @@
     </ul>
     <p>Files transfer <strong>directly between your devices over your own Tailscale tailnet</strong>, through the <code>tailscaled</code> running on your machine. Owldrop has no servers that route, host, or inspect file contents — we never see what you send. The transfer is subject to Tailscale's encryption and your tailnet's access controls; see Tailscale's own policies for how their service handles traffic.</p>
 
+    <p><strong>Send to anyone (tailcat).</strong> Files you share with someone outside your tailnet go from your machine to theirs through <a href="https://github.com/tailscale/tailcat" target="_blank" rel="noopener">tailcat</a>, WireGuard-encrypted end to end. When a direct connection isn't possible, the encrypted traffic is relayed by tailcat's public relay servers, which can't read it. A share link (<code>owldrop.app/r#…</code>) keeps the key after the <code>#</code>, which browsers never send to owldrop.app, so we can't see what was shared or with whom.</p>
+
     <h2>Anonymous usage telemetry (opt-out)</h2>
     <p>To know whether the project is worth keeping alive, Owldrop can report an <strong>opt-out, anonymous</strong> usage stream to <code>owldrop.app/api/t</code>. It is on by default; turn it off in Settings. It contains only:</p>
     <ul>
       <li>your app version and operating system,</li>
       <li>a random per-install identifier (generated on first run),</li>
-      <li>an event name and timestamp for events like <code>heartbeat</code>, <code>file_received</code>, <code>file_saved</code>, <code>file_deleted</code>, <code>file_sent</code>, <code>send_failed</code>, <code>drop_link_created</code>, <code>drop_link_used</code>, <code>drop_link_failed</code>, and <code>sync_item_added</code>.</li>
+      <li>an event name and timestamp for events like <code>heartbeat</code>, <code>file_received</code>, <code>file_saved</code>, <code>file_deleted</code>, <code>file_sent</code>, <code>send_failed</code>, <code>drop_link_created</code>, <code>drop_link_used</code>, <code>drop_link_failed</code>, <code>sync_item_added</code>, and <code>tailcat_received</code>.</li>
     </ul>
     <p>It <strong>never</strong> includes file names, file sizes, file contents, recipients, IP addresses, or anything identifying you. Events are sent in small batches and are best-effort — if sending fails, nothing is retried and nothing is queued on your machine. You can turn this off any time in <strong>Settings → “Share anonymous usage stats”</strong>; when off, nothing leaves the machine.</p>
     <p>Telemetry is stored by Cloudflare (D1) and used only for aggregate adoption statistics (install counts, activation — first successful transfer — and 14-day repeat). It is not sold, shared, or used for advertising.</p>

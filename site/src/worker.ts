@@ -20,6 +20,7 @@ const EVENT_NAMES = new Set([
   'drop_link_used',
   'drop_link_failed',
   'sync_item_added',
+  'tailcat_received',
 ]);
 
 const SUCCESS_EVENTS = "('file_received','file_sent','sync_item_added','drop_link_used')";
