@@ -10,7 +10,7 @@ info:
   description: "Owldrop — desktop app for Tailscale file sharing"
   copyright: "(c) 2026, Owldrop"
   comments: "See files sent to you via Tailscale's Taildrop, save or delete them with one click, and send files back."
-  version: "0.11.0"
+  version: "0.11.1"
 
 # owldrop:// links ("Open in Owldrop" on owldrop.app/r) hand a tailcat share
 # to the app (tailcat_recv.go handleOpenURLs). Mirrored by hand into
