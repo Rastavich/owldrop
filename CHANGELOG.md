@@ -8,7 +8,7 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
-## [Unreleased]
+## [0.12.0]
 
 ### Changed
 
@@ -19,8 +19,6 @@ notes and publishes this file to the public install repository, where
   (GTK3 / WebKit2GTK 4.1) build is still supported.
 - **Vite 8, @vitejs/plugin-react 6, TypeScript 7** for the UI build (TS 7's
   native compiler typechecks in under a second).
-
-## [0.11.2]
 
 ### Fixed
 
