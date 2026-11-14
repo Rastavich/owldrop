@@ -65,7 +65,7 @@
         pname = "owldrop-web";
         version = appVersion;
         src = ./web;
-        npmDepsHash = "sha256-OBgjG6cB3HITobCw55/E3cq8h0V//CnwkDiTjeDE+pM=";
+        npmDepsHash = "sha256-x/OhXguA6TxylJtdn05ocCn3gS6Q6nvKq2ZQ3FhgGfA=";
       };
       # .override (not an attrset `go =`) so the goModules download phase
       # uses the same toolchain — an attrset arg does not win over
@@ -84,7 +84,7 @@
         # proxyVendor downloads the module cache instead — same result, no
         # embed resolution at fetch time.
         proxyVendor = true;
-        vendorHash = "sha256-dnc+HkbLvF5K8ebClcMhphX0zD4QkpGU+i2mQt9iTE8=";
+        vendorHash = "sha256-baswVjzzXkE83V9AQYRZH3h1t/GW00auYWuyHE7fiOw=";
         subPackages = [ "." ];
         # drops_test.go talks to a live tailscaled daemon; not available in
         # the build sandbox (they run fine on a machine with tailscaled).

@@ -95,7 +95,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
       # The choco nsis package installs makensis silently, without touching
       # PATH, and its location has drifted across runner images — don't
       # hardcode it. Find the binary and put its dir on PATH explicitly.
@@ -228,7 +228,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Install wails3 CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
       - name: Package (.app bundle + universal dmg)
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
@@ -283,7 +283,7 @@ jobs:
             wails-cross -c '
               set -e
               export PATH="$PATH:$(go env GOPATH)/bin"
-              go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+              go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
               wails3 task linux:package
             '
       - uses: actions/upload-artifact@v4
@@ -339,7 +339,7 @@ jobs:
       # GTK3/WebKit4.1 stack too — without the tag `go install` probes
       # gtk4/webkitgtk-6.0 and dies before the app build even starts.
       - name: Install wails3 CLI (gtk3)
-        run: go install -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+        run: go install -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
       - name: Package gtk3 deb + rpm
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
