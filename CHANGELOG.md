@@ -8,6 +8,19 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.11.2]
+
+### Fixed
+
+- **Linux deb/rpm packages now include tailcat** — the GTK4 packages
+  (Ubuntu 24.10+, Debian 13+, Fedora, Arch) in 0.11.0 and 0.11.1 were missing
+  the bundled tailcat and the `owldrop://` link handler, so *Send to anyone*
+  and *Receive via tailcat* needed a separate tailcat install and share links
+  didn't open in Owldrop. The release tooling now checks the packaging before
+  every release.
+- **Ubuntu 24.04 packages show the right version** — the GTK3 deb/rpm were
+  labeled 0.7.3 regardless of the actual release.
+
 ## [0.11.1]
 
 This is the first published 0.11 release: 0.11.0's macOS build never ran,

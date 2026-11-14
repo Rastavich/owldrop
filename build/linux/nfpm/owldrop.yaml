@@ -1,0 +1,62 @@
+# Owldrop's GTK4 + WebKitGTK 6.0 deb/rpm/archlinux package (Ubuntu 24.10+ /
+# Debian 13+). OWNED BY OWLDROP, not wails: `wails3 update build-assets`
+# (run by scripts/bump-release.sh every release) regenerates nfpm.yaml from
+# its template and silently dropped our extra contents in 0.11.0/0.11.1 —
+# which is why the Taskfile packages from this file instead. The version
+# comes from build/config.yml via OWLDROP_VERSION (build/linux/Taskfile.yml).
+name: "owldrop"
+arch: ${GOARCH}
+platform: "linux"
+version: "${OWLDROP_VERSION}"
+section: "default"
+priority: "extra"
+maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
+description: "Owldrop — desktop app for Tailscale file sharing"
+vendor: "Owldrop"
+homepage: "https://owldrop.app"
+license: "MIT"
+release: "1"
+
+contents:
+  - src: "./bin/owldrop"
+    dst: "/usr/local/bin/owldrop"
+  # Bundled tailcat CLI (Send to anyone / Receive via tailcat); found by
+  # tailcat.go bundledTailcatPaths. Built by the build:tailcat task.
+  - src: "./bin/tailcat"
+    dst: "/usr/local/lib/owldrop/tailcat"
+    file_info:
+      mode: 0755
+  - src: "./build/appicon.png"
+    dst: "/usr/share/icons/hicolor/128x128/apps/owldrop.png"
+  - src: "./build/linux/owldrop.desktop"
+    dst: "/usr/share/applications/owldrop.desktop"
+  # owldrop:// share links; a separate, hidden entry so the main launcher
+  # keeps its %F file handling.
+  - src: "./build/linux/owldrop-url.desktop"
+    dst: "/usr/share/applications/owldrop-url.desktop"
+
+# Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
+depends:
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4
+
+# Distribution-specific overrides for different package formats
+overrides:
+  # RPM packages for Fedora / RHEL / AlmaLinux / Rocky Linux
+  rpm:
+    depends:
+      - gtk4
+      - webkitgtk6.0
+
+  # Arch Linux packages
+  archlinux:
+    depends:
+      - gtk4
+      - webkitgtk-6.0
+
+# scripts section to ensure desktop database is updated after install
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
+  # You can also add preremove, postremove if needed
+  # preremove: "./build/linux/nfpm/scripts/preremove.sh"
+  # postremove: "./build/linux/nfpm/scripts/postremove.sh"

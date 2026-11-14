@@ -78,6 +78,12 @@ fi
 
 run "wails3 task common:update:build-assets (regenerate platform assets)" wails3 task common:update:build-assets
 
+# The regeneration rewrites some build files from wails templates; make sure
+# it didn't drop the bundled tailcat / owldrop:// packaging (0.11.0/0.11.1
+# shipped GTK4 deb/rpm without tailcat that way).
+run "go test -run TestPackagingBundlesTailcat (packaging guard)" \
+  go test -tags server -run TestPackagingBundlesTailcat -count=1 .
+
 # --- verify the to-be-committed diff carries no old version ----------------
 # Scope: the staged diff only. Grepping build/ wholesale matches random
 # bytes in binary assets (PNGs, stale AppImage libs), not real references.

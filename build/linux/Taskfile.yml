@@ -136,8 +136,9 @@ tasks:
     env:
       GOOS: linux
       CGO_ENABLED: 1
+      OWLDROP_VERSION: '{{.APP_VERSION}}'
 
-  # tailcat ships inside the deb/rpm (nfpm.yaml → /usr/local/lib/owldrop) for
+  # tailcat ships inside the deb/rpm (nfpm/owldrop.yaml → /usr/local/lib/owldrop) for
   # "Send to anyone" / "Receive via tailcat". Pinned in tools/buildtailcat.
   build:tailcat:
     summary: Builds the bundled tailcat CLI
@@ -188,17 +189,23 @@ tasks:
   generate:deb:
     summary: Creates a deb package
     cmds:
-      - wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/bin
+      - wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/owldrop.yaml -out {{.ROOT_DIR}}/bin
+    env:
+      OWLDROP_VERSION: '{{.APP_VERSION}}' # nfpm/owldrop.yaml version
 
   generate:rpm:
     summary: Creates a rpm package
     cmds:
-      - wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/bin
+      - wails3 tool package -name "{{.APP_NAME}}" -format rpm -config ./build/linux/nfpm/owldrop.yaml -out {{.ROOT_DIR}}/bin
+    env:
+      OWLDROP_VERSION: '{{.APP_VERSION}}' # nfpm/owldrop.yaml version
 
   generate:aur:
     summary: Creates a arch linux packager package
     cmds:
-      - wails3 tool package -name "{{.APP_NAME}}" -format archlinux -config ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/bin
+      - wails3 tool package -name "{{.APP_NAME}}" -format archlinux -config ./build/linux/nfpm/owldrop.yaml -out {{.ROOT_DIR}}/bin
+    env:
+      OWLDROP_VERSION: '{{.APP_VERSION}}' # nfpm/owldrop.yaml version
 
   generate:dotdesktop:
     summary: Generates a `.desktop` file
