@@ -8,6 +8,19 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [0.11.1]
+
+This is the first published 0.11 release: 0.11.0's macOS build never ran,
+so it got no GitHub release or self-update. Everything listed under 0.11.0
+below ships here: **Send to anyone** and **Receive via tailcat** (share files
+with people outside your tailnet, open share links straight in Owldrop),
+tailcat bundled in every package, and the 0.11.0 security updates.
+
+### Fixed
+
+- **macOS release build** — moved to GitHub's `macos-15` runner; the retired
+  `macos-14` image cancelled the 0.11.0 macOS job before it started.
+
 ## [0.11.0]
 
 ### Added
