@@ -8,6 +8,18 @@ The `release` workflow turns the newest section below into the GitHub release
 notes and publishes this file to the public install repository, where
 <https://owldrop.app/changelog> renders it. Keep the newest entry on top.
 
+## [Unreleased]
+
+### Changed
+
+- **Wails 3.1.0** (from 3.0.0-beta.5) — the desktop framework's first stable
+  line. Picks up 3.0.0's fix for GHSA-2p5f-2gx8-mh8m (cross-origin frames
+  sending reserved `wails:` messages on Linux) and a safer self-updater that
+  validates an update and rolls back a damaged one. The Ubuntu 24.04
+  (GTK3 / WebKit2GTK 4.1) build is still supported.
+- **Vite 8, @vitejs/plugin-react 6, TypeScript 7** for the UI build (TS 7's
+  native compiler typechecks in under a second).
+
 ## [0.11.2]
 
 ### Fixed
